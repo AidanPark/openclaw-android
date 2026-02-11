@@ -90,7 +90,7 @@ This pins a notification and prevents Android from killing the Termux process. T
 ### Step 4: Install OpenClaw
 
 ```bash
-curl -sL https://raw.githubusercontent.com/user/openclaw-lite-android/main/bootstrap.sh | bash
+curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-lite-android/main/bootstrap.sh | bash
 ```
 
 This takes 3–10 minutes depending on network speed and device. Wi-Fi is recommended.
@@ -116,7 +116,7 @@ If a version number prints, you're done.
 
 ```bash
 pkg update -y && pkg install -y git
-git clone https://github.com/user/openclaw-lite-android.git
+git clone https://github.com/AidanPark/openclaw-lite-android.git
 cd openclaw-lite-android
 bash install.sh
 source ~/.bashrc

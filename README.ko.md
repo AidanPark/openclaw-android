@@ -92,7 +92,7 @@ termux-wake-lock
 ### 4단계: OpenClaw 설치
 
 ```bash
-curl -sL https://raw.githubusercontent.com/user/openclaw-lite-android/main/bootstrap.sh | bash
+curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-lite-android/main/bootstrap.sh | bash
 ```
 
 설치는 3~10분 정도 소요됩니다 (네트워크 속도와 기기 성능에 따라 다름). 설치 과정에서 패키지 다운로드, 컴파일이 진행되므로 Wi-Fi 환경을 권장합니다.
@@ -120,7 +120,7 @@ openclaw --version
 
 ```bash
 pkg update -y && pkg install -y git
-git clone https://github.com/user/openclaw-lite-android.git
+git clone https://github.com/AidanPark/openclaw-lite-android.git
 cd openclaw-lite-android
 bash install.sh
 source ~/.bashrc
