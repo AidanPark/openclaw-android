@@ -1,10 +1,6 @@
 # OpenClaw Lite Android
 
-> **이 프로젝트는 개발 중이며 아직 작동하지 않습니다.**
-
 [OpenClaw](https://github.com/openclaw)를 Android Termux에서 실행 — **proot-distro 없이**.
-
-> [English](README.md)
 
 ## 왜 만들었나?
 
@@ -61,6 +57,8 @@ OpenClaw는 서버로 동작하므로 화면이 꺼지면 Android가 프로세�
 
 Termux 앱을 열고 아래 명령어를 순서대로 입력합니다.
 
+(컴퓨터에서 SSH로 접속하면 명령어 입력이 훨씬 수월합니다. [Termux SSH 접속 가이드](docs/termux-ssh-guide.ko.md)를 참고하세요.)
+
 ```bash
 # 저장소 업데이트 (첫 실행 시 필수)
 pkg update -y
@@ -93,6 +91,8 @@ termux-wake-lock
 
 ### 4단계: OpenClaw 설치
 
+(컴퓨터에서 SSH로 접속하면 명령어 입력이 훨씬 수월합니다. [Termux SSH 접속 가이드](docs/termux-ssh-guide.ko.md)를 참고하세요.)
+
 ```bash
 curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-lite-android/main/bootstrap.sh | bash
 ```
@@ -117,29 +117,29 @@ openclaw --version
 
 버전 번호가 출력되면 설치 성공입니다.
 
-<details>
-<summary>대안: git clone으로 설치</summary>
+### 7단계: OpenClaw 설정 시작
 
 ```bash
-pkg update -y && pkg install -y git
-git clone https://github.com/AidanPark/openclaw-lite-android.git
-cd openclaw-lite-android
-bash install.sh
-source ~/.bashrc
+openclaw onboard
 ```
-</details>
+
+화면의 안내에 따라 초기 설정을 진행합니다.
+
+![openclaw onboard](docs/images/openclaw-onboard.png)
 
 ## 동작 원리
 
-설치 스크립트는 Termux와 표준 Linux 간의 4가지 호환성 문제를 해결합니다:
+설치 스크립트는 Termux와 표준 Linux 간의 5가지 호환성 문제를 해결합니다:
 
-1. **Bionic libc 크래시** — Android Bionic의 `getifaddrs()` 제한으로 `os.networkInterfaces()`가 크래시합니다. 사전 로드되는 JS 심(shim)이 try-catch로 감싸서 안전한 폴백을 반환합니다.
+1. **Android 플랫폼 감지** — Termux에서 Node.js의 `process.platform`이 `'android'`를 반환하여 OpenClaw가 플랫폼을 거부합니다. 사전 로드되는 JS 심(shim)이 이를 `'linux'`로 오버라이드합니다.
 
-2. **하드코딩된 시스템 경로** — Node 패키지가 `/bin/sh`, `/tmp` 등의 표준 경로를 기대합니다. 설치 스크립트가 이를 Termux의 `$PREFIX` 경로로 패치합니다.
+2. **Bionic libc 크래시** — Android Bionic의 `getifaddrs()` 제한으로 `os.networkInterfaces()`가 크래시합니다. 같은 JS 심이 try-catch로 감싸서 안전한 폴백을 반환합니다.
 
-3. **`/tmp` 접근 불가** — Android가 `/tmp` 쓰기를 차단합니다. `$PREFIX/tmp`로 리다이렉트합니다.
+3. **하드코딩된 시스템 경로** — Node 패키지가 `/bin/sh`, `/tmp` 등의 표준 경로를 기대합니다. 설치 스크립트가 이를 Termux의 `$PREFIX` 경로로 패치합니다.
 
-4. **systemd 부재** — 일부 설치 과정에서 systemd를 확인합니다. `CONTAINER=1` 환경변수로 이 검사를 우회합니다.
+4. **`/tmp` 접근 불가** — Android가 `/tmp` 쓰기를 차단합니다. `$PREFIX/tmp`로 리다이렉트합니다.
+
+5. **systemd 부재** — 일부 설치 과정에서 systemd를 확인합니다. `CONTAINER=1` 환경변수로 이 검사를 우회합니다.
 
 ## 프로젝트 구조
 
@@ -148,7 +148,7 @@ openclaw-lite-android/
 ├── install.sh                  # 원클릭 설치 스크립트 (진입점)
 ├── uninstall.sh                # 깔끔한 제거
 ├── patches/
-│   ├── bionic-compat.js        # os.networkInterfaces() 안전 래퍼
+│   ├── bionic-compat.js        # 플랫폼 오버라이드 + os.networkInterfaces() 안전 래퍼
 │   ├── patch-paths.sh          # OpenClaw 내 하드코딩 경로 수정
 │   └── apply-patches.sh        # 패치 오케스트레이터
 ├── scripts/
