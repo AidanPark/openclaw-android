@@ -21,7 +21,7 @@ echo ""
 
 step() {
     echo ""
-    echo -e "${BOLD}[$1/6] $2${NC}"
+    echo -e "${BOLD}[$1/7] $2${NC}"
     echo "----------------------------------------"
 }
 
@@ -76,15 +76,20 @@ step 6 "Verifying Installation"
 bash "$SCRIPT_DIR/tests/verify-install.sh"
 
 # ─────────────────────────────────────────────
+step 7 "Updating OpenClaw"
+echo "Running: openclaw update"
+echo ""
+openclaw update
+
 echo ""
 echo -e "${BOLD}========================================${NC}"
 echo -e "${GREEN}${BOLD}  Installation Complete!${NC}"
 echo -e "${BOLD}========================================${NC}"
 echo ""
-echo "Next steps:"
-echo "  1. Restart your Termux session (or run: source ~/.bashrc)"
-echo "  2. Configure OpenClaw: openclaw config"
-echo "  3. Start OpenClaw: openclaw start"
+echo -e "  OpenClaw $(openclaw --version)"
 echo ""
-echo "To uninstall: bash $SCRIPT_DIR/uninstall.sh"
+echo "Next step:"
+echo "  Run 'openclaw onboard' to start setup."
+echo ""
+echo "To uninstall: bash ~/.openclaw-android/uninstall.sh"
 echo ""

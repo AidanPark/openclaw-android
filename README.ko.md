@@ -2,7 +2,7 @@
 
 <img src="docs/images/openclaw_android.jpg" alt="OpenClaw for Android">
 
-나야, [OpenClaw](https://github.com/openclaw). 근데 이제 Android-Termux를 곁들인
+나야, [OpenClaw](https://github.com/openclaw). 근데,, 이제 Android-Termux 를 곁들인...
 
 ## 왜 만들었나?
 
@@ -100,30 +100,29 @@ pkg update -y && pkg upgrade -y && pkg install -y curl && termux-wake-lock
 (컴퓨터에서 SSH로 접속하면 명령어 입력이 훨씬 수월합니다. [Termux SSH 접속 가이드](docs/termux-ssh-guide.ko.md)를 참고하세요.)
 
 ```bash
-curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-android/main/bootstrap.sh | bash
+curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-android/main/bootstrap.sh | bash && source ~/.bashrc
 ```
 
-설치는 3~10분 정도 소요됩니다 (네트워크 속도와 기기 성능에 따라 다름). 설치 과정에서 패키지 다운로드, 컴파일이 진행되므로 Wi-Fi 환경을 권장합니다.
+설치 스크립트가 아래 7단계를 자동으로 처리합니다. 3~10분 정도 소요되며 (네트워크 속도와 기기 성능에 따라 다름), Wi-Fi 환경을 권장합니다.
 
-### 5단계: 환경변수 적용
-
-설치가 완료되면 환경변수를 적용합니다. 둘 중 하나를 선택하세요:
-
-- **방법 A**: Termux 앱을 완전히 종료했다가 다시 열기
-- **방법 B**: 아래 명령어 실행
-  ```bash
-  source ~/.bashrc
-  ```
-
-### 6단계: 설치 확인
-
-```bash
-openclaw --version
+```
+install.sh (진입점)
+  ├── [1/7] scripts/check-env.sh      # Termux 환경 검증
+  ├── [2/7] scripts/install-deps.sh    # pkg install (nodejs-lts 등)
+  ├── [3/7] scripts/setup-paths.sh     # 디렉토리 생성
+  ├── [4/7] scripts/setup-env.sh       # .bashrc에 환경변수 추가
+  ├── [5/7] patches/apply-patches.sh   # OpenClaw 설치 및 패치 적용
+  │         ├── bionic-compat.js 복사
+  │         └── patches/patch-paths.sh # sed로 하드코딩 경로 치환
+  ├── [6/7] tests/verify-install.sh    # 설치 검증
+  └── [7/7] openclaw update            # 최신 버전으로 업데이트
 ```
 
-버전 번호가 출력되면 설치 성공입니다.
+설치가 완료되면 OpenClaw 버전이 출력되고, `openclaw onboard`로 설정을 시작하라는 안내가 나타납니다.
 
-### 7단계: OpenClaw 설정 시작
+### 5단계: OpenClaw 설정 시작
+
+설치 완료 메시지의 안내에 따라 아래 명령어를 실행합니다.
 
 ```bash
 openclaw onboard
@@ -133,7 +132,7 @@ openclaw onboard
 
 ![openclaw onboard](docs/images/openclaw-onboard.png)
 
-### 8단계: 게이트웨이 실행 및 Termux 탭 구성
+### 6단계: 게이트웨이 실행 및 Termux 탭 구성
 
 설정이 끝나면 게이트웨이를 실행합니다. 게이트웨이는 폰의 Termux에서 직접 실행하는 것이 안정적입니다.
 
@@ -182,6 +181,7 @@ openclaw gateway
 
 ```
 openclaw-android/
+├── bootstrap.sh                # curl | bash 원라이너 설치 (다운로더)
 ├── install.sh                  # 원클릭 설치 스크립트 (진입점)
 ├── uninstall.sh                # 깔끔한 제거
 ├── patches/
@@ -199,9 +199,9 @@ openclaw-android/
 
 ## 설치 흐름 상세
 
-`bash install.sh`를 실행하면 아래 6단계가 순서대로 실행됩니다.
+`bash install.sh`를 실행하면 아래 7단계가 순서대로 실행됩니다.
 
-### [1/6] 환경 체크 — `scripts/check-env.sh`
+### [1/7] 환경 체크 — `scripts/check-env.sh`
 
 설치를 시작하기 전에 현재 환경이 적합한지 검증합니다.
 
@@ -211,7 +211,7 @@ openclaw-android/
 - **기존 설치 감지**: `openclaw` 명령어가 이미 존재하면 현재 버전을 표시하고 재설치/업데이트임을 안내
 - **Node.js 사전 확인**: 이미 설치된 Node.js가 있으면 버전을 표시하고, 22 미만이면 업그레이드 예고
 
-### [2/6] 패키지 설치 — `scripts/install-deps.sh`
+### [2/7] 패키지 설치 — `scripts/install-deps.sh`
 
 OpenClaw 빌드 및 실행에 필요한 Termux 패키지를 설치합니다.
 
@@ -231,7 +231,7 @@ OpenClaw 빌드 및 실행에 필요한 Termux 패키지를 설치합니다.
 
 - 설치 후 Node.js >= 22 버전 및 npm 존재 여부를 검증. 실패 시 종료
 
-### [3/6] 경로 설정 — `scripts/setup-paths.sh`
+### [3/7] 경로 설정 — `scripts/setup-paths.sh`
 
 Termux에서 필요한 디렉토리 구조를 생성합니다.
 
@@ -240,7 +240,7 @@ Termux에서 필요한 디렉토리 구조를 생성합니다.
 - `$HOME/.openclaw` — OpenClaw 데이터 디렉토리
 - 표준 Linux 경로(`/bin/sh`, `/usr/bin/env`, `/tmp`)가 Termux의 `$PREFIX` 하위 경로로 매핑되는 현황을 표시
 
-### [4/6] 환경변수 설정 — `scripts/setup-env.sh`
+### [4/7] 환경변수 설정 — `scripts/setup-env.sh`
 
 `~/.bashrc`에 환경변수 블록을 추가합니다.
 
@@ -252,7 +252,7 @@ Termux에서 필요한 디렉토리 구조를 생성합니다.
   - `NODE_OPTIONS="-r .../bionic-compat.js"` — 모든 Node 프로세스에 Bionic 호환 패치 자동 로드
   - `CONTAINER=1` — systemd 존재 여부 확인을 우회
 
-### [5/6] OpenClaw 설치 및 패치 — `npm install` + `patches/apply-patches.sh`
+### [5/7] OpenClaw 설치 및 패치 — `npm install` + `patches/apply-patches.sh`
 
 OpenClaw을 글로벌로 설치하고 Termux 호환 패치를 적용합니다.
 
@@ -267,7 +267,7 @@ OpenClaw을 글로벌로 설치하고 Termux 호환 패치를 적용합니다.
      - `"/usr/bin/env"` → `"$PREFIX/bin/env"`
    - 패치 결과를 `~/.openclaw-android/patch.log`에 기록
 
-### [6/6] 설치 검증 — `tests/verify-install.sh`
+### [6/7] 설치 검증 — `tests/verify-install.sh`
 
 설치가 정상적으로 완료되었는지 7가지 항목을 확인합니다.
 
@@ -285,12 +285,16 @@ OpenClaw을 글로벌로 설치하고 Termux 호환 패치를 적용합니다.
 
 모든 항목 통과 시 PASSED, 하나라도 실패 시 FAILED를 출력하고 재설치를 안내합니다.
 
+### [7/7] OpenClaw 업데이트
+
+`openclaw update`를 실행하여 최신 상태로 업데이트합니다. 완료 후 OpenClaw 버전을 출력하고 `openclaw onboard`로 설정을 시작하라는 안내를 표시합니다.
+
 </details>
 
 ## 제거
 
 ```bash
-bash uninstall.sh
+bash ~/.openclaw-android/uninstall.sh
 ```
 
 OpenClaw 패키지, 패치, 환경변수, 임시 파일이 모두 제거됩니다. OpenClaw 데이터(`~/.openclaw`)는 선택적으로 보존할 수 있습니다.

@@ -100,30 +100,29 @@ Once Step 3 finishes, paste the following command.
 (Typing commands is much easier via SSH from a computer. See the [Termux SSH Setup Guide](docs/termux-ssh-guide.md) for details.)
 
 ```bash
-curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-android/main/bootstrap.sh | bash
+curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-android/main/bootstrap.sh | bash && source ~/.bashrc
 ```
 
-This takes 3–10 minutes depending on network speed and device. Package downloads and compilation will occur, so Wi-Fi is recommended.
+The installer automatically handles the following 7 steps. This takes 3–10 minutes depending on network speed and device. Wi-Fi is recommended.
 
-### Step 5: Apply Environment
-
-Once installation is complete, apply the environment variables. Choose one:
-
-- **Option A**: Close and reopen the Termux app completely
-- **Option B**: Run the following command
-  ```bash
-  source ~/.bashrc
-  ```
-
-### Step 6: Verify
-
-```bash
-openclaw --version
+```
+install.sh (entry point)
+  ├── [1/7] scripts/check-env.sh      # Verify Termux environment
+  ├── [2/7] scripts/install-deps.sh    # pkg install (nodejs-lts, etc.)
+  ├── [3/7] scripts/setup-paths.sh     # Create directories
+  ├── [4/7] scripts/setup-env.sh       # Add env vars to .bashrc
+  ├── [5/7] patches/apply-patches.sh   # Install OpenClaw & apply patches
+  │         ├── bionic-compat.js copy
+  │         └── patches/patch-paths.sh # sed hardcoded path replacements
+  ├── [6/7] tests/verify-install.sh    # Verify installation
+  └── [7/7] openclaw update            # Update to latest version
 ```
 
-If a version number prints, you're done.
+Once complete, the OpenClaw version is displayed along with instructions to run `openclaw onboard`.
 
-### Step 7: Start OpenClaw Setup
+### Step 5: Start OpenClaw Setup
+
+As instructed in the installation output, run:
 
 ```bash
 openclaw onboard
@@ -133,7 +132,7 @@ Follow the on-screen instructions to complete the initial setup.
 
 ![openclaw onboard](docs/images/openclaw-onboard.png)
 
-### Step 8: Start the Gateway and Set Up Termux Tabs
+### Step 6: Start the Gateway and Set Up Termux Tabs
 
 Once setup is complete, start the gateway. Running it directly on the phone's Termux is the most stable approach.
 
@@ -182,6 +181,7 @@ However, **once the gateway is running, there's no difference**. The process sta
 
 ```
 openclaw-android/
+├── bootstrap.sh                # curl | bash one-liner installer (downloader)
 ├── install.sh                  # One-click installer (entry point)
 ├── uninstall.sh                # Clean removal
 ├── patches/
@@ -199,9 +199,9 @@ openclaw-android/
 
 ## Detailed Installation Flow
 
-Running `bash install.sh` executes the following 6 steps in order.
+Running `bash install.sh` executes the following 7 steps in order.
 
-### [1/6] Environment Check — `scripts/check-env.sh`
+### [1/7] Environment Check — `scripts/check-env.sh`
 
 Validates that the current environment is suitable before starting installation.
 
@@ -211,7 +211,7 @@ Validates that the current environment is suitable before starting installation.
 - **Existing installation**: If `openclaw` command already exists, shows current version and notes this is a reinstall/upgrade
 - **Node.js pre-check**: If Node.js is already installed, shows version and warns if below 22
 
-### [2/6] Package Installation — `scripts/install-deps.sh`
+### [2/7] Package Installation — `scripts/install-deps.sh`
 
 Installs Termux packages required for building and running OpenClaw.
 
@@ -231,7 +231,7 @@ Installs Termux packages required for building and running OpenClaw.
 
 - After installation, verifies Node.js >= 22 and npm presence. Exits on failure
 
-### [3/6] Path Setup — `scripts/setup-paths.sh`
+### [3/7] Path Setup — `scripts/setup-paths.sh`
 
 Creates the directory structure needed for Termux.
 
@@ -240,7 +240,7 @@ Creates the directory structure needed for Termux.
 - `$HOME/.openclaw` — OpenClaw data directory
 - Displays how standard Linux paths (`/bin/sh`, `/usr/bin/env`, `/tmp`) map to Termux's `$PREFIX` subdirectories
 
-### [4/6] Environment Variables — `scripts/setup-env.sh`
+### [4/7] Environment Variables — `scripts/setup-env.sh`
 
 Adds an environment variable block to `~/.bashrc`.
 
@@ -252,7 +252,7 @@ Adds an environment variable block to `~/.bashrc`.
   - `NODE_OPTIONS="-r .../bionic-compat.js"` — Auto-load Bionic compatibility patch for all Node processes
   - `CONTAINER=1` — Bypass systemd existence checks
 
-### [5/6] OpenClaw Installation & Patching — `npm install` + `patches/apply-patches.sh`
+### [5/7] OpenClaw Installation & Patching — `npm install` + `patches/apply-patches.sh`
 
 Installs OpenClaw globally and applies Termux compatibility patches.
 
@@ -267,7 +267,7 @@ Installs OpenClaw globally and applies Termux compatibility patches.
      - `"/usr/bin/env"` → `"$PREFIX/bin/env"`
    - Logs patch results to `~/.openclaw-android/patch.log`
 
-### [6/6] Installation Verification — `tests/verify-install.sh`
+### [6/7] Installation Verification — `tests/verify-install.sh`
 
 Checks 7 items to confirm installation completed successfully.
 
@@ -285,12 +285,16 @@ Checks 7 items to confirm installation completed successfully.
 
 All items pass → PASSED. Any failure → FAILED with reinstall instructions.
 
+### [7/7] OpenClaw Update
+
+Runs `openclaw update` to ensure the latest version. On completion, displays the OpenClaw version and instructs the user to run `openclaw onboard` to start setup.
+
 </details>
 
 ## Uninstall
 
 ```bash
-bash uninstall.sh
+bash ~/.openclaw-android/uninstall.sh
 ```
 
 This removes the OpenClaw package, patches, environment variables, and temp files. Your OpenClaw data (`~/.openclaw`) is optionally preserved.
