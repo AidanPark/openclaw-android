@@ -2,6 +2,12 @@
 
 <img src="docs/images/openclaw_android.jpg" alt="OpenClaw on Android">
 
+![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-brightgreen)
+![Termux](https://img.shields.io/badge/Termux-Required-orange)
+![No proot](https://img.shields.io/badge/proot--distro-Not%20Required-blue)
+![License MIT](https://img.shields.io/github/license/AidanPark/openclaw-android)
+![GitHub Stars](https://img.shields.io/github/stars/AidanPark/openclaw-android)
+
 Because Android deserves a shell.
 
 ## Why?
