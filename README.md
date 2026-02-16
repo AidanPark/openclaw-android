@@ -143,7 +143,13 @@ Once setup is complete, start the gateway:
 openclaw gateway
 ```
 
-To access the dashboard from your PC, open a new terminal on your PC and set up an SSH tunnel:
+To access the dashboard from your PC, first find your phone's IP address. Run the following in Termux and look for the `inet` address under `wlan0` (e.g. `192.168.0.100`).
+
+```bash
+ifconfig
+```
+
+Then open a new terminal on your PC and set up an SSH tunnel:
 
 ```bash
 ssh -N -L 18789:127.0.0.1:18789 -p 8022 <phone-ip>
@@ -170,6 +176,14 @@ Recommended tab setup:
 With these two tabs open, the gateway runs stably while you can SSH in from your computer for additional tasks.
 
 > To stop the gateway, press `Ctrl+C` in Tab 1. Do not use `Ctrl+Z` — it only suspends the process without terminating it. Always use `Ctrl+C`.
+
+## Managing Multiple Devices
+
+If you run OpenClaw on multiple phones, use the [Dashboard Connect](https://aidanpark.github.io/openclaw-android/tools/connect.html) tool to manage them from your PC.
+
+- Save connection settings (IP, token, ports) for each device with a nickname
+- Generates the SSH tunnel command and dashboard URL automatically
+- **Your data stays local** — This is a static page with no server or analytics. All settings are saved in your browser's localStorage and never leave your device.
 
 ## What It Does
 
@@ -308,16 +322,6 @@ All items pass → PASSED. Any failure → FAILED with reinstall instructions.
 Runs `openclaw update` to ensure the latest version. On completion, displays the OpenClaw version and instructs the user to run `openclaw onboard` to start setup.
 
 </details>
-
-## Update
-
-If you installed before and want to get the latest features (e.g., `oca-gateway`), run:
-
-```bash
-curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-android/main/update.sh | bash && source ~/.bashrc
-```
-
-This is a lightweight update that downloads only what's needed — no reinstall required.
 
 ## Uninstall
 

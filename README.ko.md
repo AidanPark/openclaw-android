@@ -143,7 +143,13 @@ openclaw onboard
 openclaw gateway
 ```
 
-PC에서 대시보드에 접속하려면, PC의 새 터미널에서 SSH 터널을 설정합니다:
+PC에서 대시보드에 접속하려면, 먼저 폰의 IP 주소를 확인합니다. Termux에서 다음을 실행하고 `wlan0` 항목의 `inet` 주소를 확인하세요 (예: `192.168.0.100`).
+
+```bash
+ifconfig
+```
+
+그 다음 PC의 새 터미널에서 SSH 터널을 설정합니다:
 
 ```bash
 ssh -N -L 18789:127.0.0.1:18789 -p 8022 <폰IP>
@@ -170,6 +176,14 @@ ssh -N -L 18789:127.0.0.1:18789 -p 8022 <폰IP>
 이렇게 두 탭을 유지해 두면 게이트웨이가 안정적으로 동작하면서, 컴퓨터에서 SSH로 접속하여 추가 작업을 할 수 있습니다.
 
 > 게이트웨이를 중지하려면 탭 1에서 `Ctrl+C`를 누르세요. `Ctrl+Z`는 프로세스를 종료하지 않고 일시 중지만 시키므로, 반드시 `Ctrl+C`를 사용하세요.
+
+## 여러 디바이스 관리
+
+여러 폰에서 OpenClaw를 운영한다면, [Dashboard Connect](https://aidanpark.github.io/openclaw-android/tools/connect.html) 도구로 PC에서 편리하게 관리할 수 있습니다.
+
+- 각 기기의 연결 정보(IP, 토큰, 포트)를 닉네임과 함께 저장
+- SSH 터널 명령어와 대시보드 URL을 자동 생성
+- **데이터는 로컬에만 저장** — 서버나 분석 도구가 없는 정적 페이지입니다. 모든 설정은 브라우저의 localStorage에 저장되며 인터넷으로 전송되지 않습니다.
 
 ## 동작 원리
 
@@ -308,16 +322,6 @@ OpenClaw을 글로벌로 설치하고 Termux 호환 패치를 적용합니다.
 `openclaw update`를 실행하여 최신 상태로 업데이트합니다. 완료 후 OpenClaw 버전을 출력하고 `openclaw onboard`로 설정을 시작하라는 안내를 표시합니다.
 
 </details>
-
-## 업데이트
-
-이전에 설치했는데 새 기능(예: `oca-gateway`)을 사용하고 싶다면 아래 명령어를 실행하세요:
-
-```bash
-curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-android/main/update.sh | bash && source ~/.bashrc
-```
-
-필요한 파일만 다운로드하는 경량 업데이트입니다. 재설치가 필요 없습니다.
 
 ## 제거
 

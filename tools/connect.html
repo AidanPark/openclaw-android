@@ -4,65 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OpenClaw on Android — Dashboard Connect</title>
+<link rel="icon" type="image/png" href="../docs/images/favicon.png">
 <style>
+  :root {
+    --bg: #0b1020;
+    --card: #121a33;
+    --text: #e8ecff;
+    --muted: #a8b1d6;
+    --accent: #6aa3ff;
+    --border: rgba(255, 255, 255, 0.10);
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #1a1a2e;
-    color: #e0e0e0;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
     min-height: 100vh;
     display: flex;
-  }
-
-  /* Sidebar */
-  .sidebar {
-    width: 300px;
-    min-width: 300px;
-    background: #0f1a30;
-    border-right: 1px solid #2a2a4a;
-    padding: 24px 20px;
-    overflow-y: auto;
-    height: 100vh;
-    position: sticky;
-    top: 0;
-  }
-  .sidebar h2 {
-    font-size: 1em;
-    color: #e94560;
-    margin-bottom: 16px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #2a2a4a;
-  }
-  .sidebar h3 {
-    font-size: 0.85em;
-    color: #60a0ff;
-    margin: 16px 0 6px;
-  }
-  .sidebar p {
-    font-size: 0.8em;
-    color: #a0a0b0;
-    line-height: 1.6;
-    margin-bottom: 8px;
-  }
-  .sidebar code {
-    background: #0a0a1a;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-family: 'SF Mono', 'Fira Code', monospace;
-    font-size: 0.9em;
-    color: #80ff80;
-  }
-  .sidebar .cmd-block {
-    background: #0a0a1a;
-    border: 1px solid #2a2a4a;
-    border-radius: 4px;
-    padding: 8px 10px;
-    margin: 6px 0 10px;
-    font-family: 'SF Mono', 'Fira Code', monospace;
-    font-size: 0.78em;
-    color: #80ff80;
-    line-height: 1.5;
-    word-break: break-all;
+    letter-spacing: 0.2px;
   }
 
   /* Main */
@@ -71,56 +30,83 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 20px;
+    padding: 28px 16px;
   }
-  .container {
-    background: #16213e;
-    border-radius: 12px;
-    padding: 32px;
+  .outer {
     width: 100%;
     max-width: 520px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+  .container {
+    background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 32px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
   }
   .banner {
     text-align: center;
     margin-bottom: 20px;
   }
   .banner img {
-    max-width: 200px;
+    width: 100%;
     border-radius: 8px;
   }
+  .title-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
   h1 {
-    font-size: 1.2em;
-    margin-bottom: 24px;
-    color: #e94560;
-    text-align: center;
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: 0.2px;
+  }
+  .github-link {
+    color: var(--muted);
+    text-decoration: none;
+    display: inline-flex;
+    transition: color 0.2s;
+  }
+  .github-link:hover {
+    color: var(--text);
+  }
+  .card-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text);
+    margin-top: 16px;
+    margin-bottom: 10px;
+    letter-spacing: 0.2px;
+  }
+  .card-title-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .card-title-row .card-title {
+    margin-bottom: 10px;
   }
 
   /* Device list */
   .device-section {
     margin-bottom: 20px;
   }
-  .device-section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-  }
-  .device-section-header span {
-    font-size: 0.85em;
-    color: #a0a0b0;
-  }
   .btn-new {
-    background: #2a4a7f;
-    color: #e0e0e0;
-    border: none;
+    background: rgba(106, 163, 255, 0.22);
+    border: 1px solid rgba(106, 163, 255, 0.35);
+    color: var(--text);
     padding: 6px 14px;
-    border-radius: 5px;
-    font-size: 0.82em;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
     cursor: pointer;
     transition: background 0.2s;
   }
-  .btn-new:hover { background: #3a5a9f; }
+  .btn-new:hover { background: rgba(106, 163, 255, 0.32); }
   .device-list {
     display: flex;
     flex-direction: column;
@@ -132,286 +118,321 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: #0f3460;
-    border: 1px solid #2a4a7f;
-    border-radius: 6px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 10px;
     padding: 10px 12px;
     cursor: pointer;
     transition: border-color 0.2s, background 0.2s;
   }
   .device-card:hover {
-    border-color: #60a0ff;
-    background: #143a6e;
+    border-color: rgba(106, 163, 255, 0.35);
+    background: rgba(106, 163, 255, 0.08);
   }
   .device-card.active {
-    border-color: #e94560;
-    background: #1a2a50;
+    border-color: rgba(106, 163, 255, 0.55);
+    background: rgba(106, 163, 255, 0.12);
   }
   .device-card-info {
     flex: 1;
     min-width: 0;
   }
   .device-card-name {
-    font-size: 0.95em;
-    font-weight: 600;
-    color: #e0e0e0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .device-card-ip {
-    font-size: 0.78em;
-    color: #808090;
+    font-size: 12px;
+    color: var(--muted);
     font-family: 'SF Mono', 'Fira Code', monospace;
     margin-top: 2px;
   }
   .btn-delete {
     background: none;
     border: none;
-    color: #605060;
+    color: rgba(255,255,255,0.2);
     font-size: 1.1em;
     cursor: pointer;
     padding: 4px 8px;
-    border-radius: 4px;
+    border-radius: 8px;
     transition: color 0.2s, background 0.2s;
     flex-shrink: 0;
     margin-left: 8px;
   }
   .btn-delete:hover {
-    color: #e94560;
-    background: rgba(233,69,96,0.1);
+    color: rgba(255, 106, 106, 0.92);
+    background: rgba(255, 106, 106, 0.1);
   }
   .empty-msg {
     text-align: center;
-    color: #505070;
-    font-size: 0.85em;
+    color: var(--muted);
+    font-size: 13px;
     padding: 16px 0;
   }
 
   /* Form */
   .form-section {
-    border-top: 1px solid #2a2a4a;
-    padding-top: 20px;
   }
   .form-group {
     margin-bottom: 14px;
   }
   label {
     display: block;
-    font-size: 0.85em;
-    color: #a0a0b0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
     margin-bottom: 4px;
   }
   input {
     width: 100%;
     padding: 10px 12px;
-    background: #0f3460;
-    border: 1px solid #2a4a7f;
-    border-radius: 6px;
-    color: #e0e0e0;
-    font-size: 0.95em;
+    background: rgba(0,0,0,0.20);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-size: 14px;
     font-family: 'SF Mono', 'Fira Code', monospace;
+    outline: none;
   }
   input#nickname {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  }
+  input:disabled {
+    background: rgba(0,0,0,0.12);
+    color: rgba(255,255,255,0.25);
+    border-color: rgba(255,255,255,0.05);
+    cursor: not-allowed;
   }
   input:focus {
-    outline: none;
-    border-color: #e94560;
+    border-color: rgba(106, 163, 255, 0.55);
+    box-shadow: 0 0 0 3px rgba(106, 163, 255, 0.12);
   }
   .row {
     display: flex;
     gap: 12px;
   }
   .row .form-group { flex: 1; }
-  .form-buttons {
-    display: flex;
-    gap: 10px;
-    margin-top: 8px;
-    margin-bottom: 24px;
-  }
-  .btn {
-    display: inline-block;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.95em;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  .btn-save {
-    background: #e94560;
-    color: #fff;
-    flex: 1;
-  }
-  .btn-save:hover { background: #c73650; }
-  .btn-cancel {
-    background: #2a2a4a;
-    color: #a0a0b0;
-    padding: 10px 16px;
-  }
-  .btn-cancel:hover { background: #3a3a5a; }
   .divider {
-    text-align: center;
-    font-size: 0.85em;
-    color: #606080;
-    margin: 20px 0 14px;
-    border-top: 1px solid #2a2a4a;
-    padding-top: 14px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    margin: 20px 0 10px;
   }
   .command-box {
     position: relative;
-    background: #0a0a1a;
-    border: 1px solid #2a2a4a;
-    border-radius: 6px;
+    background: rgba(0,0,0,0.20);
+    border: 1px solid var(--border);
+    border-radius: 12px;
     padding: 12px 60px 12px 12px;
     font-family: 'SF Mono', 'Fira Code', monospace;
-    font-size: 0.85em;
+    font-size: 13px;
     word-break: break-all;
     line-height: 1.5;
-    color: #80ff80;
+    color: var(--text);
     min-height: 44px;
   }
   .btn-copy {
     position: absolute;
     top: 8px;
     right: 8px;
-    background: #2a4a7f;
-    color: #e0e0e0;
+    background: rgba(106, 163, 255, 0.22);
+    border: 1px solid rgba(106, 163, 255, 0.35);
+    color: var(--text);
     padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 0.8em;
-    border: none;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
     cursor: pointer;
   }
-  .btn-copy:hover { background: #3a5a9f; }
-  .btn-copy.copied { background: #2a7a4a; }
+  .btn-copy:hover { background: rgba(106, 163, 255, 0.32); }
+  .btn-copy.copied { background: rgba(137, 240, 194, 0.22); border-color: rgba(137, 240, 194, 0.35); }
   .btn-open {
     display: block;
     text-align: center;
-    background: #0f3460;
-    color: #60a0ff;
+    background: rgba(106, 163, 255, 0.22);
+    border: 1px solid rgba(106, 163, 255, 0.35);
+    color: var(--accent);
     text-decoration: none;
     padding: 12px;
-    border-radius: 6px;
-    font-size: 1em;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
     margin-top: 10px;
-    border: 1px solid #2a4a7f;
     transition: background 0.2s;
   }
   .btn-open:hover {
-    background: #1a4a80;
-    color: #80c0ff;
+    background: rgba(106, 163, 255, 0.32);
   }
+
+  /* Tooltip */
+  .label-with-tooltip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .tooltip-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+  .tooltip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: rgba(106, 163, 255, 0.22);
+    color: var(--accent);
+    font-size: 0.7em;
+    font-weight: 700;
+    cursor: help;
+  }
+  .tooltip-bubble {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--muted);
+    line-height: 1.6;
+    white-space: normal;
+    width: 260px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    z-index: 10;
+  }
+  .tooltip-bubble code {
+    background: rgba(0,0,0,0.30);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.9em;
+    color: rgba(137, 240, 194, 0.92);
+  }
+  .tooltip-bubble.tooltip-wide {
+    width: 560px;
+  }
+  .tooltip-bubble .tooltip-img {
+    display: block;
+    width: 100%;
+    border-radius: 8px;
+    margin-top: 8px;
+    border: 1px solid var(--border);
+  }
+  .tooltip-bubble::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    right: 2px;
+    border: 6px solid transparent;
+    border-top-color: var(--border);
+  }
+  .tooltip-wrap:hover .tooltip-bubble { display: block; }
+
+  /* Storage info */
+  .storage-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.25);
+  }
+  .storage-info p {
+    margin: 0;
+    line-height: 1.4;
+  }
+  .storage-actions {
+    flex-shrink: 0;
+    margin-left: 12px;
+  }
+  .storage-actions a {
+    color: rgba(255,255,255,0.25);
+    text-decoration: none;
+  }
+  .storage-actions a:hover {
+    color: var(--accent);
+  }
+  .storage-sep {
+    margin: 0 4px;
+  }
+
   .hidden { display: none; }
 
-  /* Sidebar toggle for mobile */
-  .sidebar-toggle {
-    display: none;
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 48px;
-    height: 48px;
-    background: #e94560;
-    color: #fff;
-    border: none;
-    border-radius: 50%;
-    font-size: 1.4em;
-    cursor: pointer;
-    z-index: 1000;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-  }
   @media (max-width: 768px) {
-    .sidebar {
-      position: fixed;
-      left: -300px;
-      top: 0;
-      z-index: 999;
-      transition: left 0.3s;
-    }
-    .sidebar.open { left: 0; }
-    .sidebar-toggle { display: block; }
     .main { padding: 20px 16px; }
   }
 </style>
 </head>
 <body>
 
-<aside class="sidebar" id="sidebar">
-  <h2>How to Find Settings</h2>
-
-  <h3>Phone IP</h3>
-  <p>Your phone's local IP address on Wi-Fi. Run this in Termux:</p>
-  <div class="cmd-block">ifconfig wlan0 | grep 'inet '</div>
-  <p>Look for the <code>inet</code> address (e.g. <code>192.168.0.100</code>). Make sure your PC is on the same Wi-Fi network.</p>
-
-  <h3>Dashboard Token</h3>
-  <p>Shown when you start the OpenClaw gateway. Look for the line:</p>
-  <div class="cmd-block">Dashboard URL: http://127.0.0.1:18789/#token=abc123...</div>
-  <p>Copy the value after <code>#token=</code>. The token changes each time the gateway restarts.</p>
-
-  <h3>Dashboard Port</h3>
-  <p>The port OpenClaw dashboard listens on. Default is <code>18789</code>. Shown in the Dashboard URL above.</p>
-
-  <h3>SSH Port</h3>
-  <p>Termux SSH server (sshd) listens on port <code>8022</code> by default. Start it with:</p>
-  <div class="cmd-block">sshd</div>
-  <p>If you haven't set up SSH yet, see the <a href="https://github.com/AidanPark/openclaw-android/blob/main/docs/termux-ssh-guide.md" style="color:#60a0ff;" target="_blank">Termux SSH Guide</a>.</p>
-</aside>
-
-<button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">?</button>
-
 <main class="main">
-  <div class="container">
+  <div class="outer">
+    <div class="title-row">
+      <h1>OpenClaw on Android</h1>
+      <a href="https://github.com/AidanPark/openclaw-android" class="github-link" target="_blank" title="GitHub"><svg width="24" height="24" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>
+    </div>
     <div class="banner">
       <img src="../docs/images/openclaw_android.jpg" alt="OpenClaw on Android">
     </div>
-    <h1>OpenClaw on Android<br>Dashboard Connect</h1>
-
+    <div class="card-title-row">
+      <div class="card-title">Saved Devices</div>
+      <button class="btn-new" onclick="showForm(null)">+ New Device</button>
+    </div>
     <!-- Device List -->
     <div class="device-section" id="deviceSection">
-      <div class="device-section-header">
-        <span>Saved Devices</span>
-        <button class="btn-new" onclick="showForm(null)">+ New Device</button>
-      </div>
       <div class="device-list" id="deviceList"></div>
     </div>
+    <div class="storage-info">
+      <p>Settings are saved in your browser's localStorage. Clearing browser data will erase them.</p>
+      <div class="storage-actions">
+        <a href="#" onclick="exportDevices(); return false;">Export</a>
+        <span class="storage-sep">/</span>
+        <a href="#" onclick="document.getElementById('importFile').click(); return false;">Import</a>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importDevices(this)">
+      </div>
+    </div>
 
+    <div class="card-title">Dashboard Connect</div>
+  <div class="container">
     <!-- Form (hidden by default, shown on new/edit) -->
     <div class="form-section hidden" id="formSection">
       <div class="form-group">
-        <label>Nickname</label>
-        <input type="text" id="nickname" placeholder="e.g. Galaxy S24, Living Room Phone">
+        <label class="label-with-tooltip">Nickname<span class="tooltip-wrap"><span class="tooltip-icon">?</span><span class="tooltip-bubble">Give each device a nickname to manage multiple phones easily.</span></span></label>
+        <input type="text" id="nickname" placeholder="e.g. Jarvis, Alfred, Galaxy S24">
       </div>
       <div class="form-group">
-        <label>Phone IP</label>
+        <label class="label-with-tooltip">Phone IP<span class="tooltip-wrap"><span class="tooltip-icon">?</span><span class="tooltip-bubble tooltip-wide">Run <code>ifconfig</code> in Termux and find the <code>inet</code> address under <code>wlan0</code> (e.g. <code>192.168.0.100</code>). Your PC must be on the same Wi-Fi.<img class="tooltip-img" src="../docs/images/termux-ifconfig.png" alt="ifconfig in Termux"></span></span></label>
         <input type="text" id="phoneIp" placeholder="192.168.0.100">
       </div>
       <div class="row">
         <div class="form-group">
-          <label>SSH Port</label>
-          <input type="text" id="sshPort" placeholder="8022" value="8022">
+          <label class="label-with-tooltip">SSH Port<span class="tooltip-wrap"><span class="tooltip-icon">?</span><span class="tooltip-bubble">Termux sshd uses port <code>8022</code> by default. You rarely need to change this.</span></span></label>
+          <input type="text" id="sshPort" value="8022" disabled>
         </div>
         <div class="form-group">
-          <label>Local Port</label>
-          <input type="text" id="localPort" placeholder="18790" value="18790">
+          <label class="label-with-tooltip">Local Port<span class="tooltip-wrap"><span class="tooltip-icon">?</span><span class="tooltip-bubble">The port on your PC that maps to the dashboard. Change this if you run multiple tunnels at once (e.g. <code>18790</code>, <code>18791</code>).</span></span></label>
+          <input type="text" id="localPort" placeholder="18789" value="18789">
         </div>
         <div class="form-group">
-          <label>Dashboard Port</label>
-          <input type="text" id="dashPort" placeholder="18789" value="18789">
+          <label class="label-with-tooltip">Dashboard Port<span class="tooltip-wrap"><span class="tooltip-icon">?</span><span class="tooltip-bubble">OpenClaw dashboard listens on port <code>18789</code> by default. You rarely need to change this.</span></span></label>
+          <input type="text" id="dashPort" value="18789" disabled>
         </div>
       </div>
       <div class="form-group">
-        <label>Token</label>
+        <label class="label-with-tooltip">Token<span class="tooltip-wrap"><span class="tooltip-icon">?</span><span class="tooltip-bubble tooltip-wide">Shown when the gateway starts. You can also run <code>openclaw dashboard</code> to see it. Copy the value after <code>#token=</code>.<img class="tooltip-img" src="../docs/images/openclaw-dashboard.png" alt="openclaw dashboard"></span></span></label>
         <input type="text" id="token" placeholder="40db03634fb0104867...">
       </div>
-      <div class="form-buttons">
-        <button class="btn btn-save" onclick="saveDevice()">Save</button>
-        <button class="btn btn-cancel" onclick="cancelForm()">Cancel</button>
-      </div>
-
-      <!-- Result (inside form, shown below Save) -->
+      <!-- Result -->
       <div id="result" class="hidden">
         <div class="divider">Step 1: Run SSH Tunnel on your PC</div>
         <div class="command-box">
@@ -423,6 +444,7 @@
         <a id="dashLink" class="btn-open" href="#" target="_blank">Open Dashboard</a>
       </div>
     </div>
+  </div>
   </div>
 </main>
 
@@ -513,47 +535,34 @@
       formFields.forEach(f => document.getElementById(f).value = d[f] || '');
       renderResult(d);
     } else {
-      activeId = null;
+      // Create new device immediately
+      const newId = genId();
+      const data = { id: newId, nickname: '', phoneIp: '', sshPort: '8022', localPort: '18789', dashPort: '18789', token: '' };
+      devices.push(data);
+      saveAll();
+      editingId = newId;
+      activeId = newId;
+      formFields.forEach(f => document.getElementById(f).value = data[f] || '');
       document.getElementById('result').classList.add('hidden');
-      formFields.forEach(f => {
-        const el = document.getElementById(f);
-        if (f === 'sshPort') el.value = '8022';
-        else if (f === 'localPort') el.value = '18790';
-        else if (f === 'dashPort') el.value = '18789';
-        else el.value = '';
-      });
       document.getElementById('nickname').focus();
     }
     renderList();
   }
 
-  function cancelForm() {
-    editingId = null;
-    activeId = null;
-    document.getElementById('formSection').classList.add('hidden');
-    document.getElementById('result').classList.add('hidden');
-    renderList();
-  }
-
-  function saveDevice() {
-    const data = {};
+  function autoSave() {
+    if (!editingId) return;
+    const idx = devices.findIndex(x => x.id === editingId);
+    if (idx < 0) return;
+    const data = { id: editingId };
     formFields.forEach(f => data[f] = document.getElementById(f).value.trim());
-    if (!data.nickname) { alert('Nickname is required.'); return; }
-    if (!data.phoneIp) { alert('Phone IP is required.'); return; }
-    if (!data.token) { alert('Token is required.'); return; }
-
-    if (editingId) {
-      const idx = devices.findIndex(x => x.id === editingId);
-      if (idx >= 0) { data.id = editingId; devices[idx] = data; }
-    } else {
-      data.id = genId();
-      devices.push(data);
-    }
+    devices[idx] = data;
     saveAll();
-    activeId = data.id;
-    editingId = data.id;
     renderList();
-    renderResult(data);
+    if (data.phoneIp && data.token) {
+      renderResult(data);
+    } else {
+      document.getElementById('result').classList.add('hidden');
+    }
   }
 
   function deleteDevice(id) {
@@ -581,9 +590,45 @@
     });
   }
 
-  function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
+  function exportDevices() {
+    const json = JSON.stringify(devices, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'openclaw-on-android-devices.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
   }
+
+  function importDevices(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const imported = JSON.parse(e.target.result);
+        if (!Array.isArray(imported)) throw new Error();
+        devices = imported;
+        saveAll();
+        activeId = null;
+        editingId = null;
+        document.getElementById('formSection').classList.add('hidden');
+        document.getElementById('result').classList.add('hidden');
+        renderList();
+        if (devices.length > 0) selectDevice(devices[0].id);
+      } catch(err) {
+        alert('Invalid file format.');
+      }
+    };
+    reader.readAsText(file);
+    input.value = '';
+  }
+
+  // Auto-save on input change
+  formFields.forEach(f => {
+    const el = document.getElementById(f);
+    if (!el.disabled) el.addEventListener('input', autoSave);
+  });
 
   // Init
   loadDevices();
