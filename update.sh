@@ -34,15 +34,7 @@ if [ -z "${PREFIX:-}" ]; then
 fi
 echo -e "${GREEN}[OK]${NC}   Termux detected"
 
-# Check existing installation
-if [ ! -d "$OPENCLAW_DIR" ]; then
-    echo -e "${RED}[FAIL]${NC} OpenClaw on Android is not installed"
-    echo "       Run the full installer first:"
-    echo "       curl -sL $REPO_BASE/bootstrap.sh | bash"
-    exit 1
-fi
-echo -e "${GREEN}[OK]${NC}   OpenClaw on Android found at $OPENCLAW_DIR"
-
+# Check existing OpenClaw installation
 if ! command -v openclaw &>/dev/null; then
     echo -e "${RED}[FAIL]${NC} openclaw command not found"
     echo "       Run the full installer first:"
@@ -50,6 +42,9 @@ if ! command -v openclaw &>/dev/null; then
     exit 1
 fi
 echo -e "${GREEN}[OK]${NC}   openclaw $(openclaw --version 2>/dev/null || echo "")"
+
+# Create directory if it doesn't exist (older installations may not have it)
+mkdir -p "$OPENCLAW_DIR"
 
 # Check curl
 if ! command -v curl &>/dev/null; then
