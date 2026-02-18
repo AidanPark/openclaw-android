@@ -36,18 +36,6 @@
 - 약 500MB 이상의 여유 저장공간
 - Wi-Fi 또는 모바일 데이터 연결
 
-## 보너스: 폰에서 AI CLI 도구 사용
-
-이 프로젝트에 포함된 호환 패치가 Termux의 네이티브 빌드 환경을 개선하여, 주요 AI CLI 도구를 설치하고 실행할 수 있습니다:
-
-| 도구 | 설치 |
-|------|------|
-| [Claude Code](https://github.com/anthropics/claude-code) (Anthropic) | `npm i -g @anthropic-ai/claude-code` |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) (Google) | `npm i -g @google/gemini-cli` |
-| [Codex CLI](https://github.com/openai/codex) (OpenAI) | `npm i -g @openai/codex` |
-
-OpenClaw on Android를 먼저 설치한 후 위 도구를 설치하면 패치가 자동으로 적용됩니다.
-
 ## 처음부터 설치하기 (초기화된 폰 기준)
 
 1. [개발자 옵션 활성화 및 화면 켜짐 유지 설정](#1단계-개발자-옵션-활성화-및-화면-켜짐-유지-설정)
@@ -182,6 +170,18 @@ ssh -N -L 18789:127.0.0.1:18789 -p 8022 <폰IP>
 - 각 기기의 연결 정보(IP, 토큰, 포트)를 닉네임과 함께 저장
 - SSH 터널 명령어와 대시보드 URL을 자동 생성
 - **데이터는 로컬에만 저장** — 연결 정보(IP, 토큰, 포트)는 브라우저의 localStorage에만 저장되며 어떤 서버로도 전송되지 않습니다.
+
+## 보너스: 폰에서 AI CLI 도구 사용
+
+이 프로젝트에 포함된 호환 패치가 Termux의 네이티브 빌드 환경을 개선하여, 주요 AI CLI 도구를 설치하고 실행할 수 있습니다:
+
+| 도구 | 설치 |
+|------|------|
+| [Claude Code](https://github.com/anthropics/claude-code) (Anthropic) | `npm i -g @anthropic-ai/claude-code` |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) (Google) | `npm i -g @google/gemini-cli` |
+| [Codex CLI](https://github.com/openai/codex) (OpenAI) | `npm i -g @openai/codex` |
+
+OpenClaw on Android를 먼저 설치한 후 위 도구를 설치하면 패치가 자동으로 적용됩니다.
 
 ## 업데이트
 
