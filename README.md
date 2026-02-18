@@ -183,6 +183,12 @@ The compatibility patches included in this project fix Termux's native build env
 
 Install OpenClaw on Android first, then install any of these tools — the patches handle the rest.
 
+<p>
+  <img src="docs/images/run_claude.png" alt="Claude Code on Termux" width="32%">
+  <img src="docs/images/run_gemini.png" alt="Gemini CLI on Termux" width="32%">
+  <img src="docs/images/run_codex.png" alt="Codex CLI on Termux" width="32%">
+</p>
+
 ## Update
 
 If you already have OpenClaw on Android installed and want to apply the latest patches and environment updates:

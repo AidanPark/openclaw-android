@@ -183,6 +183,12 @@ ssh -N -L 18789:127.0.0.1:18789 -p 8022 <폰IP>
 
 OpenClaw on Android를 먼저 설치한 후 위 도구를 설치하면 패치가 자동으로 적용됩니다.
 
+<p>
+  <img src="docs/images/run_claude.png" alt="Claude Code on Termux" width="32%">
+  <img src="docs/images/run_gemini.png" alt="Gemini CLI on Termux" width="32%">
+  <img src="docs/images/run_codex.png" alt="Codex CLI on Termux" width="32%">
+</p>
+
 ## 업데이트
 
 이미 OpenClaw on Android가 설치되어 있고, 최신 패치와 환경 설정을 적용하고 싶다면:
