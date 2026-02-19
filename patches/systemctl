@@ -9,7 +9,7 @@ for arg in "$@"; do
             "{\"meta\":{\"restartNonce\":\"$(date +%s%N)\"}}" \
             2>/dev/null; then
             # Gateway not running — start it
-            openclaw gateway start 2>/dev/null || true
+            openclaw gateway 2>/dev/null || true
         fi
         exit 0
     fi
