@@ -107,7 +107,11 @@ pkg update -y && pkg upgrade -y && pkg install -y curl && termux-wake-lock
 ### 4단계: OpenClaw 설치
 
 > **팁: SSH로 편하게 입력하기**
-> 이 단계부터는 폰 화면 대신 컴퓨터 키보드로 명령어를 입력할 수 있습니다. 폰에서 `pkg install -y openssh && passwd && sshd`를 실행한 뒤, PC에서 `ssh -p 8022 <폰IP>`로 접속하세요. 자세한 내용은 [Termux SSH 접속 가이드](docs/termux-ssh-guide.ko.md)를 참고하세요.
+> 이 단계부터는 폰 화면 대신 컴퓨터 키보드로 명령어를 입력할 수 있습니다.
+> 폰에서 아래 명령어를 먼저 실행한 뒤, PC에서 `ssh -p 8022 <폰IP>`로 접속하세요:
+> ```
+> pkg install -y openssh && passwd && sshd
+> ```
 
 Termux에 아래 명령어를 붙여넣으세요.
 

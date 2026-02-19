@@ -107,7 +107,11 @@ Once `termux-wake-lock` runs, a notification pins in the status bar and prevents
 ### Step 4: Install OpenClaw
 
 > **Tip: Use SSH for easier typing**
-> From this step on, you can type commands from your computer keyboard instead of the phone screen. Run `pkg install -y openssh && passwd && sshd` on the phone, then connect from your PC with `ssh -p 8022 <phone-ip>`. See the [Termux SSH Setup Guide](docs/termux-ssh-guide.md) for details.
+> From this step on, you can type commands from your computer keyboard instead of the phone screen.
+> Run the following on your phone first, then connect from your PC with `ssh -p 8022 <phone-ip>`:
+> ```
+> pkg install -y openssh && passwd && sshd
+> ```
 
 Paste the following command in Termux.
 
