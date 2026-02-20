@@ -46,8 +46,8 @@ MARKER_END="# <<< OpenClaw on Android <<<"
 
 if [ -f "$BASHRC" ] && grep -qF "$MARKER_START" "$BASHRC"; then
     sed -i "/${MARKER_START//\//\\/}/,/${MARKER_END//\//\\/}/d" "$BASHRC"
-    # Remove blank lines left behind
-    sed -i '/^[[:space:]]*$/d' "$BASHRC"
+    # Collapse consecutive blank lines left behind (preserve intentional single blank lines)
+    sed -i '/^$/{ N; /^\n$/d }' "$BASHRC"
     echo -e "${GREEN}[OK]${NC}   Removed environment block from $BASHRC"
 else
     echo -e "${YELLOW}[SKIP]${NC} No environment block found in $BASHRC"

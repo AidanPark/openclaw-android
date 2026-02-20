@@ -164,6 +164,36 @@ openclaw gateway
 
 업데이트 전에 게이트웨이가 실행 중이었다면 기존 프로세스를 먼저 종료해야 할 수 있습니다. 위의 [게이트웨이가 시작되지 않음](#게이트웨이가-시작되지-않음-gateway-already-running-또는-port-is-already-in-use) 섹션을 참고하세요.
 
+## `openclaw update` 중 sharp 빌드 실패
+
+```
+npm error gyp ERR! not ok
+Update Result: ERROR
+Reason: global update
+```
+
+### 원인
+
+`openclaw update`가 npm으로 패키지를 업데이트할 때, npm을 서브프로세스로 실행합니다. `sharp` 네이티브 모듈 컴파일에 필요한 Termux 전용 빌드 환경변수(`CXXFLAGS`, `GYP_DEFINES`, `CPATH`)가 `~/.bashrc`에 설정되어 있지만, 해당 서브프로세스 환경에서는 자동으로 적용되지 않아 빌드가 실패합니다.
+
+### 영향
+
+**이 에러는 무해합니다.** OpenClaw 자체는 정상적으로 업데이트되었으며, `sharp` 모듈(이미지 처리용)만 리빌드에 실패한 것입니다. OpenClaw는 sharp 없이도 정상적으로 작동합니다.
+
+### 해결 방법
+
+업데이트 후 아래 스크립트로 sharp를 수동 빌드하세요:
+
+```bash
+bash ~/.openclaw-android/scripts/build-sharp.sh
+```
+
+또는 `openclaw update` 대신 `update.sh`를 사용하면, 필요한 환경변수를 자동으로 설정하고 sharp 빌드까지 처리합니다:
+
+```bash
+curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-android/main/update.sh | bash
+```
+
 ## "not supported on android" 에러
 
 ```

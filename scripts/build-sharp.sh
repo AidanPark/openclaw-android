@@ -17,6 +17,22 @@ export TEMP="$TMPDIR"
 export CONTAINER="${CONTAINER:-1}"
 export NODE_OPTIONS="${NODE_OPTIONS:--r $HOME/.openclaw-android/patches/bionic-compat.js}"
 
+# Locate openclaw install directory
+OPENCLAW_DIR="$(npm root -g)/openclaw"
+
+if [ ! -d "$OPENCLAW_DIR" ]; then
+    echo -e "${RED}[FAIL]${NC} OpenClaw directory not found: $OPENCLAW_DIR"
+    exit 0
+fi
+
+# Skip rebuild if sharp is already working (e.g. compiled during npm install)
+if [ -d "$OPENCLAW_DIR/node_modules/sharp" ]; then
+    if node -e "require('$OPENCLAW_DIR/node_modules/sharp')" 2>/dev/null; then
+        echo -e "${GREEN}[OK]${NC}   sharp is already working — skipping rebuild"
+        exit 0
+    fi
+fi
+
 # Install required packages
 echo "Installing build dependencies..."
 if ! pkg install -y libvips binutils; then
@@ -40,14 +56,6 @@ export CXXFLAGS="-include $HOME/.openclaw-android/patches/termux-compat.h"
 export GYP_DEFINES="OS=linux android_ndk_path=$PREFIX"
 export CPATH="$PREFIX/include/glib-2.0:$PREFIX/lib/glib-2.0/include"
 
-# Rebuild sharp
-OPENCLAW_DIR="$(npm root -g)/openclaw"
-
-if [ ! -d "$OPENCLAW_DIR" ]; then
-    echo -e "${RED}[FAIL]${NC} OpenClaw directory not found: $OPENCLAW_DIR"
-    exit 0
-fi
-
 echo "Rebuilding sharp in $OPENCLAW_DIR..."
 echo "This may take several minutes..."
 echo ""
@@ -59,5 +67,5 @@ else
     echo ""
     echo -e "${YELLOW}[WARN]${NC} sharp build failed (non-critical)"
     echo "       Image processing will not be available, but OpenClaw will work normally."
-    echo "       You can retry later: bash ~/.openclaw-android/build-sharp.sh"
+    echo "       You can retry later: bash ~/.openclaw-android/scripts/build-sharp.sh"
 fi

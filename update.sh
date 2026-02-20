@@ -20,7 +20,7 @@ echo ""
 
 step() {
     echo ""
-    echo -e "${BOLD}[$1/5] $2${NC}"
+    echo -e "${BOLD}[$1/6] $2${NC}"
     echo "----------------------------------------"
 }
 
@@ -149,16 +149,17 @@ else
 fi
 
 # Download build-sharp.sh
-SHARP_TMPFILE=$(mktemp "$PREFIX/tmp/build-sharp.XXXXXX.sh") || {
-    echo -e "${YELLOW}[WARN]${NC} Failed to create temporary file for build-sharp.sh (non-critical)"
-    SHARP_TMPFILE=""
-}
-if curl -sfL "$REPO_BASE/scripts/build-sharp.sh" -o "$SHARP_TMPFILE"; then
-    echo -e "${GREEN}[OK]${NC}   build-sharp.sh downloaded"
+SHARP_TMPFILE=""
+if SHARP_TMPFILE=$(mktemp "$PREFIX/tmp/build-sharp.XXXXXX.sh" 2>/dev/null); then
+    if curl -sfL "$REPO_BASE/scripts/build-sharp.sh" -o "$SHARP_TMPFILE"; then
+        echo -e "${GREEN}[OK]${NC}   build-sharp.sh downloaded"
+    else
+        echo -e "${YELLOW}[WARN]${NC} Failed to download build-sharp.sh (non-critical)"
+        rm -f "$SHARP_TMPFILE"
+        SHARP_TMPFILE=""
+    fi
 else
-    echo -e "${YELLOW}[WARN]${NC} Failed to download build-sharp.sh (non-critical)"
-    rm -f "$SHARP_TMPFILE"
-    SHARP_TMPFILE=""
+    echo -e "${YELLOW}[WARN]${NC} Failed to create temporary file for build-sharp.sh (non-critical)"
 fi
 
 # ─────────────────────────────────────────────
@@ -179,7 +180,33 @@ export GYP_DEFINES="OS=linux android_ndk_path=$PREFIX"
 export CPATH="$PREFIX/include/glib-2.0:$PREFIX/lib/glib-2.0/include"
 
 # ─────────────────────────────────────────────
-step 5 "Building sharp (image processing)"
+step 5 "Updating OpenClaw Package"
+
+# Install build dependencies required for sharp's native compilation.
+# This must happen before npm install so that libvips headers are
+# available when node-gyp compiles sharp as a dependency of openclaw.
+echo "Installing build dependencies..."
+if pkg install -y libvips binutils; then
+    echo -e "${GREEN}[OK]${NC}   libvips and binutils ready"
+else
+    echo -e "${YELLOW}[WARN]${NC} Failed to install build dependencies"
+    echo "       Image processing (sharp) may not compile correctly"
+fi
+
+# CXXFLAGS, GYP_DEFINES, and CPATH were exported in step 4.
+# npm runs as a child process of this script and inherits those
+# env vars, so sharp's node-gyp build succeeds here — unlike in
+# 'openclaw update', which spawns npm without these env vars set.
+echo "Updating openclaw npm package..."
+if npm install -g openclaw@latest --no-fund --no-audit; then
+    echo -e "${GREEN}[OK]${NC}   openclaw package updated"
+else
+    echo -e "${YELLOW}[WARN]${NC} Package update failed (non-critical)"
+    echo "       Retry manually: npm install -g openclaw@latest"
+fi
+
+# ─────────────────────────────────────────────
+step 6 "Building sharp (image processing)"
 
 if [ -n "$SHARP_TMPFILE" ]; then
     bash "$SHARP_TMPFILE"

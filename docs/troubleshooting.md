@@ -164,6 +164,36 @@ openclaw gateway
 
 If the gateway was already running before the update, you may need to stop the old process first. See the [Gateway won't start](#gateway-wont-start-gateway-already-running-or-port-is-already-in-use) section above.
 
+## sharp build fails during `openclaw update`
+
+```
+npm error gyp ERR! not ok
+Update Result: ERROR
+Reason: global update
+```
+
+### Cause
+
+When `openclaw update` runs npm to update the package, it spawns npm as a subprocess. The Termux-specific build environment variables required to compile `sharp`'s native module (`CXXFLAGS`, `GYP_DEFINES`, `CPATH`) are set in `~/.bashrc` but are not automatically available in that subprocess context.
+
+### Impact
+
+**This error is non-critical.** OpenClaw itself has been updated successfully — only the `sharp` module (used for image processing) failed to rebuild. OpenClaw works normally without it.
+
+### Solution
+
+After the update, manually rebuild `sharp` using the provided script:
+
+```bash
+bash ~/.openclaw-android/scripts/build-sharp.sh
+```
+
+Alternatively, use `update.sh` instead of `openclaw update` — it sets the required environment variables and rebuilds sharp automatically:
+
+```bash
+curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-android/main/update.sh | bash
+```
+
 ## "not supported on android" error
 
 ```
