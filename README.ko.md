@@ -40,7 +40,7 @@
 
 1. [개발자 옵션 활성화 및 화면 켜짐 유지 설정](#1단계-개발자-옵션-활성화-및-화면-켜짐-유지-설정)
 2. [Termux 설치](#2단계-termux-설치)
-3. [Termux 초기 설정 및 백그라운드 종료 방지](#3단계-termux-초기-설정-및-백그라운드-종료-방지)
+3. [Termux 초기 설정](#3단계-termux-초기-설정)
 4. [OpenClaw 설치](#4단계-openclaw-설치) — 명령어 하나
 5. [OpenClaw 설정 시작](#5단계-openclaw-설정-시작)
 6. [OpenClaw(게이트웨이) 실행](#6단계-openclaw게이트웨이-실행)
@@ -84,17 +84,15 @@ OpenClaw는 서버로 동작하므로 화면이 꺼지면 Android가 프로세�
 2. `Termux` 검색 후 **Download APK**를 눌러 다운로드 및 설치
    - "출처를 알 수 없는 앱" 설치 허용 팝업이 뜨면 **허용**
 
-### 3단계: Termux 초기 설정 및 백그라운드 종료 방지
+### 3단계: Termux 초기 설정
 
-Termux 앱을 열고 아래 명령어를 붙여넣으세요. 저장소 업데이트, curl 설치, 백그라운드 종료 방지가 한 번에 처리됩니다.
+Termux 앱을 열고 아래 명령어를 붙여넣으세요. 다음 단계에 필요한 curl을 설치합니다.
 
 ```bash
-pkg update -y && pkg upgrade -y && pkg install -y curl && termux-wake-lock
+pkg update -y && pkg install -y curl
 ```
 
 > 처음 실행하면 저장소 미러를 선택하라는 메시지가 나올 수 있습니다. 아무거나 선택해도 되지만, 지역적으로 가까운 미러를 고르면 더 빠릅니다.
-
-`termux-wake-lock`이 실행되면 상단 알림바에 Termux 알림이 고정되면서 시스템이 프로세스를 종료하지 않습니다. 해제하려면 `termux-wake-unlock`을 실행하거나 알림을 스와이프하면 됩니다.
 
 **배터리 최적화에서 Termux 제외**
 
@@ -288,7 +286,7 @@ openclaw-android/
 
 OpenClaw 빌드 및 실행에 필요한 Termux 패키지를 설치합니다.
 
-- `pkg update -y`로 패키지 저장소 갱신
+- `pkg update -y && pkg upgrade -y`로 패키지 저장소 갱신 및 업그레이드
 - 다음 패키지를 일괄 설치:
 
 | 패키지 | 역할 | 필요한 이유 |

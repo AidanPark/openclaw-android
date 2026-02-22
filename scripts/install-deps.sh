@@ -9,9 +9,10 @@ NC='\033[0m'
 echo "=== Installing Dependencies ==="
 echo ""
 
-# Update package repos
+# Update and upgrade package repos
 echo "Updating package repositories..."
 pkg update -y
+pkg upgrade -y
 
 # Install required packages
 PACKAGES=(

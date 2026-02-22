@@ -25,6 +25,12 @@ step() {
 
 # ─────────────────────────────────────────────
 step 1 "Environment Check"
+
+# Enable background kill prevention (Termux wake lock)
+if command -v termux-wake-lock &>/dev/null; then
+    termux-wake-lock 2>/dev/null || true
+    echo -e "${GREEN}[OK]${NC}   Termux wake lock enabled"
+fi
 bash "$SCRIPT_DIR/scripts/check-env.sh"
 
 # ─────────────────────────────────────────────

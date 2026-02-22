@@ -40,7 +40,7 @@ The standard approach to running OpenClaw on Android requires installing proot-d
 
 1. [Enable Developer Options and Stay Awake](#step-1-enable-developer-options-and-stay-awake)
 2. [Install Termux](#step-2-install-termux)
-3. [Initial Termux Setup and Background Kill Prevention](#step-3-initial-termux-setup-and-background-kill-prevention)
+3. [Initial Termux Setup](#step-3-initial-termux-setup)
 4. [Install OpenClaw](#step-4-install-openclaw) — one command
 5. [Start OpenClaw Setup](#step-5-start-openclaw-setup)
 6. [Start OpenClaw (Gateway)](#step-6-start-openclaw-gateway)
@@ -84,17 +84,15 @@ Keeping a phone plugged in 24/7 at 100% can cause battery swelling. Limiting the
 2. Search for `Termux`, then tap **Download APK** to download and install
    - Allow "Install from unknown sources" when prompted
 
-### Step 3: Initial Termux Setup and Background Kill Prevention
+### Step 3: Initial Termux Setup
 
-Open the Termux app and paste the following command. It updates repos, installs curl, and enables background kill prevention — all in one go.
+Open the Termux app and paste the following command to install curl (needed for the next step).
 
 ```bash
-pkg update -y && pkg upgrade -y && pkg install -y curl && termux-wake-lock
+pkg update -y && pkg install -y curl
 ```
 
 > You may be asked to choose a mirror on first run. Pick any — a geographically closer mirror will be faster.
-
-Once `termux-wake-lock` runs, a notification pins in the status bar and prevents Android from killing the Termux process. To release it later, run `termux-wake-unlock` or swipe the notification away.
 
 **Disable Battery Optimization for Termux**
 
@@ -288,7 +286,7 @@ Validates that the current environment is suitable before starting installation.
 
 Installs Termux packages required for building and running OpenClaw.
 
-- Runs `pkg update -y` to refresh package repos
+- Runs `pkg update -y && pkg upgrade -y` to refresh and upgrade packages
 - Installs the following packages:
 
 | Package | Role | Why It's Needed |
