@@ -227,5 +227,5 @@ node -e "console.log(process.platform)"
 `android`가 출력되면 파일이 오래된 버전입니다. 재설치하세요:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-android/main/bootstrap.sh | bash
+curl -sL myopenclawhub.com/install | bash
 ```

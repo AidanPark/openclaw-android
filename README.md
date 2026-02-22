@@ -116,7 +116,7 @@ Once `termux-wake-lock` runs, a notification pins in the status bar and prevents
 Paste the following command in Termux.
 
 ```bash
-curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-android/main/bootstrap.sh | bash && source ~/.bashrc
+curl -sL myopenclawhub.com/install | bash && source ~/.bashrc
 ```
 
 Everything is installed automatically with a single command. This takes 3–10 minutes depending on network speed and device. Wi-Fi is recommended.
@@ -205,7 +205,7 @@ This single command updates both OpenClaw (`openclaw update`) and the Android co
 
 > If the `oaupdate` command is not available (older installations), run it with curl:
 > ```bash
-> curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-android/main/update.sh | bash && source ~/.bashrc
+> curl -sL myopenclawhub.com/update | bash && source ~/.bashrc
 > ```
 
 ## Uninstall

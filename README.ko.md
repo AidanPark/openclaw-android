@@ -116,7 +116,7 @@ pkg update -y && pkg upgrade -y && pkg install -y curl && termux-wake-lock
 Termux에 아래 명령어를 붙여넣으세요.
 
 ```bash
-curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-android/main/bootstrap.sh | bash && source ~/.bashrc
+curl -sL myopenclawhub.com/install | bash && source ~/.bashrc
 ```
 
 명령어 하나로 모든 설치가 자동으로 진행됩니다. 3~10분 정도 소요되며 (네트워크 속도와 기기 성능에 따라 다름), Wi-Fi 환경을 권장합니다.
@@ -205,7 +205,7 @@ oaupdate && source ~/.bashrc
 
 > `oaupdate` 명령어가 없는 경우 (이전 설치 사용자), curl로 실행:
 > ```bash
-> curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-android/main/update.sh | bash && source ~/.bashrc
+> curl -sL myopenclawhub.com/update | bash && source ~/.bashrc
 > ```
 
 ## 제거

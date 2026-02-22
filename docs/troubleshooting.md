@@ -227,5 +227,5 @@ node -e "console.log(process.platform)"
 If it prints `android`, the file is outdated. Reinstall:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/AidanPark/openclaw-android/main/bootstrap.sh | bash
+curl -sL myopenclawhub.com/install | bash
 ```
