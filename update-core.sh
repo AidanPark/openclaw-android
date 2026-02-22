@@ -227,6 +227,11 @@ echo -e "${BOLD}========================================${NC}"
 echo -e "${GREEN}${BOLD}  Update Complete!${NC}"
 echo -e "${BOLD}========================================${NC}"
 echo ""
+
+# Show OpenClaw update status
+openclaw update status 2>/dev/null || true
+
+echo ""
 echo -e "${YELLOW}Run this to apply changes to the current session:${NC}"
 echo ""
 echo "  source ~/.bashrc"
