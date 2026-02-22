@@ -201,7 +201,7 @@ If you already have OpenClaw on Android installed and want to apply the latest p
 oaupdate && source ~/.bashrc
 ```
 
-This lightweight updater refreshes environment variables and patches without reinstalling everything. Safe to run multiple times.
+This single command updates both OpenClaw (`openclaw update`) and the Android compatibility patches from this project. Safe to run multiple times.
 
 > If the `oaupdate` command is not available (older installations), run it with curl:
 > ```bash

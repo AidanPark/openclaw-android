@@ -201,7 +201,7 @@ OpenClaw on Android를 먼저 설치한 후 위 도구를 설치하면 패치가
 oaupdate && source ~/.bashrc
 ```
 
-전체 재설치 없이 환경변수와 패치만 갱신하는 경량 업데이터입니다. 여러 번 실행해도 안전합니다.
+이 명령어 하나로 OpenClaw(`openclaw update`)와 이 프로젝트의 Android 호환 패치가 함께 업데이트됩니다. 여러 번 실행해도 안전합니다.
 
 > `oaupdate` 명령어가 없는 경우 (이전 설치 사용자), curl로 실행:
 > ```bash
