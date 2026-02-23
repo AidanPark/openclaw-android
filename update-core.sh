@@ -216,18 +216,32 @@ fi
 # npm runs as a child process of this script and inherits those
 # env vars, so sharp's node-gyp build succeeds here — unlike in
 # 'openclaw update', which spawns npm without these env vars set.
-echo "Updating openclaw npm package..."
-if npm install -g openclaw@latest --no-fund --no-audit; then
-    echo -e "${GREEN}[OK]${NC}   openclaw package updated"
+
+# Compare installed vs latest version to skip unnecessary npm install
+CURRENT_VER=$(openclaw --version 2>/dev/null || echo "")
+LATEST_VER=$(npm view openclaw version 2>/dev/null || echo "")
+
+OPENCLAW_UPDATED=false
+if [ -n "$CURRENT_VER" ] && [ -n "$LATEST_VER" ] && [ "$CURRENT_VER" = "$LATEST_VER" ]; then
+    echo -e "${GREEN}[OK]${NC}   openclaw $CURRENT_VER is already the latest"
 else
-    echo -e "${YELLOW}[WARN]${NC} Package update failed (non-critical)"
-    echo "       Retry manually: npm install -g openclaw@latest"
+    echo "Updating openclaw npm package... ($CURRENT_VER → $LATEST_VER)"
+    if npm install -g openclaw@latest --no-fund --no-audit; then
+        echo -e "${GREEN}[OK]${NC}   openclaw package updated"
+        OPENCLAW_UPDATED=true
+    else
+        echo -e "${YELLOW}[WARN]${NC} Package update failed (non-critical)"
+        echo "       Retry manually: npm install -g openclaw@latest"
+    fi
 fi
 
 # ─────────────────────────────────────────────
 step 6 "Building sharp (image processing)"
 
-if [ -n "$SHARP_TMPFILE" ]; then
+if [ "$OPENCLAW_UPDATED" = false ]; then
+    echo -e "${GREEN}[SKIP]${NC} openclaw unchanged — sharp rebuild not needed"
+    rm -f "$SHARP_TMPFILE"
+elif [ -n "$SHARP_TMPFILE" ]; then
     bash "$SHARP_TMPFILE"
     rm -f "$SHARP_TMPFILE"
 else
