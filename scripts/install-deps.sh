@@ -26,6 +26,7 @@ PACKAGES=(
     tmux
     ttyd
     dufs
+    android-tools
 )
 
 echo "Installing packages: ${PACKAGES[*]}"

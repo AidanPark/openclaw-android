@@ -218,9 +218,10 @@ bash ~/.openclaw-android/uninstall.sh
 
 OpenClaw 패키지, 패치, 환경변수, 임시 파일이 모두 제거됩니다. OpenClaw 데이터(`~/.openclaw`)는 선택적으로 보존할 수 있습니다.
 
-## 문제 해결
+## 중요한 이슈
 
-자세한 트러블슈팅 가이드는 [문제 해결 문서](docs/troubleshooting.ko.md)를 참고하세요.
+- **Android가 프로세스를 강제 종료 (signal 9)**: [Phantom Process Killer 비활성화](docs/disable-phantom-process-killer.ko.md) 참고 — Android 12 이상 필수
+- 기타 문제는 [문제 해결 문서](docs/troubleshooting.ko.md)를 참고하세요
 
 ## 동작 원리
 
@@ -285,6 +286,7 @@ openclaw-android/
 - **디스크 여유 공간**: `$PREFIX` 파티션에 최소 500MB 이상 여유 공간이 있는지 확인. 부족하면 오류
 - **기존 설치 감지**: `openclaw` 명령어가 이미 존재하면 현재 버전을 표시하고 재설치/업데이트임을 안내
 - **Node.js 사전 확인**: 이미 설치된 Node.js가 있으면 버전을 표시하고, 22 미만이면 업그레이드 예고
+- **Phantom Process Killer** (Android 12+): `getprop`/`settings`로 `settings_enable_monitor_phantom_procs` 값을 확인. 활성화 상태면 백그라운드 프로세스가 강제 종료될 수 있다는 경고와 ADB 비활성화 명령을 안내
 
 ### [2/7] 패키지 설치 — `scripts/install-deps.sh`
 
@@ -305,6 +307,7 @@ OpenClaw 빌드 및 실행에 필요한 Termux 패키지를 설치합니다.
 | `tmux` | 터미널 멀티플렉서 | OpenClaw 서버를 백그라운드 세션에서 실행할 수 있게 해줌. Termux에서는 앱이 백그라운드로 가면 프로세스가 중단될 수 있으므로, tmux 세션 안에서 실행하면 안정적으로 유지 가능 |
 | `ttyd` | 웹 터미널 | 터미널을 웹으로 공유하는 도구. [My OpenClaw Hub](https://myopenclawhub.com)에서 브라우저 기반 터미널 접속을 제공하는 데 사용 |
 | `dufs` | HTTP/WebDAV 파일 서버 | 브라우저로 파일 업로드/다운로드를 제공하는 도구. [My OpenClaw Hub](https://myopenclawhub.com)에서 호스트의 파일 관리에 사용 |
+| `android-tools` | Android Debug Bridge (adb) | Termux 내에서 Android의 Phantom Process Killer를 비활성화하는 데 사용. 이 설정 없이는 Android 12+에서 백그라운드 프로세스(openclaw, sshd 등)가 SIGKILL로 강제 종료될 수 있음 |
 | `pyyaml` (pip) | Python용 YAML 파서 | OpenClaw의 `.skill` 패키징에 필요. Termux 패키지 설치 후 `pip install pyyaml`로 설치 |
 
 - 설치 후 Node.js >= 22 버전 및 npm 존재 여부를 검증. 실패 시 종료
@@ -397,6 +400,7 @@ OpenClaw을 글로벌로 설치하고 Termux 호환 패치를 적용합니다.
 - `openclaw` 명령 존재 확인 (이미 설치되어 있어야 함)
 - `curl` 사용 가능 여부 확인 (파일 다운로드에 필요)
 - 구버전 디렉토리 마이그레이션 (`.openclaw-lite` → `.openclaw-android` — 레거시 호환)
+- **Phantom Process Killer** (Android 12+): 전체 설치와 동일한 체크 — 활성화 상태면 경고와 ADB 비활성화 명령을 안내
 
 ### [2/6] 신규 패키지 설치
 
@@ -404,9 +408,10 @@ OpenClaw을 글로벌로 설치하고 Termux 호환 패치를 적용합니다.
 
 - `ttyd` — 브라우저 기반 터미널 접속을 위한 웹 터미널. 이미 설치되어 있으면 스킵
 - `dufs` — 브라우저 기반 파일 관리를 위한 HTTP/WebDAV 파일 서버. 이미 설치되어 있으면 스킵
+- `android-tools` — Phantom Process Killer 비활성화용 ADB. 이미 설치되어 있으면 스킵
 - `PyYAML` — `.skill` 패키징용 YAML 파서. 이미 설치되어 있으면 스킵
 
-둘 다 비필수 — 실패 시 경고만 출력하고 업데이트를 중단하지 않습니다.
+모두 비필수 — 실패 시 경고만 출력하고 업데이트를 중단하지 않습니다.
 
 ### [3/6] 최신 스크립트 다운로드
 
