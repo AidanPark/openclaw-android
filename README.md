@@ -218,9 +218,10 @@ bash ~/.openclaw-android/uninstall.sh
 
 This removes the OpenClaw package, patches, environment variables, and temp files. Your OpenClaw data (`~/.openclaw`) is optionally preserved.
 
-## Troubleshooting
+## Known Issues
 
-See the [Troubleshooting Guide](docs/troubleshooting.md) for detailed solutions.
+- **Process killed by Android (signal 9)**: See [Disable Phantom Process Killer](docs/disable-phantom-process-killer.md) — required for Android 12+
+- For other issues, see the [Troubleshooting Guide](docs/troubleshooting.md)
 
 ## What It Does
 
@@ -285,6 +286,7 @@ Validates that the current environment is suitable before starting installation.
 - **Disk space**: Ensures at least 500MB free on the `$PREFIX` partition. Errors if insufficient
 - **Existing installation**: If `openclaw` command already exists, shows current version and notes this is a reinstall/upgrade
 - **Node.js pre-check**: If Node.js is already installed, shows version and warns if below 22
+- **Phantom Process Killer** (Android 12+): Reads `settings_enable_monitor_phantom_procs` via `getprop`/`settings`. If active, warns that background processes may be killed and shows ADB commands to disable it
 
 ### [2/7] Package Installation — `scripts/install-deps.sh`
 
@@ -305,6 +307,7 @@ Installs Termux packages required for building and running OpenClaw.
 | `tmux` | Terminal multiplexer | Allows running the OpenClaw server in a background session. In Termux, apps going to background may suspend processes, so running inside a tmux session keeps it stable |
 | `ttyd` | Web terminal | Shares a terminal over the web. Used by [My OpenClaw Hub](https://myopenclawhub.com) to provide browser-based terminal access to the host |
 | `dufs` | HTTP/WebDAV file server | Provides file upload/download via browser. Used by [My OpenClaw Hub](https://myopenclawhub.com) for file management on the host |
+| `android-tools` | Android Debug Bridge (adb) | Used to disable Android's Phantom Process Killer from within Termux. Without this, Android 12+ may kill background processes (openclaw, sshd, etc.) via SIGKILL |
 | `pyyaml` (pip) | YAML parser for Python | Required for `.skill` packaging in OpenClaw. Installed via `pip install pyyaml` after the Termux packages |
 
 - After installation, verifies Node.js >= 22 and npm presence. Exits on failure
@@ -397,6 +400,7 @@ Validates the minimum conditions for updating.
 - Checks `openclaw` command exists (must already be installed)
 - Checks `curl` is available (needed to download files)
 - Migrates old directory name if needed (`.openclaw-lite` → `.openclaw-android` — legacy compatibility)
+- **Phantom Process Killer** (Android 12+): Same check as the full installer — warns if active and shows ADB commands to disable it
 
 ### [2/6] Installing New Packages
 
@@ -404,9 +408,10 @@ Installs packages that may have been added since the user's initial installation
 
 - `ttyd` — Web terminal for browser-based access. Skipped if already installed
 - `dufs` — HTTP/WebDAV file server for browser-based file management. Skipped if already installed
+- `android-tools` — ADB for disabling Phantom Process Killer. Skipped if already installed
 - `PyYAML` — YAML parser for `.skill` packaging. Skipped if already installed
 
-Both are non-critical — failures print a warning but don't stop the update.
+All are non-critical — failures print a warning but don't stop the update.
 
 ### [3/6] Downloading Latest Scripts
 

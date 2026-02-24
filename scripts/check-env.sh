@@ -63,6 +63,28 @@ else
     echo -e "${YELLOW}[INFO]${NC} Node.js not found. Will be installed."
 fi
 
+# 6. Check Phantom Process Killer (Android 12+, API 31+)
+SDK_INT=$(getprop ro.build.version.sdk 2>/dev/null || echo "0")
+if [ "$SDK_INT" -ge 31 ] 2>/dev/null; then
+    PPK_VALUE=$(/system/bin/settings get global settings_enable_monitor_phantom_procs 2>/dev/null || echo "")
+    if [ "$PPK_VALUE" = "false" ]; then
+        echo -e "${GREEN}[OK]${NC}   Phantom Process Killer disabled"
+    else
+        echo -e "${YELLOW}[WARN]${NC} Phantom Process Killer is active"
+        echo "       Background processes (openclaw, sshd, etc.) may be killed by Android."
+        echo "       To disable, run these commands:"
+        echo ""
+        echo "       1. Enable 'Wireless debugging' in Developer options"
+        echo "       2. Tap 'Pair device with pairing code' and run:"
+        echo "          adb pair localhost:<PORT> <PAIRING_CODE>"
+        echo "       3. Connect (use the port shown on Wireless debugging main screen):"
+        echo "          adb connect localhost:<PORT>"
+        echo "       4. Disable Phantom Process Killer:"
+        echo "          adb shell \"settings put global settings_enable_monitor_phantom_procs false\""
+        echo ""
+    fi
+fi
+
 echo ""
 if [ "$ERRORS" -gt 0 ]; then
     echo -e "${RED}Environment check failed with $ERRORS error(s).${NC}"
