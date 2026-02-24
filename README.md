@@ -44,7 +44,6 @@ The standard approach to running OpenClaw on Android requires installing proot-d
 4. [Install OpenClaw](#step-4-install-openclaw) — one command
 5. [Start OpenClaw Setup](#step-5-start-openclaw-setup)
 6. [Start OpenClaw (Gateway)](#step-6-start-openclaw-gateway)
-7. [Access the Dashboard from Your PC](#step-7-access-the-dashboard-from-your-pc)
 
 ### Step 1: Enable Developer Options and Stay Awake
 
@@ -149,7 +148,13 @@ openclaw gateway
 
 > To stop the gateway, press `Ctrl+C`. Do not use `Ctrl+Z` — it only suspends the process without terminating it.
 
-### Step 7: Access the Dashboard from Your PC
+## Disable Phantom Process Killer (Android 12+)
+
+Android 12 and above may forcibly kill background processes like `openclaw gateway` and `sshd` without warning (you'll see `[Process completed (signal 9)]`). Disabling the Phantom Process Killer prevents this. The setting persists across reboots — you only need to do it once.
+
+See the [step-by-step guide with screenshots](docs/disable-phantom-process-killer.md) to disable it using ADB from within Termux.
+
+## Access the Dashboard from Your PC
 
 To manage OpenClaw from your PC browser, you need to set up an SSH connection to your phone. See the [Termux SSH Setup Guide](docs/termux-ssh-guide.md) to configure SSH access first. Open another new tab on the phone for `sshd` (same method as Step 6).
 
@@ -176,24 +181,6 @@ If you run OpenClaw on multiple devices on the same network, use the <a href="ht
 - Save connection settings (IP, token, ports) for each device with a nickname
 - Generates the SSH tunnel command and dashboard URL automatically
 - **Your data stays local** — Connection settings (IP, token, ports) are saved only in your browser's localStorage and are never sent to any server.
-
-## Bonus: AI CLI Tools on Your Phone
-
-The compatibility patches included in this project fix Termux's native build environment, enabling popular AI CLI tools to install and run:
-
-| Tool | Install |
-|------|---------|
-| [Claude Code](https://github.com/anthropics/claude-code) (Anthropic) | `npm i -g @anthropic-ai/claude-code` |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) (Google) | `npm i -g @google/gemini-cli` |
-| [Codex CLI](https://github.com/openai/codex) (OpenAI) | `npm i -g @openai/codex` |
-
-Install OpenClaw on Android first, then install any of these tools — the patches handle the rest.
-
-<p>
-  <img src="docs/images/run_claude.png" alt="Claude Code on Termux" width="32%">
-  <img src="docs/images/run_gemini.png" alt="Gemini CLI on Termux" width="32%">
-  <img src="docs/images/run_codex.png" alt="Codex CLI on Termux" width="32%">
-</p>
 
 ## CLI Reference
 
@@ -228,10 +215,9 @@ oa --uninstall
 
 This removes the OpenClaw package, patches, environment variables, and temp files. Your OpenClaw data (`~/.openclaw`) is optionally preserved.
 
-## Known Issues
+## Troubleshooting
 
-- **Process killed by Android (signal 9)**: See [Disable Phantom Process Killer](docs/disable-phantom-process-killer.md) — required for Android 12+
-- For other issues, see the [Troubleshooting Guide](docs/troubleshooting.md)
+See the [Troubleshooting Guide](docs/troubleshooting.md) for detailed solutions.
 
 ## What It Does
 
@@ -467,6 +453,24 @@ Installs or updates `clawhub`, the CLI tool for searching and installing OpenCla
 Runs `build-sharp.sh` to ensure the sharp native module is built. If sharp was already compiled successfully during Step 5's `npm install`, this step detects it and skips the rebuild.
 
 </details>
+
+## Bonus: AI CLI Tools on Your Phone
+
+The compatibility patches included in this project fix Termux's native build environment, enabling popular AI CLI tools to install and run:
+
+| Tool | Install |
+|------|---------|
+| [Claude Code](https://github.com/anthropics/claude-code) (Anthropic) | `npm i -g @anthropic-ai/claude-code` |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) (Google) | `npm i -g @google/gemini-cli` |
+| [Codex CLI](https://github.com/openai/codex) (OpenAI) | `npm i -g @openai/codex` |
+
+Install OpenClaw on Android first, then install any of these tools — the patches handle the rest.
+
+<p>
+  <img src="docs/images/run_claude.png" alt="Claude Code on Termux" width="32%">
+  <img src="docs/images/run_gemini.png" alt="Gemini CLI on Termux" width="32%">
+  <img src="docs/images/run_codex.png" alt="Codex CLI on Termux" width="32%">
+</p>
 
 ## License
 

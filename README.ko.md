@@ -8,7 +8,7 @@
 ![License MIT](https://img.shields.io/github/license/AidanPark/openclaw-android)
 ![GitHub Stars](https://img.shields.io/github/stars/AidanPark/openclaw-android)
 
-나야, [OpenClaw](https://github.com/openclaw). 근데,, 이제 Android-Termux 를 곁들인...
+나야, [OpenClaw](https://github.com/openclaw). 근데 이제 Android-Termux 를 곁들인...
 
 ## 왜 만들었나?
 
@@ -44,7 +44,6 @@
 4. [OpenClaw 설치](#4단계-openclaw-설치) — 명령어 하나
 5. [OpenClaw 설정 시작](#5단계-openclaw-설정-시작)
 6. [OpenClaw(게이트웨이) 실행](#6단계-openclaw게이트웨이-실행)
-7. [PC에서 대시보드 접속](#7단계-pc에서-대시보드-접속)
 
 ### 1단계: 개발자 옵션 활성화 및 화면 켜짐 유지 설정
 
@@ -149,7 +148,13 @@ openclaw gateway
 
 > 게이트웨이를 중지하려면 `Ctrl+C`를 누르세요. `Ctrl+Z`는 프로세스를 종료하지 않고 일시 중지만 시키므로, 반드시 `Ctrl+C`를 사용하세요.
 
-### 7단계: PC에서 대시보드 접속
+## Phantom Process Killer 비활성화 (Android 12+)
+
+Android 12 이상에서는 `openclaw gateway`나 `sshd` 같은 백그라운드 프로세스를 예고 없이 강제 종료할 수 있습니다 (`[Process completed (signal 9)]` 메시지가 표시됨). Phantom Process Killer를 비활성화하면 이를 방지할 수 있습니다. 이 설정은 재부팅해도 유지되므로 한 번만 하면 됩니다.
+
+Termux 내에서 ADB로 비활성화하는 [스크린샷 포함 단계별 가이드](docs/disable-phantom-process-killer.ko.md)를 참고하세요.
+
+## PC에서 대시보드 접속
 
 PC 브라우저에서 OpenClaw를 관리하려면 폰에 SSH 연결을 설정해야 합니다. 먼저 [Termux SSH 접속 가이드](docs/termux-ssh-guide.ko.md)를 참고하여 SSH를 설정하세요. `sshd`도 별도 탭에서 실행합니다 (6단계와 같은 방법).
 
@@ -176,24 +181,6 @@ ssh -N -L 18789:127.0.0.1:18789 -p 8022 <폰IP>
 - 각 기기의 연결 정보(IP, 토큰, 포트)를 닉네임과 함께 저장
 - SSH 터널 명령어와 대시보드 URL을 자동 생성
 - **데이터는 로컬에만 저장** — 연결 정보(IP, 토큰, 포트)는 브라우저의 localStorage에만 저장되며 어떤 서버로도 전송되지 않습니다.
-
-## 보너스: 폰에서 AI CLI 도구 사용
-
-이 프로젝트에 포함된 호환 패치가 Termux의 네이티브 빌드 환경을 개선하여, 주요 AI CLI 도구를 설치하고 실행할 수 있습니다:
-
-| 도구 | 설치 |
-|------|------|
-| [Claude Code](https://github.com/anthropics/claude-code) (Anthropic) | `npm i -g @anthropic-ai/claude-code` |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) (Google) | `npm i -g @google/gemini-cli` |
-| [Codex CLI](https://github.com/openai/codex) (OpenAI) | `npm i -g @openai/codex` |
-
-OpenClaw on Android를 먼저 설치한 후 위 도구를 설치하면 패치가 자동으로 적용됩니다.
-
-<p>
-  <img src="docs/images/run_claude.png" alt="Claude Code on Termux" width="32%">
-  <img src="docs/images/run_gemini.png" alt="Gemini CLI on Termux" width="32%">
-  <img src="docs/images/run_codex.png" alt="Codex CLI on Termux" width="32%">
-</p>
 
 ## CLI 명령어
 
@@ -228,10 +215,9 @@ oa --uninstall
 
 OpenClaw 패키지, 패치, 환경변수, 임시 파일이 모두 제거됩니다. OpenClaw 데이터(`~/.openclaw`)는 선택적으로 보존할 수 있습니다.
 
-## 중요한 이슈
+## 문제 해결
 
-- **Android가 프로세스를 강제 종료 (signal 9)**: [Phantom Process Killer 비활성화](docs/disable-phantom-process-killer.ko.md) 참고 — Android 12 이상 필수
-- 기타 문제는 [문제 해결 문서](docs/troubleshooting.ko.md)를 참고하세요
+자세한 트러블슈팅 가이드는 [문제 해결 문서](docs/troubleshooting.ko.md)를 참고하세요.
 
 ## 동작 원리
 
@@ -467,6 +453,24 @@ OpenClaw 스킬을 검색하고 설치하는 CLI 도구인 `clawhub`를 설치�
 `build-sharp.sh`를 실행하여 sharp 네이티브 모듈을 빌드합니다. Step 5의 `npm install`에서 이미 성공적으로 컴파일되었으면 이 단계에서 감지하고 rebuild를 건너뜁니다.
 
 </details>
+
+## 보너스: 폰에서 AI CLI 도구 사용
+
+이 프로젝트에 포함된 호환 패치가 Termux의 네이티브 빌드 환경을 개선하여, 주요 AI CLI 도구를 설치하고 실행할 수 있습니다:
+
+| 도구 | 설치 |
+|------|------|
+| [Claude Code](https://github.com/anthropics/claude-code) (Anthropic) | `npm i -g @anthropic-ai/claude-code` |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) (Google) | `npm i -g @google/gemini-cli` |
+| [Codex CLI](https://github.com/openai/codex) (OpenAI) | `npm i -g @openai/codex` |
+
+OpenClaw on Android를 먼저 설치한 후 위 도구를 설치하면 패치가 자동으로 적용됩니다.
+
+<p>
+  <img src="docs/images/run_claude.png" alt="Claude Code on Termux" width="32%">
+  <img src="docs/images/run_gemini.png" alt="Gemini CLI on Termux" width="32%">
+  <img src="docs/images/run_codex.png" alt="Codex CLI on Termux" width="32%">
+</p>
 
 ## 라이선스
 

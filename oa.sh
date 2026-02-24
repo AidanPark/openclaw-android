@@ -3,7 +3,7 @@
 # Installed to $PREFIX/bin/oa
 set -euo pipefail
 
-OA_VERSION="0.8"
+OA_VERSION="0.8.1"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
