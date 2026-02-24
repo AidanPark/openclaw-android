@@ -106,7 +106,7 @@ if npm install -g clawdhub --no-fund --no-audit; then
     echo -e "${GREEN}[OK]${NC}   clawhub installed"
     # Node.js v24+ on Termux doesn't bundle undici; clawhub needs it
     CLAWHUB_DIR="$(npm root -g)/clawdhub"
-    if [ -d "$CLAWHUB_DIR" ] && ! node -e "require('undici')" 2>/dev/null; then
+    if [ -d "$CLAWHUB_DIR" ] && ! (cd "$CLAWHUB_DIR" && node -e "require('undici')" 2>/dev/null); then
         echo "Installing undici dependency for clawhub..."
         if (cd "$CLAWHUB_DIR" && npm install undici --no-fund --no-audit); then
             echo -e "${GREEN}[OK]${NC}   undici installed for clawhub"

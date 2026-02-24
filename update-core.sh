@@ -208,12 +208,16 @@ step 5 "Updating OpenClaw Package"
 # Install build dependencies required for sharp's native compilation.
 # This must happen before npm install so that libvips headers are
 # available when node-gyp compiles sharp as a dependency of openclaw.
-echo "Installing build dependencies..."
-if pkg install -y libvips binutils; then
-    echo -e "${GREEN}[OK]${NC}   libvips and binutils ready"
+if dpkg -s libvips &>/dev/null && dpkg -s binutils &>/dev/null; then
+    echo -e "${GREEN}[OK]${NC}   libvips and binutils already installed"
 else
-    echo -e "${YELLOW}[WARN]${NC} Failed to install build dependencies"
-    echo "       Image processing (sharp) may not compile correctly"
+    echo "Installing build dependencies..."
+    if pkg install -y libvips binutils; then
+        echo -e "${GREEN}[OK]${NC}   libvips and binutils ready"
+    else
+        echo -e "${YELLOW}[WARN]${NC} Failed to install build dependencies"
+        echo "       Image processing (sharp) may not compile correctly"
+    fi
 fi
 
 # Create ar symlink if missing (Termux provides llvm-ar but not ar)
@@ -261,7 +265,7 @@ fi
 
 # Node.js v24+ on Termux doesn't bundle undici; clawhub needs it
 CLAWHUB_DIR="$(npm root -g)/clawdhub"
-if [ -d "$CLAWHUB_DIR" ] && ! node -e "require('undici')" 2>/dev/null; then
+if [ -d "$CLAWHUB_DIR" ] && ! (cd "$CLAWHUB_DIR" && node -e "require('undici')" 2>/dev/null); then
     echo "Installing undici dependency for clawhub..."
     if (cd "$CLAWHUB_DIR" && npm install undici --no-fund --no-audit); then
         echo -e "${GREEN}[OK]${NC}   undici installed for clawhub"
