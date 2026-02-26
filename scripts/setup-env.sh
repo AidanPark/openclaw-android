@@ -18,6 +18,7 @@ COMPAT_PATH="$HOME/.openclaw-android/patches/bionic-compat.js"
 COMPAT_HEADER="$HOME/.openclaw-android/patches/termux-compat.h"
 
 ENV_BLOCK="${MARKER_START}
+export PATH=\"\$HOME/.local/bin:\$PATH\"
 export TMPDIR=\"\$PREFIX/tmp\"
 export TMP=\"\$TMPDIR\"
 export TEMP=\"\$TMPDIR\"
@@ -48,6 +49,7 @@ echo -e "${GREEN}[OK]${NC}   Added environment variables to $BASHRC"
 
 echo ""
 echo "Variables configured:"
+echo "  PATH=\$HOME/.local/bin:\$PATH"
 echo "  TMPDIR=\$PREFIX/tmp"
 echo "  TMP=\$TMPDIR"
 echo "  TEMP=\$TMPDIR"

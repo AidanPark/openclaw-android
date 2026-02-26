@@ -21,7 +21,7 @@ echo ""
 
 step() {
     echo ""
-    echo -e "${BOLD}[$1/7] $2${NC}"
+    echo -e "${BOLD}[$1/8] $2${NC}"
     echo "----------------------------------------"
 }
 
@@ -48,6 +48,7 @@ step 4 "Configuring Environment Variables"
 bash "$SCRIPT_DIR/scripts/setup-env.sh"
 
 # Source the new environment for current session
+export PATH="$HOME/.local/bin:$PATH"
 export TMPDIR="$PREFIX/tmp"
 export TMP="$TMPDIR"
 export TEMP="$TMPDIR"
@@ -128,11 +129,25 @@ echo ""
 bash "$SCRIPT_DIR/scripts/build-sharp.sh"
 
 # ─────────────────────────────────────────────
-step 6 "Verifying Installation"
+step 6 "Installing code-server (IDE)"
+echo "Installing code-server (browser-based IDE)..."
+# Copy argon2 stub needed by the installer
+mkdir -p "$HOME/.openclaw-android/patches"
+cp "$SCRIPT_DIR/patches/argon2-stub.js" "$HOME/.openclaw-android/patches/argon2-stub.js"
+echo -e "${GREEN}[OK]${NC}   argon2-stub.js installed"
+
+if bash "$SCRIPT_DIR/scripts/install-code-server.sh" install; then
+    echo -e "${GREEN}[OK]${NC}   code-server installation step complete"
+else
+    echo -e "${YELLOW}[WARN]${NC} code-server installation failed (non-critical)"
+fi
+
+# ─────────────────────────────────────────────
+step 7 "Verifying Installation"
 bash "$SCRIPT_DIR/tests/verify-install.sh"
 
 # ─────────────────────────────────────────────
-step 7 "Updating OpenClaw"
+step 8 "Updating OpenClaw"
 echo "Running: openclaw update"
 echo ""
 openclaw update || true
@@ -150,6 +165,7 @@ echo ""
 echo -e "${BOLD}Manage with the 'oa' command:${NC}"
 echo "  oa --update       Update OpenClaw and patches"
 echo "  oa --status       Show installation status"
+echo "  oa ide            Start code-server (browser IDE)"
 echo "  oa --uninstall    Remove OpenClaw on Android"
 echo "  oa --help         Show all options"
 echo ""

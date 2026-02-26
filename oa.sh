@@ -23,6 +23,9 @@ show_help() {
     echo "Usage: oa [option]"
     echo ""
     echo "Options:"
+    echo "  ide            Start code-server (browser IDE)"
+    echo "  ide --stop     Stop code-server"
+    echo "  ide --status   Check if code-server is running"
     echo "  --update       Update OpenClaw and Android patches"
     echo "  --uninstall    Remove OpenClaw on Android"
     echo "  --status       Show installation status"
@@ -48,6 +51,49 @@ show_version() {
             echo -e "  ${YELLOW}v${latest} available${NC} — run: oa --update"
         fi
     fi
+}
+
+# ── IDE (code-server) ─────────────────────────
+
+cmd_ide() {
+    local subcmd="${1:-start}"
+
+    case "$subcmd" in
+        --stop)
+            if pgrep -f "code-server" &>/dev/null; then
+                pkill -f "code-server"
+                echo -e "${GREEN}[OK]${NC}   code-server stopped"
+            else
+                echo "code-server is not running"
+            fi
+            ;;
+        --status)
+            if pgrep -f "code-server" &>/dev/null; then
+                echo -e "${GREEN}[OK]${NC}   code-server is running"
+                echo "  URL: http://localhost:8080"
+            else
+                echo "code-server is not running"
+                echo "  Start with: oa ide"
+            fi
+            ;;
+        start|"")
+            if ! command -v code-server &>/dev/null; then
+                echo -e "${RED}[FAIL]${NC} code-server not found"
+                echo "  Run 'oa --update' to install it"
+                exit 1
+            fi
+            echo "Starting code-server..."
+            echo "  URL: http://localhost:8080"
+            echo "  Press Ctrl+C to stop"
+            echo ""
+            exec code-server --auth none --bind-addr 0.0.0.0:8080 "$HOME/.openclaw"
+            ;;
+        *)
+            echo -e "${RED}Unknown ide option: $subcmd${NC}"
+            echo "Usage: oa ide [--stop|--status]"
+            exit 1
+            ;;
+    esac
 }
 
 # ── Update ────────────────────────────────────
@@ -129,6 +175,18 @@ cmd_status() {
         echo -e "  clawhub:     ${YELLOW}not installed${NC}"
     fi
 
+    if command -v code-server &>/dev/null; then
+        local cs_ver
+        cs_ver=$(code-server --version 2>/dev/null | head -1 || true)
+        local cs_status="stopped"
+        if pgrep -f "code-server" &>/dev/null; then
+            cs_status="running"
+        fi
+        echo "  code-server: ${cs_ver:-installed} ($cs_status)"
+    else
+        echo -e "  code-server: ${YELLOW}not installed${NC}"
+    fi
+
     echo ""
     echo -e "${BOLD}Environment${NC}"
     echo "  PREFIX:            ${PREFIX:-not set}"
@@ -201,6 +259,10 @@ cmd_status() {
 # ── Main dispatch ─────────────────────────────
 
 case "${1:-}" in
+    ide)
+        shift
+        cmd_ide "${1:-start}"
+        ;;
     --update)
         cmd_update
         ;;

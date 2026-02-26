@@ -111,7 +111,19 @@ for DIR in "$HOME/.openclaw-android" "$HOME/.openclaw" "$PREFIX/tmp"; do
     fi
 done
 
-# 7. .bashrc contains env block
+# 7. code-server
+if command -v code-server &>/dev/null; then
+    CS_VER=$(code-server --version 2>/dev/null | head -1 || true)
+    if [ -n "$CS_VER" ]; then
+        check_pass "code-server $CS_VER"
+    else
+        check_warn "code-server found but --version failed"
+    fi
+else
+    check_warn "code-server not installed (non-critical)"
+fi
+
+# 8. .bashrc contains env block
 if grep -qF "OpenClaw on Android" "$HOME/.bashrc" 2>/dev/null; then
     check_pass ".bashrc contains environment block"
 else

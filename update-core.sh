@@ -21,7 +21,7 @@ echo ""
 
 step() {
     echo ""
-    echo -e "${BOLD}[$1/7] $2${NC}"
+    echo -e "${BOLD}[$1/8] $2${NC}"
     echo "----------------------------------------"
 }
 
@@ -203,6 +203,27 @@ WRAPPER
 chmod +x "$PREFIX/bin/oaupdate"
 echo -e "${GREEN}[OK]${NC}   oaupdate command updated (→ oa --update)"
 
+# Download argon2-stub.js (needed for code-server)
+if curl -sfL "$REPO_BASE/patches/argon2-stub.js" -o "$OPENCLAW_DIR/patches/argon2-stub.js"; then
+    echo -e "${GREEN}[OK]${NC}   argon2-stub.js updated"
+else
+    echo -e "${YELLOW}[WARN]${NC} Failed to download argon2-stub.js (non-critical)"
+fi
+
+# Download install-code-server.sh
+CS_TMPFILE=""
+if CS_TMPFILE=$(mktemp "$PREFIX/tmp/install-code-server.XXXXXX.sh" 2>/dev/null); then
+    if curl -sfL "$REPO_BASE/scripts/install-code-server.sh" -o "$CS_TMPFILE"; then
+        echo -e "${GREEN}[OK]${NC}   install-code-server.sh downloaded"
+    else
+        echo -e "${YELLOW}[WARN]${NC} Failed to download install-code-server.sh (non-critical)"
+        rm -f "$CS_TMPFILE"
+        CS_TMPFILE=""
+    fi
+else
+    echo -e "${YELLOW}[WARN]${NC} Failed to create temporary file for install-code-server.sh (non-critical)"
+fi
+
 # Download build-sharp.sh
 SHARP_TMPFILE=""
 if SHARP_TMPFILE=$(mktemp "$PREFIX/tmp/build-sharp.XXXXXX.sh" 2>/dev/null); then
@@ -225,6 +246,7 @@ bash "$TMPFILE"
 rm -f "$TMPFILE"
 
 # Re-export for current session (setup-env.sh runs as subprocess, exports don't propagate)
+export PATH="$HOME/.local/bin:$PATH"
 export TMPDIR="$PREFIX/tmp"
 export TMP="$TMPDIR"
 export TEMP="$TMPDIR"
@@ -340,7 +362,21 @@ if [ -d "$OLD_SKILLS_DIR" ] && [ "$(ls -A "$OLD_SKILLS_DIR" 2>/dev/null)" ]; the
 fi
 
 # ─────────────────────────────────────────────
-step 7 "Building sharp (image processing)"
+step 7 "Updating code-server (IDE)"
+
+if [ -n "$CS_TMPFILE" ]; then
+    if bash "$CS_TMPFILE" update; then
+        echo -e "${GREEN}[OK]${NC}   code-server update step complete"
+    else
+        echo -e "${YELLOW}[WARN]${NC} code-server update failed (non-critical)"
+    fi
+    rm -f "$CS_TMPFILE"
+else
+    echo -e "${YELLOW}[SKIP]${NC} install-code-server.sh was not downloaded"
+fi
+
+# ─────────────────────────────────────────────
+step 8 "Building sharp (image processing)"
 
 if [ "$OPENCLAW_UPDATED" = false ]; then
     echo -e "${GREEN}[SKIP]${NC} openclaw unchanged — sharp rebuild not needed"
@@ -365,6 +401,7 @@ echo ""
 echo -e "${BOLD}Manage with the 'oa' command:${NC}"
 echo "  oa --update       Update OpenClaw and patches"
 echo "  oa --status       Show installation status"
+echo "  oa ide            Start code-server (browser IDE)"
 echo "  oa --uninstall    Remove OpenClaw on Android"
 echo "  oa --help         Show all options"
 echo ""

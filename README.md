@@ -188,6 +188,9 @@ After installation, the `oa` command is available for managing your installation
 
 | Option | Description |
 |--------|-------------|
+| `oa ide` | Start code-server (browser IDE) |
+| `oa ide --stop` | Stop code-server |
+| `oa ide --status` | Check if code-server is running |
 | `oa --update` | Update OpenClaw and Android patches |
 | `oa --uninstall` | Remove OpenClaw on Android |
 | `oa --status` | Show installation status and diagnostics |
@@ -252,11 +255,13 @@ openclaw-android/
 │   ├── bionic-compat.js        # Platform override + os.networkInterfaces() + os.cpus() patches
 │   ├── termux-compat.h         # C/C++ compatibility shim (renameat2 syscall wrapper)
 │   ├── spawn.h                 # POSIX spawn stub header for Termux
+│   ├── argon2-stub.js          # JS stub for argon2 native module (code-server)
 │   ├── patch-paths.sh          # Fix hardcoded paths in OpenClaw
 │   └── apply-patches.sh        # Patch orchestrator
 ├── scripts/
 │   ├── build-sharp.sh          # Build sharp native module (image processing)
 │   ├── check-env.sh            # Pre-flight environment check
+│   ├── install-code-server.sh  # Install/update code-server (browser IDE)
 │   ├── install-deps.sh         # Install Termux packages
 │   ├── setup-env.sh            # Configure environment variables
 │   └── setup-paths.sh          # Create directories and symlinks
@@ -272,9 +277,9 @@ openclaw-android/
 
 ## Detailed Installation Flow
 
-Running `bash install.sh` executes the following 7 steps in order.
+Running `bash install.sh` executes the following 8 steps in order.
 
-### [1/7] Environment Check — `scripts/check-env.sh`
+### [1/8] Environment Check — `scripts/check-env.sh`
 
 Validates that the current environment is suitable before starting installation.
 
@@ -285,7 +290,7 @@ Validates that the current environment is suitable before starting installation.
 - **Node.js pre-check**: If Node.js is already installed, shows version and warns if below 22
 - **Phantom Process Killer** (Android 12+): Reads `settings_enable_monitor_phantom_procs` via `getprop`/`settings`. If active, warns that background processes may be killed and shows ADB commands to disable it
 
-### [2/7] Package Installation — `scripts/install-deps.sh`
+### [2/8] Package Installation — `scripts/install-deps.sh`
 
 Installs Termux packages required for building and running OpenClaw.
 
@@ -309,7 +314,7 @@ Installs Termux packages required for building and running OpenClaw.
 
 - After installation, verifies Node.js >= 22 and npm presence. Exits on failure
 
-### [3/7] Path Setup — `scripts/setup-paths.sh`
+### [3/8] Path Setup — `scripts/setup-paths.sh`
 
 Creates the directory structure needed for Termux.
 
@@ -318,7 +323,7 @@ Creates the directory structure needed for Termux.
 - `$HOME/.openclaw` — OpenClaw data directory
 - Displays how standard Linux paths (`/bin/sh`, `/usr/bin/env`, `/tmp`) map to Termux's `$PREFIX` subdirectories
 
-### [4/7] Environment Variables — `scripts/setup-env.sh`
+### [4/8] Environment Variables — `scripts/setup-env.sh`
 
 Adds an environment variable block to `~/.bashrc`.
 
@@ -338,7 +343,7 @@ Adds an environment variable block to `~/.bashrc`.
 
 After running `setup-env.sh`, `install.sh` re-exports all environment variables in the current process. Since `setup-env.sh` runs as a subprocess, its exports don't propagate to the parent. This re-export ensures Step 5's `npm install` inherits the correct build environment (CFLAGS, CXXFLAGS, GYP_DEFINES, etc.).
 
-### [5/7] OpenClaw Installation & Patching — `npm install` + `patches/apply-patches.sh`
+### [5/8] OpenClaw Installation & Patching — `npm install` + `patches/apply-patches.sh`
 
 Installs OpenClaw globally and applies Termux compatibility patches.
 
@@ -365,9 +370,31 @@ Installs OpenClaw globally and applies Termux compatibility patches.
    - Runs `npm rebuild sharp` inside the OpenClaw directory
    - If the build fails, prints a warning and continues — image processing won't work but the gateway runs normally
 
-### [6/7] Installation Verification — `tests/verify-install.sh`
+### [6/8] code-server Installation — `scripts/install-code-server.sh`
 
-Checks 7 items to confirm installation completed successfully.
+Installs code-server, a browser-based VS Code IDE, with Termux-specific workarounds. This step is non-critical — failure prints a warning but does not abort the installer.
+
+The code-server standalone release bundles glibc-linked binaries that cannot run on Termux (Bionic libc). The installer applies three workarounds:
+
+1. **Replace bundled node** — The bundled `lib/node` binary is replaced with a symlink to Termux's native Node.js (`$PREFIX/bin/node`)
+2. **Patch argon2 native module** — The `argon2` module ships a glibc-compiled `.node` binary. Since code-server runs with `--auth none`, argon2 is never called. The module entry point is replaced with `patches/argon2-stub.js` (a JS stub that throws if called)
+3. **Handle hard link failures** — Android's filesystem does not support hard links. `tar` extraction fails for hardlinked `.node` files. The script ignores tar errors and manually recovers `.node` files from `obj.target/` directories to `Release/`
+
+Installation flow:
+- Checks if already installed (skips if so)
+- Fetches the latest version from GitHub API
+- Downloads the `linux-arm64` tarball
+- Extracts and recovers `.node` files
+- Installs to `~/.local/lib/code-server-<version>`
+- Applies the three workarounds above
+- Creates a symlink at `~/.local/bin/code-server`
+- Verifies with `code-server --version`
+
+After installation, use `oa ide` to start code-server.
+
+### [7/8] Installation Verification — `tests/verify-install.sh`
+
+Checks the following items to confirm installation completed successfully.
 
 | Check Item | PASS Condition |
 |------------|---------------|
@@ -378,20 +405,23 @@ Checks 7 items to confirm installation completed successfully.
 | NODE_OPTIONS | Environment variable is set |
 | CONTAINER | Set to `1` |
 | bionic-compat.js | File exists in `~/.openclaw-android/patches/` |
+| termux-compat.h | File exists in `~/.openclaw-android/patches/` |
+| CXXFLAGS | Environment variable is set (WARN level) |
 | Directories | `~/.openclaw-android`, `~/.openclaw`, `$PREFIX/tmp` exist |
+| code-server | `code-server --version` succeeds (WARN level, non-critical) |
 | .bashrc | Contains environment variable block |
 
-All items pass → PASSED. Any failure → FAILED with reinstall instructions.
+All items pass → PASSED. Any failure → FAILED with reinstall instructions. WARN-level items do not cause failure.
 
-### [7/7] OpenClaw Update
+### [8/8] OpenClaw Update
 
 Runs `openclaw update` to ensure the latest version. On completion, displays the OpenClaw version and instructs the user to run `openclaw onboard` to start setup.
 
 ## Lightweight Updater Flow — `oa --update`
 
-Running `oa --update` (or `oaupdate` for backward compatibility) downloads `update-core.sh` from GitHub and executes the following 7 steps. Unlike the full installer, it skips environment checks, path setup, and verification — focusing only on refreshing patches, environment variables, and the OpenClaw package.
+Running `oa --update` (or `oaupdate` for backward compatibility) downloads `update-core.sh` from GitHub and executes the following 8 steps. Unlike the full installer, it skips environment checks, path setup, and verification — focusing only on refreshing patches, environment variables, and the OpenClaw package.
 
-### [1/7] Pre-flight Check
+### [1/8] Pre-flight Check
 
 Validates the minimum conditions for updating.
 
@@ -401,7 +431,7 @@ Validates the minimum conditions for updating.
 - Migrates old directory name if needed (`.openclaw-lite` → `.openclaw-android` — legacy compatibility)
 - **Phantom Process Killer** (Android 12+): Same check as the full installer — warns if active and shows ADB commands to disable it
 
-### [2/7] Installing New Packages
+### [2/8] Installing New Packages
 
 Installs packages that may have been added since the user's initial installation.
 
@@ -412,7 +442,7 @@ Installs packages that may have been added since the user's initial installation
 
 All are non-critical — failures print a warning but don't stop the update.
 
-### [3/7] Downloading Latest Scripts
+### [3/8] Downloading Latest Scripts
 
 Downloads the latest patch files and scripts from GitHub.
 
@@ -422,24 +452,26 @@ Downloads the latest patch files and scripts from GitHub.
 | `bionic-compat.js` | Node.js runtime compatibility patch | Warning |
 | `termux-compat.h` | C/C++ build compatibility header | Warning |
 | `spawn.h` | POSIX spawn stub (skipped if exists) | Warning |
+| `argon2-stub.js` | JS stub for argon2 native module (code-server) | Warning |
 | `systemctl` | systemd stub for Termux | Warning |
 | `oa.sh` | Unified CLI (`oa` command) | Warning |
 | `build-sharp.sh` | sharp native module build script | Warning |
+| `install-code-server.sh` | code-server install/update script (temp file) | Warning |
 
 Only `setup-env.sh` is required — all other failures are non-critical.
 
-### [4/7] Updating Environment Variables
+### [4/8] Updating Environment Variables
 
 Runs the downloaded `setup-env.sh` to refresh the `.bashrc` environment block with the latest variables. Then re-exports all variables in the current process so that Step 5's `npm install` inherits the correct build environment.
 
-### [5/7] Updating OpenClaw Package
+### [5/8] Updating OpenClaw Package
 
 - Installs build dependencies: `libvips` (for sharp) and `binutils` (for native builds)
 - Creates `ar → llvm-ar` symlink if missing
 - Runs `npm install -g openclaw@latest` — environment variables from Step 4 are inherited, enabling native modules (sharp, `@discordjs/opus`, etc.) to build correctly
 - On failure, prints a warning and continues
 
-### [6/7] Updating clawhub (skill manager)
+### [6/8] Updating clawhub (skill manager)
 
 Installs or updates `clawhub`, the CLI tool for searching and installing OpenClaw skills.
 
@@ -448,7 +480,11 @@ Installs or updates `clawhub`, the CLI tool for searching and installing OpenCla
 - Migrates skills from `~/skills/` to `~/.openclaw/workspace/skills/` if they were installed before `CLAWDHUB_WORKDIR` was configured. Existing skills at the correct location are preserved
 - All operations are non-critical — failures print a warning but don't stop the update
 
-### [7/7] Building sharp (image processing)
+### [7/8] Updating code-server (IDE)
+
+Runs `install-code-server.sh` in `update` mode to install or update code-server. If already installed and up to date, this step is skipped. See [Step 6/8 of the installation flow](#68-code-server-installation--scriptsinstall-code-serversh) for details on the workarounds applied. This step is non-critical — failure prints a warning but does not stop the update.
+
+### [8/8] Building sharp (image processing)
 
 Runs `build-sharp.sh` to ensure the sharp native module is built. If sharp was already compiled successfully during Step 5's `npm install`, this step detects it and skips the rebuild.
 

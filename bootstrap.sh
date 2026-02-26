@@ -39,6 +39,8 @@ FILES=(
     "scripts/setup-paths.sh"
     "scripts/setup-env.sh"
     "scripts/build-sharp.sh"
+    "scripts/install-code-server.sh"
+    "patches/argon2-stub.js"
     "tests/verify-install.sh"
     "update.sh"
     "oa.sh"
