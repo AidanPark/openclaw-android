@@ -25,56 +25,42 @@
 
 **기존 방식**: Termux 위에 전체 Linux 배포판을 설치합니다.
 
-```mermaid
-block-beta
-  columns 1
-  block:kernel["Linux 커널"]
-    columns 1
-    block:android["Android · Bionic libc · 구글이 만든 경량 C 라이브러리"]
-      columns 1
-      block:termux["Termux"]
-        columns 1
-        block:proot["proot-distro · Debian / Ubuntu"]
-          columns 1
-          glibc["GNU glibc · 데스크톱 Linux의 C 라이브러리"]
-          apps["Node.js → OpenClaw"]
-        end
-      end
-    end
-  end
-
-  style kernel fill:#f8f9fa,stroke:#868e96
-  style android fill:#fff9db,stroke:#f08c00
-  style termux fill:#e7f5ff,stroke:#1971c2
-  style proot fill:#ffe3e3,stroke:#e03131
-  style glibc fill:#fff,stroke:#ccc
-  style apps fill:#fff,stroke:#ccc
+```
+┌─────────────────────────────────────────────┐
+│  Linux 커널                                  │
+│  ┌─────────────────────────────────────────┐ │
+│  │  Android · Bionic libc                  │ │
+│  │  ┌─────────────────────────────────────┐ │ │
+│  │  │  Termux                             │ │ │
+│  │  │  ┌─────────────────────────────────┐ │ │ │
+│  │  │  │  proot-distro · Debian/Ubuntu   │ │ │ │
+│  │  │  │  ┌───────────────────────────┐   │ │ │ │
+│  │  │  │  │  GNU glibc               │   │ │ │ │
+│  │  │  │  │  Node.js → OpenClaw      │   │ │ │ │
+│  │  │  │  └───────────────────────────┘   │ │ │ │
+│  │  │  └─────────────────────────────────┘ │ │ │
+│  │  └─────────────────────────────────────┘ │ │
+│  └─────────────────────────────────────────┘ │
+└─────────────────────────────────────────────┘
 ```
 
 **이 프로젝트**: proot-distro 없이, glibc 동적 링커만 설치합니다.
 
-```mermaid
-block-beta
-  columns 1
-  block:kernel2["Linux 커널 · 같은 커널"]
-    columns 1
-    block:android2["Android · Bionic libc"]
-      columns 1
-      block:termux2["Termux + glibc-runner"]
-        columns 1
-        ldso["glibc 동적 링커 ld.so · 링커만 설치"]
-        node2["ld.so → Node.js → OpenClaw"]
-        tools["OpenCode · code-server · git · python · make ..."]
-      end
-    end
-  end
-
-  style kernel2 fill:#f8f9fa,stroke:#868e96
-  style android2 fill:#fff9db,stroke:#f08c00
-  style termux2 fill:#d3f9d8,stroke:#2b8a3e
-  style ldso fill:#fff,stroke:#ccc
-  style node2 fill:#fff,stroke:#ccc
-  style tools fill:#fff,stroke:#ccc
+```
+┌─────────────────────────────────────────────┐
+│  Linux 커널 (같은 커널)                      │
+│  ┌─────────────────────────────────────────┐ │
+│  │  Android · Bionic libc                  │ │
+│  │  ┌─────────────────────────────────────┐ │ │
+│  │  │  Termux + glibc-runner              │ │ │
+│  │  │  ┌───────────────────────────────┐   │ │ │
+│  │  │  │  glibc ld.so (링커만 설치)    │   │ │ │
+│  │  │  │  ld.so → Node.js → OpenClaw   │   │ │ │
+│  │  │  └───────────────────────────────┘   │ │ │
+│  │  │  OpenCode · code-server · git ...    │ │ │
+│  │  └─────────────────────────────────────┘ │ │
+│  └─────────────────────────────────────────┘ │
+└─────────────────────────────────────────────┘
 ```
 
 | | 기존 방식 (proot-distro) | 이 프로젝트 |
