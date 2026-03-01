@@ -40,6 +40,7 @@ FILES=(
     "scripts/setup-env.sh"
     "scripts/build-sharp.sh"
     "scripts/install-code-server.sh"
+    "scripts/install-ai-tools.sh"
     "patches/argon2-stub.js"
     "tests/verify-install.sh"
     "update.sh"

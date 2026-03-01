@@ -243,6 +243,20 @@ cmd_status() {
     echo "  Available:            ${AVAIL_MB:-unknown}MB"
 
     echo ""
+    echo -e "${BOLD}AI CLI Tools${NC}"
+    local ai_names=("Claude Code" "Gemini CLI" "Codex CLI")
+    local ai_cmds=("claude" "gemini" "codex")
+    for i in 0 1 2; do
+        if command -v "${ai_cmds[$i]}" &>/dev/null; then
+            local ai_ver
+            ai_ver=$("${ai_cmds[$i]}" --version 2>/dev/null | head -1 || echo "installed")
+            echo -e "  ${GREEN}[OK]${NC}   ${ai_names[$i]}: ${ai_ver}"
+        else
+            echo -e "  ${DIM:-\033[2m}[--]${NC} ${ai_names[$i]}: not installed"
+        fi
+    done
+
+    echo ""
     echo -e "${BOLD}Skills${NC}"
     local SKILLS_DIR="${CLAWDHUB_WORKDIR:-$HOME/.openclaw/workspace}/skills"
     if [ -d "$SKILLS_DIR" ]; then

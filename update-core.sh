@@ -21,7 +21,7 @@ echo ""
 
 step() {
     echo ""
-    echo -e "${BOLD}[$1/8] $2${NC}"
+    echo -e "${BOLD}[$1/9] $2${NC}"
     echo "----------------------------------------"
 }
 
@@ -238,6 +238,21 @@ else
     echo -e "${YELLOW}[WARN]${NC} Failed to create temporary file for build-sharp.sh (non-critical)"
 fi
 
+# Download install-ai-tools.sh
+AI_TOOLS_TMPFILE=""
+if AI_TOOLS_TMPFILE=$(mktemp "$PREFIX/tmp/install-ai-tools.XXXXXX.sh" 2>/dev/null); then
+    if curl -sfL "$REPO_BASE/scripts/install-ai-tools.sh" -o "$AI_TOOLS_TMPFILE"; then
+        chmod +x "$AI_TOOLS_TMPFILE"
+        echo -e "${GREEN}[OK]${NC}   install-ai-tools.sh downloaded"
+    else
+        echo -e "${YELLOW}[WARN]${NC} Failed to download install-ai-tools.sh (non-critical)"
+        rm -f "$AI_TOOLS_TMPFILE"
+        AI_TOOLS_TMPFILE=""
+    fi
+else
+    echo -e "${YELLOW}[WARN]${NC} Failed to create temporary file for install-ai-tools.sh (non-critical)"
+fi
+
 # ─────────────────────────────────────────────
 step 4 "Updating Environment Variables"
 
@@ -307,7 +322,20 @@ else
 fi
 
 # ─────────────────────────────────────────────
-step 6 "Updating clawhub (skill manager)"
+step 6 "Building sharp (image processing)"
+
+if [ "$OPENCLAW_UPDATED" = false ]; then
+    echo -e "${GREEN}[SKIP]${NC} openclaw unchanged \u2014 sharp rebuild not needed"
+    [ -n "$SHARP_TMPFILE" ] && rm -f "$SHARP_TMPFILE"
+elif [ -n "$SHARP_TMPFILE" ]; then
+    bash "$SHARP_TMPFILE"
+    rm -f "$SHARP_TMPFILE"
+else
+    echo -e "${YELLOW}[SKIP]${NC} build-sharp.sh was not downloaded"
+fi
+
+# ─────────────────────────────────────────────
+step 7 "Updating clawhub (skill manager)"
 
 if command -v clawhub &>/dev/null; then
     echo -e "${GREEN}[OK]${NC}   clawhub already installed"
@@ -358,12 +386,12 @@ if [ -d "$OLD_SKILLS_DIR" ] && [ "$(ls -A "$OLD_SKILLS_DIR" 2>/dev/null)" ]; the
     if rmdir "$OLD_SKILLS_DIR" 2>/dev/null; then
         echo -e "${GREEN}[OK]${NC}   Removed empty ~/skills/"
     else
-        echo -e "${YELLOW}[WARN]${NC} ~/skills/ not empty after migration — check manually"
+        echo -e "${YELLOW}[WARN]${NC} ~/skills/ not empty after migration \u2014 check manually"
     fi
 fi
 
 # ─────────────────────────────────────────────
-step 7 "Updating code-server (IDE)"
+step 8 "Updating code-server (IDE)"
 
 if [ -n "$CS_TMPFILE" ]; then
     if bash "$CS_TMPFILE" update; then
@@ -377,16 +405,13 @@ else
 fi
 
 # ─────────────────────────────────────────────
-step 8 "Building sharp (image processing)"
+step 9 "AI CLI Tools (Optional)"
 
-if [ "$OPENCLAW_UPDATED" = false ]; then
-    echo -e "${GREEN}[SKIP]${NC} openclaw unchanged — sharp rebuild not needed"
-    [ -n "$SHARP_TMPFILE" ] && rm -f "$SHARP_TMPFILE"
-elif [ -n "$SHARP_TMPFILE" ]; then
-    bash "$SHARP_TMPFILE"
-    rm -f "$SHARP_TMPFILE"
+if [ -n "$AI_TOOLS_TMPFILE" ]; then
+    bash "$AI_TOOLS_TMPFILE" || true
+    rm -f "$AI_TOOLS_TMPFILE"
 else
-    echo -e "${YELLOW}[SKIP]${NC} build-sharp.sh was not downloaded"
+    echo -e "${YELLOW}[SKIP]${NC} install-ai-tools.sh was not downloaded"
 fi
 
 echo ""

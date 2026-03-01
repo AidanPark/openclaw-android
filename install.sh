@@ -21,7 +21,7 @@ echo ""
 
 step() {
     echo ""
-    echo -e "${BOLD}[$1/8] $2${NC}"
+    echo -e "${BOLD}[$1/9] $2${NC}"
     echo "----------------------------------------"
 }
 
@@ -100,6 +100,14 @@ npm install -g openclaw@latest
 echo ""
 echo -e "${GREEN}[OK]${NC}   OpenClaw installed"
 
+# Apply path patches to installed modules
+echo ""
+bash "$SCRIPT_DIR/patches/apply-patches.sh"
+
+# Build sharp for image processing (non-critical)
+echo ""
+bash "$SCRIPT_DIR/scripts/build-sharp.sh"
+
 # Install clawhub (skill manager) and fix undici dependency
 echo ""
 echo "Installing clawhub (skill manager)..."
@@ -120,14 +128,6 @@ else
     echo "       Retry manually: npm i -g clawdhub"
 fi
 
-# Apply path patches to installed modules
-echo ""
-bash "$SCRIPT_DIR/patches/apply-patches.sh"
-
-# Build sharp for image processing (non-critical)
-echo ""
-bash "$SCRIPT_DIR/scripts/build-sharp.sh"
-
 # ─────────────────────────────────────────────
 step 6 "Installing code-server (IDE)"
 echo "Installing code-server (browser-based IDE)..."
@@ -143,11 +143,15 @@ else
 fi
 
 # ─────────────────────────────────────────────
-step 7 "Verifying Installation"
+step 7 "AI CLI Tools (Optional)"
+bash "$SCRIPT_DIR/scripts/install-ai-tools.sh" || true
+
+# ─────────────────────────────────────────────
+step 8 "Verifying Installation"
 bash "$SCRIPT_DIR/tests/verify-install.sh"
 
 # ─────────────────────────────────────────────
-step 8 "Updating OpenClaw"
+step 9 "Updating OpenClaw"
 echo "Running: openclaw update"
 echo ""
 openclaw update || true
