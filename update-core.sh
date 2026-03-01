@@ -446,7 +446,7 @@ fi
 # ─────────────────────────────────────────────
 step 7 "Updating clawhub (skill manager)"
 
-if command -v clawhub &>/dev/null; then
+if command -v clawhub &>/dev/null || command -v clawdhub &>/dev/null; then
     echo -e "${GREEN}[OK]${NC}   clawhub already installed"
 else
     INSTALL_CLAWHUB=true
