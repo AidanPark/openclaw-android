@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # install.sh - One-click installer for OpenClaw on Termux (Android)
+# Architecture: glibc-based (grun + proot for Bun standalone)
 # Usage: bash install.sh
 set -euo pipefail
 
@@ -9,19 +10,19 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OA_VERSION="0.8.2"
+OA_VERSION="1.0.0"
 
 echo ""
 echo -e "${BOLD}========================================${NC}"
 echo -e "${BOLD}  OpenClaw on Android - Installer v${OA_VERSION}${NC}"
 echo -e "${BOLD}========================================${NC}"
 echo ""
-echo "This script installs OpenClaw on Termux without proot-distro."
+echo "This script installs OpenClaw on Termux with glibc environment."
 echo ""
 
 step() {
     echo ""
-    echo -e "${BOLD}[$1/9] $2${NC}"
+    echo -e "${BOLD}[$1/10] $2${NC}"
     echo "----------------------------------------"
 }
 
@@ -36,49 +37,39 @@ fi
 bash "$SCRIPT_DIR/scripts/check-env.sh"
 
 # ─────────────────────────────────────────────
-step 2 "Installing Dependencies"
+step 2 "Installing Base Dependencies"
 bash "$SCRIPT_DIR/scripts/install-deps.sh"
 
 # ─────────────────────────────────────────────
-step 3 "Setting Up Paths"
+step 3 "Installing glibc Environment"
+bash "$SCRIPT_DIR/scripts/install-glibc-env.sh"
+
+# ─────────────────────────────────────────────
+step 4 "Setting Up Paths"
 bash "$SCRIPT_DIR/scripts/setup-paths.sh"
 
 # ─────────────────────────────────────────────
-step 4 "Configuring Environment Variables"
+step 5 "Configuring Environment Variables"
 bash "$SCRIPT_DIR/scripts/setup-env.sh"
 
 # Source the new environment for current session
-export PATH="$HOME/.local/bin:$PATH"
+GLIBC_NODE_DIR="$HOME/.openclaw-android/node"
+export PATH="$GLIBC_NODE_DIR/bin:$HOME/.local/bin:$PATH"
 export TMPDIR="$PREFIX/tmp"
 export TMP="$TMPDIR"
 export TEMP="$TMPDIR"
-export NODE_OPTIONS="-r $HOME/.openclaw-android/patches/bionic-compat.js"
 export CONTAINER=1
-export CFLAGS="-Wno-error=implicit-function-declaration"
-export CXXFLAGS="-include $HOME/.openclaw-android/patches/termux-compat.h"
-export GYP_DEFINES="OS=linux android_ndk_path=$PREFIX"
-export CPATH="$PREFIX/include/glib-2.0:$PREFIX/lib/glib-2.0/include"
 export CLAWDHUB_WORKDIR="$HOME/.openclaw/workspace"
+export OA_GLIBC=1
 
 # ─────────────────────────────────────────────
-step 5 "Installing OpenClaw"
+step 6 "Installing OpenClaw"
 
-# Apply bionic-compat.js first (needed for npm install)
+# Copy glibc-compat.js (needed for Node.js runtime patches)
 echo "Copying compatibility patches..."
 mkdir -p "$HOME/.openclaw-android/patches"
-cp "$SCRIPT_DIR/patches/bionic-compat.js" "$HOME/.openclaw-android/patches/bionic-compat.js"
-echo -e "${GREEN}[OK]${NC}   bionic-compat.js installed"
-
-cp "$SCRIPT_DIR/patches/termux-compat.h" "$HOME/.openclaw-android/patches/termux-compat.h"
-echo -e "${GREEN}[OK]${NC}   termux-compat.h installed"
-
-# Install spawn.h stub if missing (needed for koffi/native module builds)
-if [ ! -f "$PREFIX/include/spawn.h" ]; then
-    cp "$SCRIPT_DIR/patches/spawn.h" "$PREFIX/include/spawn.h"
-    echo -e "${GREEN}[OK]${NC}   spawn.h stub installed"
-else
-    echo -e "${GREEN}[OK]${NC}   spawn.h already exists"
-fi
+cp "$SCRIPT_DIR/patches/glibc-compat.js" "$HOME/.openclaw-android/patches/glibc-compat.js"
+echo -e "${GREEN}[OK]${NC}   glibc-compat.js installed"
 
 # Install oa CLI command (oa.sh → $PREFIX/bin/oa)
 cp "$SCRIPT_DIR/oa.sh" "$PREFIX/bin/oa"
@@ -90,12 +81,19 @@ cp "$SCRIPT_DIR/update.sh" "$PREFIX/bin/oaupdate"
 chmod +x "$PREFIX/bin/oaupdate"
 echo -e "${GREEN}[OK]${NC}   oaupdate command installed"
 
+# Set CPATH for native module builds (sharp needs glib-2.0 headers)
+# These are in Termux-specific subdirectories that compilers don't search by default
+export CPATH="$PREFIX/include/glib-2.0:$PREFIX/lib/glib-2.0/include"
+
 echo ""
-echo "Running: npm install -g openclaw@latest"
+echo "Running: npm install -g openclaw@latest --ignore-scripts"
 echo "This may take several minutes..."
 echo ""
 
-npm install -g openclaw@latest
+# Use --ignore-scripts to skip native module builds that may fail on Termux
+# (e.g. koffi uses renameat2 which is unavailable in Android's Bionic headers).
+# sharp will be rebuilt separately in step 7 via build-sharp.sh.
+npm install -g openclaw@latest --ignore-scripts
 
 echo ""
 echo -e "${GREEN}[OK]${NC}   OpenClaw installed"
@@ -103,10 +101,6 @@ echo -e "${GREEN}[OK]${NC}   OpenClaw installed"
 # Apply path patches to installed modules
 echo ""
 bash "$SCRIPT_DIR/patches/apply-patches.sh"
-
-# Build sharp for image processing (non-critical)
-echo ""
-bash "$SCRIPT_DIR/scripts/build-sharp.sh"
 
 # Install clawhub (skill manager) and fix undici dependency
 echo ""
@@ -129,9 +123,9 @@ else
 fi
 
 # ─────────────────────────────────────────────
-step 6 "Installing code-server (IDE)"
+step 7 "Installing code-server (IDE)"
 echo "Installing code-server (browser-based IDE)..."
-# Copy argon2 stub needed by the installer
+# Copy argon2 stub (may still be needed if glibc argon2 doesn't work)
 mkdir -p "$HOME/.openclaw-android/patches"
 cp "$SCRIPT_DIR/patches/argon2-stub.js" "$HOME/.openclaw-android/patches/argon2-stub.js"
 echo -e "${GREEN}[OK]${NC}   argon2-stub.js installed"
@@ -143,15 +137,19 @@ else
 fi
 
 # ─────────────────────────────────────────────
-step 7 "AI CLI Tools (Optional)"
-bash "$SCRIPT_DIR/scripts/install-ai-tools.sh" || true
+step 8 "Installing OpenCode + oh-my-opencode"
+if bash "$SCRIPT_DIR/scripts/install-opencode.sh"; then
+    echo -e "${GREEN}[OK]${NC}   OpenCode installation step complete"
+else
+    echo -e "${YELLOW}[WARN]${NC} OpenCode installation failed (non-critical)"
+fi
 
 # ─────────────────────────────────────────────
-step 8 "Verifying Installation"
+step 9 "Verifying Installation"
 bash "$SCRIPT_DIR/tests/verify-install.sh"
 
 # ─────────────────────────────────────────────
-step 9 "Updating OpenClaw"
+step 10 "Updating OpenClaw"
 echo "Running: openclaw update"
 echo ""
 openclaw update || true
@@ -170,6 +168,7 @@ echo -e "${BOLD}Manage with the 'oa' command:${NC}"
 echo "  oa --update       Update OpenClaw and patches"
 echo "  oa --status       Show installation status"
 echo "  oa ide            Start code-server (browser IDE)"
+echo "  oa opencode       Start OpenCode"
 echo "  oa --uninstall    Remove OpenClaw on Android"
 echo "  oa --help         Show all options"
 echo ""
