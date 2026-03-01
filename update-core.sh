@@ -444,34 +444,34 @@ else
 fi
 
 # ─────────────────────────────────────────────
-step 7 "Updating clawhub (skill manager)"
+step 7 "Updating clawdhub (skill manager)"
 
-if command -v clawhub &>/dev/null || command -v clawdhub &>/dev/null; then
-    echo -e "${GREEN}[OK]${NC}   clawhub already installed"
+if command -v clawdhub &>/dev/null; then
+    echo -e "${GREEN}[OK]${NC}   clawdhub already installed"
 else
     INSTALL_CLAWHUB=true
     if [ -t 0 ]; then
-        read -rp "clawhub (skill manager) is not installed. Install it? [Y/n] " REPLY
+        read -rp "clawdhub (skill manager) is not installed. Install it? [Y/n] " REPLY
         [[ "$REPLY" =~ ^[Nn]$ ]] && INSTALL_CLAWHUB=false
     fi
     if [ "$INSTALL_CLAWHUB" = true ]; then
-        echo "Installing clawhub..."
+        echo "Installing clawdhub..."
         if npm install -g clawdhub --no-fund --no-audit; then
-            echo -e "${GREEN}[OK]${NC}   clawhub installed"
+            echo -e "${GREEN}[OK]${NC}   clawdhub installed"
         else
-            echo -e "${YELLOW}[WARN]${NC} clawhub installation failed (non-critical)"
+            echo -e "${YELLOW}[WARN]${NC} clawdhub installation failed (non-critical)"
         fi
     else
-        echo -e "${YELLOW}[SKIP]${NC} Skipping clawhub"
+        echo -e "${YELLOW}[SKIP]${NC} Skipping clawdhub"
     fi
 fi
 
-# Node.js v24+ on Termux doesn't bundle undici; clawhub needs it
+# Node.js v24+ on Termux doesn't bundle undici; clawdhub needs it
 CLAWHUB_DIR="$(npm root -g)/clawdhub"
 if [ -d "$CLAWHUB_DIR" ] && ! (cd "$CLAWHUB_DIR" && node -e "require('undici')" 2>/dev/null); then
-    echo "Installing undici dependency for clawhub..."
+    echo "Installing undici dependency for clawdhub..."
     if (cd "$CLAWHUB_DIR" && npm install undici --no-fund --no-audit); then
-        echo -e "${GREEN}[OK]${NC}   undici installed for clawhub"
+        echo -e "${GREEN}[OK]${NC}   undici installed for clawdhub"
     else
         echo -e "${YELLOW}[WARN]${NC} undici installation failed"
     fi
@@ -480,7 +480,7 @@ else
 fi
 
 # Migrate skills installed to wrong path before CLAWDHUB_WORKDIR was set
-# Previous versions of clawhub defaulted to ~/skills/ instead of ~/.openclaw/workspace/skills/
+# Previous versions of clawdhub defaulted to ~/skills/ instead of ~/.openclaw/workspace/skills/
 OLD_SKILLS_DIR="$HOME/skills"
 CORRECT_SKILLS_DIR="$HOME/.openclaw/workspace/skills"
 if [ -d "$OLD_SKILLS_DIR" ] && [ "$(ls -A "$OLD_SKILLS_DIR" 2>/dev/null)" ]; then

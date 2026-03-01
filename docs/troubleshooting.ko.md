@@ -198,7 +198,7 @@ bash ~/.openclaw-android/scripts/build-sharp.sh
 oa --update && source ~/.bashrc
 ```
 
-## `clawhub` 실행 시 "Cannot find package 'undici'" 에러
+## `clawdhub` 실행 시 "Cannot find package 'undici'" 에러
 
 ```
 Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'undici' imported from /data/data/com.termux/files/usr/lib/node_modules/clawdhub/dist/http.js
@@ -206,11 +206,11 @@ Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'undici' imported from /data/d
 
 ### 원인
 
-Node.js v24+ Termux 환경에서는 `undici` 패키지가 Node.js에 번들되지 않습니다. `clawhub`가 HTTP 요청에 `undici`를 사용하지만 찾을 수 없어 실패합니다.
+Node.js v24+ Termux 환경에서는 `undici` 패키지가 Node.js에 번들되지 않습니다. `clawdhub`가 HTTP 요청에 `undici`를 사용하지만 찾을 수 없어 실패합니다.
 
 ### 해결 방법
 
-업데이터를 실행하면 `clawhub`와 `undici` 의존성이 자동으로 설치됩니다:
+업데이터를 실행하면 `clawdhub`와 `undici` 의존성이 자동으로 설치됩니다:
 
 ```bash
 oa --update && source ~/.bashrc

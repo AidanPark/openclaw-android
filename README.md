@@ -420,7 +420,7 @@ Adds an environment variable block to `~/.bashrc`.
   - `TMPDIR=$PREFIX/tmp` — Use Termux temp directory instead of `/tmp`
   - `TMP`, `TEMP` — Same as `TMPDIR` (for compatibility with some tools)
   - `CONTAINER=1` — Bypass systemd existence checks
-  - `CLAWDHUB_WORKDIR="$HOME/.openclaw/workspace"` — Direct clawhub to install skills into OpenClaw's workspace
+  - `CLAWDHUB_WORKDIR="$HOME/.openclaw/workspace"` — Direct clawdhub to install skills into OpenClaw's workspace
   - `OA_GLIBC=1` — Marks this as a glibc-based installation
 - Creates an `ar → llvm-ar` symlink if missing
 
@@ -433,7 +433,7 @@ Installs OpenClaw globally and applies Termux compatibility patches.
 1. Copies `glibc-compat.js` to `~/.openclaw-android/patches/` — provides `os.cpus()` fallback (Android kernel returns 0) and `os.networkInterfaces()` try-catch wrapper (EACCES on Android)
 2. Installs `oa.sh` as `$PREFIX/bin/oa` and `update.sh` wrapper as `$PREFIX/bin/oaupdate`
 3. Runs `npm install -g openclaw@latest`
-4. Installs `clawhub` (skill manager) globally via `npm install -g clawdhub`
+4. Installs `clawdhub` (skill manager) globally via `npm install -g clawdhub`
 5. `patches/apply-patches.sh` applies patches:
    - Copies `glibc-compat.js` to the patches directory
    - Installs `systemctl` stub to `$PREFIX/bin/systemctl`
@@ -580,12 +580,12 @@ Runs the downloaded `setup-env.sh` to refresh the `.bashrc` environment block wi
 
 Runs `build-sharp.sh` to ensure the sharp native module is built. If sharp was already compiled successfully during Step 5's `npm install`, this step detects it and skips the rebuild.
 
-### [7/10] Updating clawhub (skill manager)
+### [7/10] Updating clawdhub (skill manager)
 
-Installs or updates `clawhub`, the CLI tool for searching and installing OpenClaw skills.
+Installs or updates `clawdhub`, the CLI tool for searching and installing OpenClaw skills.
 
-- If `clawhub` is not installed, installs it via `npm install -g clawdhub`
-- On Node.js v24+ in Termux, the `undici` package is not bundled with Node.js. If `undici` is missing, it's installed directly into clawhub's directory
+- If `clawdhub` is not installed, installs it via `npm install -g clawdhub`
+- On Node.js v24+ in Termux, the `undici` package is not bundled with Node.js. If `undici` is missing, it's installed directly into clawdhub's directory
 - Migrates skills from `~/skills/` to `~/.openclaw/workspace/skills/` if installed before `CLAWDHUB_WORKDIR` was configured
 - All operations are non-critical
 

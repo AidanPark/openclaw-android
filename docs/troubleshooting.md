@@ -198,7 +198,7 @@ Alternatively, use `oa --update` instead of `openclaw update` — it handles sha
 oa --update && source ~/.bashrc
 ```
 
-## `clawhub` fails with "Cannot find package 'undici'"
+## `clawdhub` fails with "Cannot find package 'undici'"
 
 ```
 Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'undici' imported from /data/data/com.termux/files/usr/lib/node_modules/clawdhub/dist/http.js
@@ -206,11 +206,11 @@ Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'undici' imported from /data/d
 
 ### Cause
 
-Node.js v24+ on Termux doesn't bundle the `undici` package, which `clawhub` depends on for HTTP requests.
+Node.js v24+ on Termux doesn't bundle the `undici` package, which `clawdhub` depends on for HTTP requests.
 
 ### Solution
 
-Run the updater to automatically install `clawhub` and its `undici` dependency:
+Run the updater to automatically install `clawdhub` and its `undici` dependency:
 
 ```bash
 oa --update && source ~/.bashrc

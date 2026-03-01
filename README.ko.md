@@ -420,7 +420,7 @@ Termux에서 필요한 디렉토리 구조를 생성합니다.
   - `TMPDIR=$PREFIX/tmp` — `/tmp` 대신 Termux 임시 디렉토리 사용
   - `TMP`, `TEMP` — `TMPDIR`과 동일 (일부 도구 호환용)
   - `CONTAINER=1` — systemd 존재 여부 확인을 우회
-  - `CLAWDHUB_WORKDIR="$HOME/.openclaw/workspace"` — clawhub가 스킬을 기본 경로(`~/skills/`) 대신 OpenClaw workspace에 설치하도록 지정
+  - `CLAWDHUB_WORKDIR="$HOME/.openclaw/workspace"` — clawdhub가 스킬을 기본 경로(`~/skills/`) 대신 OpenClaw workspace에 설치하도록 지정
   - `OA_GLIBC=1` — glibc 기반 설치임을 표시
 - `ar → llvm-ar` 심볼릭 링크가 없으면 생성
 
@@ -433,7 +433,7 @@ OpenClaw을 글로벌로 설치하고 Termux 호환 패치를 적용합니다.
 1. `glibc-compat.js`를 `~/.openclaw-android/patches/`에 복사 — `os.cpus()` 폴백 (Android 커널이 0을 반환) 및 `os.networkInterfaces()` try-catch 래퍼 (Android에서 EACCES) 제공
 2. `oa.sh`를 `$PREFIX/bin/oa`로, `update.sh` wrapper를 `$PREFIX/bin/oaupdate`로 설치
 3. `npm install -g openclaw@latest` 실행
-4. `clawhub` (스킬 매니저)를 `npm install -g clawdhub`로 글로벌 설치
+4. `clawdhub` (스킬 매니저)를 `npm install -g clawdhub`로 글로벌 설치
 5. `patches/apply-patches.sh`가 패치를 일괄 적용:
    - `glibc-compat.js`를 패치 디렉토리에 복사
    - `systemctl` 스텅을 `$PREFIX/bin/systemctl`에 설치
@@ -570,12 +570,12 @@ GitHub에서 최신 패치 파일과 스크립트를 다운로드합니다.
 
 `build-sharp.sh`를 실행하여 sharp 네이티브 모듈을 빌드합니다. Step 5의 `npm install`에서 이미 성공적으로 컴파일되었으면 이 단계에서 감지하고 rebuild를 건너뛱니다.
 
-### [7/10] clawhub 설치/갱신 (스킬 매니저)
+### [7/10] clawdhub 설치/갱신 (스킬 매니저)
 
-OpenClaw 스킬을 검색하고 설치하는 CLI 도구인 `clawhub`를 설치하거나 갱신합니다.
+OpenClaw 스킬을 검색하고 설치하는 CLI 도구인 `clawdhub`를 설치하거나 갱신합니다.
 
-- `clawhub`가 설치되지 않은 경우 `npm install -g clawdhub`로 설치
-- Node.js v24+ Termux 환경에서는 `undici` 패키지가 Node.js에 번들되지 않음. `undici`가 누락된 경우 clawhub 디렉토리에 직접 설치
+- `clawdhub`가 설치되지 않은 경우 `npm install -g clawdhub`로 설치
+- Node.js v24+ Termux 환경에서는 `undici` 패키지가 Node.js에 번들되지 않음. `undici`가 누락된 경우 clawdhub 디렉토리에 직접 설치
 - `CLAWDHUB_WORKDIR` 설정 전에 `~/skills/`에 설치된 스킬이 있으면 `~/.openclaw/workspace/skills/`로 자동 마이그레이션
 - 모두 비필수 — 실패 시 경고만 출력
 

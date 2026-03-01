@@ -124,10 +124,10 @@ cmd_status() {
         echo -e "  npm:         ${RED}not installed${NC}"
     fi
 
-    if command -v clawhub &>/dev/null || command -v clawdhub &>/dev/null; then
-        echo "  clawhub:     $(clawhub --version 2>/dev/null || clawdhub --version 2>/dev/null || echo 'installed')"
+    if command -v clawdhub &>/dev/null; then
+        echo "  clawdhub:    $(clawdhub --version 2>/dev/null || echo 'installed')"
     else
-        echo -e "  clawhub:     ${YELLOW}not installed${NC}"
+        echo -e "  clawdhub:    ${YELLOW}not installed${NC}"
     fi
 
     if command -v code-server &>/dev/null; then

@@ -106,23 +106,23 @@ echo -e "${GREEN}[OK]${NC}   OpenClaw installed"
 echo ""
 bash "$SCRIPT_DIR/patches/apply-patches.sh"
 
-# Install clawhub (skill manager) and fix undici dependency
+# Install clawdhub (skill manager) and fix undici dependency
 echo ""
-echo "Installing clawhub (skill manager)..."
+echo "Installing clawdhub (skill manager)..."
 if npm install -g clawdhub --no-fund --no-audit; then
-    echo -e "${GREEN}[OK]${NC}   clawhub installed"
-    # Node.js v24+ on Termux doesn't bundle undici; clawhub needs it
+    echo -e "${GREEN}[OK]${NC}   clawdhub installed"
+    # Node.js v24+ on Termux doesn't bundle undici; clawdhub needs it
     CLAWHUB_DIR="$(npm root -g)/clawdhub"
     if [ -d "$CLAWHUB_DIR" ] && ! (cd "$CLAWHUB_DIR" && node -e "require('undici')" 2>/dev/null); then
-        echo "Installing undici dependency for clawhub..."
+        echo "Installing undici dependency for clawdhub..."
         if (cd "$CLAWHUB_DIR" && npm install undici --no-fund --no-audit); then
-            echo -e "${GREEN}[OK]${NC}   undici installed for clawhub"
+            echo -e "${GREEN}[OK]${NC}   undici installed for clawdhub"
         else
-            echo -e "${YELLOW}[WARN]${NC} undici installation failed (clawhub may not work)"
+            echo -e "${YELLOW}[WARN]${NC} undici installation failed (clawdhub may not work)"
         fi
     fi
 else
-    echo -e "${YELLOW}[WARN]${NC} clawhub installation failed (non-critical)"
+    echo -e "${YELLOW}[WARN]${NC} clawdhub installation failed (non-critical)"
     echo "       Retry manually: npm i -g clawdhub"
 fi
 
