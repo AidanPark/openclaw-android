@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
-# verify-install.sh - Verify OpenClaw installation on Termux (glibc architecture)
 set -euo pipefail
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../scripts/lib.sh"
 
 PASS=0
 FAIL=0
@@ -29,7 +26,6 @@ check_warn() {
 echo "=== OpenClaw on Android - Installation Verification ==="
 echo ""
 
-# 1. Node.js version
 if command -v node &>/dev/null; then
     NODE_VER=$(node -v)
     NODE_MAJOR="${NODE_VER%%.*}"
@@ -43,36 +39,16 @@ else
     check_fail "Node.js not found"
 fi
 
-# 2. npm available
 if command -v npm &>/dev/null; then
     check_pass "npm $(npm -v)"
 else
     check_fail "npm not found"
 fi
 
-# 3. openclaw command
-if command -v openclaw &>/dev/null; then
-    CLAW_VER=$(openclaw --version 2>/dev/null || echo "error")
-    if [ "$CLAW_VER" != "error" ]; then
-        check_pass "openclaw $CLAW_VER"
-    else
-        check_warn "openclaw found but --version failed"
-    fi
-else
-    check_fail "openclaw command not found"
-fi
-
-# 4. Environment variables
 if [ -n "${TMPDIR:-}" ]; then
     check_pass "TMPDIR=$TMPDIR"
 else
     check_fail "TMPDIR not set"
-fi
-
-if [ "${CONTAINER:-}" = "1" ]; then
-    check_pass "CONTAINER=1 (systemd bypass)"
-else
-    check_warn "CONTAINER not set"
 fi
 
 if [ "${OA_GLIBC:-}" = "1" ]; then
@@ -81,15 +57,14 @@ else
     check_fail "OA_GLIBC not set"
 fi
 
-# 5. glibc components
-COMPAT_FILE="$HOME/.openclaw-android/patches/glibc-compat.js"
+COMPAT_FILE="$PROJECT_DIR/patches/glibc-compat.js"
 if [ -f "$COMPAT_FILE" ]; then
     check_pass "glibc-compat.js exists"
 else
     check_fail "glibc-compat.js not found at $COMPAT_FILE"
 fi
 
-GLIBC_MARKER="$HOME/.openclaw-android/.glibc-arch"
+GLIBC_MARKER="$PROJECT_DIR/.glibc-arch"
 if [ -f "$GLIBC_MARKER" ]; then
     check_pass "glibc architecture marker (.glibc-arch)"
 else
@@ -103,16 +78,14 @@ else
     check_fail "glibc dynamic linker not found at $GLIBC_LDSO"
 fi
 
-# Check glibc node wrapper (should be a bash script, not a binary)
-NODE_WRAPPER="$HOME/.openclaw-android/node/bin/node"
+NODE_WRAPPER="$PROJECT_DIR/node/bin/node"
 if [ -f "$NODE_WRAPPER" ] && head -1 "$NODE_WRAPPER" 2>/dev/null | grep -q "bash"; then
     check_pass "glibc node wrapper script"
 else
     check_fail "glibc node wrapper not found or not a wrapper script"
 fi
 
-# 6. Directories
-for DIR in "$HOME/.openclaw-android" "$HOME/.openclaw" "$PREFIX/tmp"; do
+for DIR in "$PROJECT_DIR" "$PREFIX/tmp"; do
     if [ -d "$DIR" ]; then
         check_pass "Directory $DIR exists"
     else
@@ -120,7 +93,6 @@ for DIR in "$HOME/.openclaw-android" "$HOME/.openclaw" "$PREFIX/tmp"; do
     fi
 done
 
-# 7. code-server (non-critical)
 if command -v code-server &>/dev/null; then
     CS_VER=$(code-server --version 2>/dev/null | head -1 || true)
     if [ -n "$CS_VER" ]; then
@@ -132,21 +104,30 @@ else
     check_warn "code-server not installed (non-critical)"
 fi
 
-# 8. OpenCode command (non-critical)
 if command -v opencode &>/dev/null; then
     check_pass "opencode command available"
 else
     check_warn "opencode not installed (non-critical)"
 fi
 
-# 9. .bashrc contains env block
 if grep -qF "OpenClaw on Android" "$HOME/.bashrc" 2>/dev/null; then
     check_pass ".bashrc contains environment block"
 else
     check_fail ".bashrc missing environment block"
 fi
 
-# Summary
+PLATFORM=$(detect_platform) || true
+PLATFORM_VERIFY="$PROJECT_DIR/platforms/$PLATFORM/verify.sh"
+if [ -n "$PLATFORM" ] && [ -f "$PLATFORM_VERIFY" ]; then
+    if bash "$PLATFORM_VERIFY"; then
+        check_pass "Platform verifier passed ($PLATFORM)"
+    else
+        check_fail "Platform verifier failed ($PLATFORM)"
+    fi
+else
+    check_warn "Platform verifier not found (platform=${PLATFORM:-none})"
+fi
+
 echo ""
 echo "==============================="
 echo -e "  Results: ${GREEN}$PASS passed${NC}, ${RED}$FAIL failed${NC}, ${YELLOW}$WARN warnings${NC}"

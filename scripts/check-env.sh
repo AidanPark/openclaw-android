@@ -1,18 +1,14 @@
 #!/usr/bin/env bash
-# check-env.sh - Verify Termux environment before installation
 set -euo pipefail
 
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-GREEN='\033[0;32m'
-NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib.sh"
 
 ERRORS=0
 
 echo "=== OpenClaw on Android - Environment Check ==="
 echo ""
 
-# 1. Check if running in Termux
 if [ -z "${PREFIX:-}" ]; then
     echo -e "${RED}[FAIL]${NC} Not running in Termux (\$PREFIX not set)"
     echo "       This script is designed for Termux on Android."
@@ -21,7 +17,6 @@ else
     echo -e "${GREEN}[OK]${NC}   Termux detected (PREFIX=$PREFIX)"
 fi
 
-# 2. Check architecture
 ARCH=$(uname -m)
 echo -n "       Architecture: $ARCH"
 if [ "$ARCH" = "aarch64" ]; then
@@ -34,7 +29,6 @@ else
     echo -e " ${YELLOW}(unknown, may not work)${NC}"
 fi
 
-# 3. Check disk space (need at least 1000MB free for glibc environment)
 AVAILABLE_MB=$(df "$PREFIX" 2>/dev/null | awk 'NR==2 {print int($4/1024)}')
 if [ -n "$AVAILABLE_MB" ] && [ "$AVAILABLE_MB" -lt 1000 ]; then
     echo -e "${RED}[FAIL]${NC} Insufficient disk space: ${AVAILABLE_MB}MB available (need 1000MB+)"
@@ -43,14 +37,6 @@ else
     echo -e "${GREEN}[OK]${NC}   Disk space: ${AVAILABLE_MB:-unknown}MB available"
 fi
 
-# 4. Check if already installed
-if command -v openclaw &>/dev/null; then
-    CURRENT_VER=$(openclaw --version 2>/dev/null || echo "unknown")
-    echo -e "${YELLOW}[INFO]${NC} OpenClaw already installed (version: $CURRENT_VER)"
-    echo "       Re-running install will update/repair the installation."
-fi
-
-# 5. Check if Node.js is already installed and version
 if command -v node &>/dev/null; then
     NODE_VER=$(node -v 2>/dev/null || echo "unknown")
     echo -e "${GREEN}[OK]${NC}   Node.js found: $NODE_VER"
@@ -63,7 +49,6 @@ else
     echo -e "${YELLOW}[INFO]${NC} Node.js not found. Will be installed via glibc environment."
 fi
 
-# 6. Note about Phantom Process Killer (Android 12+, API 31+)
 SDK_INT=$(getprop ro.build.version.sdk 2>/dev/null || echo "0")
 if [ "$SDK_INT" -ge 31 ] 2>/dev/null; then
     echo -e "${YELLOW}[INFO]${NC} Android 12+ detected — if background processes get killed (signal 9),"

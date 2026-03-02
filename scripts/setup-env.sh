@@ -1,79 +1,49 @@
 #!/usr/bin/env bash
-# setup-env.sh - Configure environment variables for OpenClaw in Termux (glibc architecture)
 set -euo pipefail
-
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-echo "=== Setting Up Environment Variables ==="
-echo ""
+source "$(dirname "$0")/lib.sh"
 
 BASHRC="$HOME/.bashrc"
-MARKER_START="# >>> OpenClaw on Android >>>"
-MARKER_END="# <<< OpenClaw on Android <<<"
+PLATFORM=$(detect_platform) || true
 
-GLIBC_NODE_DIR="$HOME/.openclaw-android/node"
-COMPAT_PATH="$HOME/.openclaw-android/patches/glibc-compat.js"
-
-ENV_BLOCK="${MARKER_START}
-export PATH=\"$GLIBC_NODE_DIR/bin:\$HOME/.local/bin:\$PATH\"
-export TMPDIR=\"\$PREFIX/tmp\"
+INFRA_VARS="export TMPDIR=\"\$PREFIX/tmp\"
 export TMP=\"\$TMPDIR\"
 export TEMP=\"\$TMPDIR\"
-export CONTAINER=1
-export CLAWDHUB_WORKDIR=\"\$HOME/.openclaw/workspace\"
-export CPATH=\"\$PREFIX/include/glib-2.0:\$PREFIX/lib/glib-2.0/include\"
-export OA_GLIBC=1
-${MARKER_END}"
+export OA_GLIBC=1"
 
-# Create .bashrc if it doesn't exist
-touch "$BASHRC"
-
-# Check if block already exists
-if grep -qF "$MARKER_START" "$BASHRC"; then
-    echo -e "${GREEN}[OK]${NC}   Refreshing environment block in $BASHRC"
-    # Remove old block
-    sed -i "/${MARKER_START//\//\\/}/,/${MARKER_END//\//\\/}/d" "$BASHRC"
+PATH_LINE="export PATH=\"\$HOME/.local/bin:\$PATH\""
+if [ -n "$PLATFORM" ]; then
+    load_platform_config "$PLATFORM" "$(dirname "$(dirname "$0")")" 2>/dev/null || true
+    if [ "${PLATFORM_NEEDS_NODEJS:-}" = true ]; then
+        PATH_LINE="export PATH=\"\$HOME/.openclaw-android/node/bin:\$HOME/.local/bin:\$PATH\""
+    fi
 fi
 
-# Append environment block
+PLATFORM_VARS=""
+PLATFORM_ENV_SCRIPT="$(dirname "$(dirname "$0")")/platforms/$PLATFORM/env.sh"
+if [ -n "$PLATFORM" ] && [ -f "$PLATFORM_ENV_SCRIPT" ]; then
+    PLATFORM_VARS=$(bash "$PLATFORM_ENV_SCRIPT")
+fi
+
+ENV_BLOCK="${BASHRC_MARKER_START}
+# platform: ${PLATFORM:-none}
+${PATH_LINE}
+${INFRA_VARS}"
+
+if [ -n "$PLATFORM_VARS" ]; then
+    ENV_BLOCK="${ENV_BLOCK}
+${PLATFORM_VARS}"
+fi
+
+ENV_BLOCK="${ENV_BLOCK}
+${BASHRC_MARKER_END}"
+
+touch "$BASHRC"
+if grep -qF "$BASHRC_MARKER_START" "$BASHRC"; then
+    sed -i "/${BASHRC_MARKER_START//\//\\/}/,/${BASHRC_MARKER_END//\//\\/}/d" "$BASHRC"
+fi
 echo "" >> "$BASHRC"
 echo "$ENV_BLOCK" >> "$BASHRC"
-echo -e "${GREEN}[OK]${NC}   Added environment variables to $BASHRC"
 
-echo ""
-echo "Variables configured:"
-echo "  PATH=$GLIBC_NODE_DIR/bin:\$HOME/.local/bin:\$PATH"
-echo "  TMPDIR=\$PREFIX/tmp"
-echo "  TMP=\$TMPDIR"
-echo "  TEMP=\$TMPDIR"
-echo "  CONTAINER=1  (suppresses systemd checks)"
-echo "  CLAWDHUB_WORKDIR=\"\$HOME/.openclaw/workspace\"  (clawdhub skill install path)"
-echo "  CPATH=\"\$PREFIX/include/glib-2.0:\$PREFIX/lib/glib-2.0/include\"  (native module builds)"
-echo "  OA_GLIBC=1  (glibc architecture marker)"
-echo ""
-echo "Removed (no longer needed with glibc):"
-echo "  NODE_OPTIONS  (handled by node wrapper auto-loading glibc-compat.js)"
-echo "  CXXFLAGS      (glibc headers are complete)"
-echo "  GYP_DEFINES   (glibc is standard Linux)"
-echo "  CFLAGS        (glibc compiler is standard)"
-
-# Source for current session
-export PATH="$GLIBC_NODE_DIR/bin:$HOME/.local/bin:$PATH"
-export TMPDIR="$PREFIX/tmp"
-export TMP="$TMPDIR"
-export TEMP="$TMPDIR"
-export CONTAINER=1
-export CLAWDHUB_WORKDIR="$HOME/.openclaw/workspace"
-export OA_GLIBC=1
-export CPATH="$PREFIX/include/glib-2.0:$PREFIX/lib/glib-2.0/include"
-
-# Create ar symlink if missing (Termux provides llvm-ar but not ar)
 if [ ! -e "$PREFIX/bin/ar" ] && [ -x "$PREFIX/bin/llvm-ar" ]; then
     ln -s "$PREFIX/bin/llvm-ar" "$PREFIX/bin/ar"
-    echo -e "${GREEN}[OK]${NC}   Created ar → llvm-ar symlink"
 fi
-
-echo ""
-echo -e "${GREEN}Environment setup complete.${NC}"
