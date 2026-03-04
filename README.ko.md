@@ -180,6 +180,7 @@ SSH 접속 및 대시보드 터널 설정은 [Termux SSH 접속 가이드](docs/
 | 옵션 | 설명 |
 |------|------|
 | `oa --update` | OpenClaw 및 Android 패치 업데이트 |
+| `oa --install` | 선택적 도구 설치 (tmux, code-server, AI CLI 등) |
 | `oa --uninstall` | OpenClaw on Android 제거 |
 | `oa --status` | 설치 상태 및 모든 설치된 컴포넌트 정보 표시 |
 | `oa --version` | 버전 표시 |
@@ -331,14 +332,6 @@ openclaw-android/
 │   │       ├── openclaw-apply-patches.sh
 │   │       ├── openclaw-patch-paths.sh
 │   │       └── openclaw-build-sharp.sh
-│   └── zeroclaw/               # ZeroClaw 플랫폼 플러그인 (예시/템플릿)
-│       ├── config.env
-│       ├── env.sh
-│       ├── install.sh
-│       ├── update.sh
-│       ├── uninstall.sh
-│       ├── status.sh
-│       └── verify.sh
 ├── tests/
 │   └── verify-install.sh       # 설치 후 검증 (오케스트레이터 + 플랫폼)
 └── docs/
@@ -387,7 +380,7 @@ PLATFORM_NEEDS_NODEJS=true
 PLATFORM_NEEDS_BUILD_TOOLS=true
 ```
 
-오케스트레이터는 이 플래그를 읽고 해당하는 설치 스크립트를 조건부로 실행합니다. glibc나 Node.js가 필요 없는 플랫폼(예: ZeroClaw)은 이 값을 `false`로 설정하면 무거운 의존성이 전부 스킵됩니다.
+오케스트레이터는 이 플래그를 읽고 해당하는 설치 스크립트를 조건부로 실행합니다. 특정 의존성이 필요 없는 플랫폼은 해당 플래그를 `false`로 설정하면 무거운 의존성이 전부 스킵됩니다.
 
 ## 설치 흐름 상세
 

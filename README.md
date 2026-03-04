@@ -180,6 +180,7 @@ After installation, the `oa` command is available for managing your installation
 | Option | Description |
 |--------|-------------|
 | `oa --update` | Update OpenClaw and Android patches |
+| `oa --install` | Install optional tools (tmux, code-server, AI CLIs, etc.) |
 | `oa --uninstall` | Remove OpenClaw on Android |
 | `oa --status` | Show installation status and all installed components |
 | `oa --version` | Show version |
@@ -331,14 +332,6 @@ openclaw-android/
 │   │       ├── openclaw-apply-patches.sh
 │   │       ├── openclaw-patch-paths.sh
 │   │       └── openclaw-build-sharp.sh
-│   └── zeroclaw/               # ZeroClaw platform plugin (example/template)
-│       ├── config.env
-│       ├── env.sh
-│       ├── install.sh
-│       ├── update.sh
-│       ├── uninstall.sh
-│       ├── status.sh
-│       └── verify.sh
 ├── tests/
 │   └── verify-install.sh       # Post-install verification (orchestrator + platform)
 └── docs/
@@ -387,7 +380,7 @@ PLATFORM_NEEDS_NODEJS=true
 PLATFORM_NEEDS_BUILD_TOOLS=true
 ```
 
-The orchestrator reads these flags and conditionally runs the corresponding install scripts. A platform that doesn't need glibc or Node.js (like ZeroClaw) simply sets these to `false` and the heavy dependencies are skipped entirely.
+The orchestrator reads these flags and conditionally runs the corresponding install scripts. A platform that doesn't need certain dependencies simply sets the corresponding flags to `false` and those heavy dependencies are skipped entirely.
 
 ## Detailed Installation Flow
 

@@ -33,6 +33,7 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  --update       Update OpenClaw and Android patches"
+    echo "  --install      Install optional tools (tmux, code-server, AI CLIs, etc.)"
     echo "  --uninstall    Remove OpenClaw on Android"
     echo "  --status       Show installation status and all components"
     echo "  --version, -v  Show version"
@@ -146,9 +147,32 @@ cmd_status() {
     echo ""
 }
 
+cmd_install() {
+    if ! command -v curl &>/dev/null; then
+        echo -e "${RED}[FAIL]${NC} curl not found. Install it with: pkg install curl"
+        exit 1
+    fi
+
+    local TMPFILE
+    TMPFILE=$(mktemp "${PREFIX:-/tmp}/tmp/install-tools.XXXXXX.sh" 2>/dev/null) \
+        || TMPFILE=$(mktemp /tmp/install-tools.XXXXXX.sh)
+
+    if ! curl -sfL "$REPO_BASE/install-tools.sh" -o "$TMPFILE"; then
+        rm -f "$TMPFILE"
+        echo -e "${RED}[FAIL]${NC} Failed to download install-tools.sh"
+        exit 1
+    fi
+
+    bash "$TMPFILE"
+    rm -f "$TMPFILE"
+}
+
 case "${1:-}" in
     --update)
         cmd_update
+        ;;
+    --install)
+        cmd_install
         ;;
     --uninstall)
         cmd_uninstall

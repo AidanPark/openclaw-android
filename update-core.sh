@@ -232,15 +232,8 @@ else
             fi
         fi
     else
-        if ask_yn "Install OpenCode?"; then
-            if bash "$RELEASE_TMP/scripts/install-opencode.sh"; then
-                echo -e "${GREEN}[OK]${NC}   OpenCode installed"
-            else
-                echo -e "${YELLOW}[WARN]${NC} OpenCode installation failed (non-critical)"
-            fi
-        else
-            echo -e "${YELLOW}[SKIP]${NC} Skipping OpenCode"
-        fi
+        echo -e "${YELLOW}[SKIP]${NC} OpenCode not installed"
+    fi
     fi
 fi
 
