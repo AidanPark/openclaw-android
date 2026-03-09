@@ -9,7 +9,7 @@ NC='\033[0m'
 
 PROJECT_DIR="$HOME/.openclaw-android"
 PLATFORM_MARKER="$PROJECT_DIR/.platform"
-OA_VERSION="1.0.4"
+OA_VERSION="1.0.5"
 
 echo ""
 echo -e "${BOLD}========================================${NC}"
@@ -206,6 +206,14 @@ if command -v code-server &>/dev/null; then
     fi
 else
     echo -e "${YELLOW}[SKIP]${NC} code-server not installed"
+fi
+
+if command -v chromium-browser &>/dev/null || command -v chromium &>/dev/null; then
+    if [ -f "$RELEASE_TMP/scripts/install-chromium.sh" ]; then
+        bash "$RELEASE_TMP/scripts/install-chromium.sh" update || true
+    fi
+else
+    echo -e "${YELLOW}[SKIP]${NC} Chromium not installed"
 fi
 
 if [ "$IS_GLIBC" = false ]; then

@@ -15,7 +15,7 @@ NC='\033[0m'
 
 PROJECT_DIR="$HOME/.openclaw-android"
 PLATFORM_MARKER="$PROJECT_DIR/.platform"
-OA_VERSION="1.0.4"
+OA_VERSION="1.0.5"
 REPO_TARBALL="https://github.com/AidanPark/openclaw-android/archive/refs/heads/main.tar.gz"
 
 echo ""
@@ -76,6 +76,7 @@ check_tool "tmux" "tmux"
 check_tool "ttyd" "ttyd"
 check_tool "dufs" "dufs"
 check_tool "android-tools" "adb"
+check_tool "Chromium" "chromium-browser"
 check_tool "code-server" "code-server"
 if [ "$IS_GLIBC" = true ]; then
     check_tool "OpenCode" "opencode"
@@ -114,11 +115,13 @@ INSTALL_OPENCODE=false
 INSTALL_CLAUDE_CODE=false
 INSTALL_GEMINI_CLI=false
 INSTALL_CODEX_CLI=false
+INSTALL_CHROMIUM=false
 
 [ "${TOOL_STATUS[tmux]}" = "not_installed" ] && ask_yn "  Install tmux (terminal multiplexer)?" && INSTALL_TMUX=true || true
 [ "${TOOL_STATUS[ttyd]}" = "not_installed" ] && ask_yn "  Install ttyd (web terminal)?" && INSTALL_TTYD=true || true
 [ "${TOOL_STATUS[dufs]}" = "not_installed" ] && ask_yn "  Install dufs (file server)?" && INSTALL_DUFS=true || true
 [ "${TOOL_STATUS[android-tools]}" = "not_installed" ] && ask_yn "  Install android-tools (adb)?" && INSTALL_ANDROID_TOOLS=true || true
+[ "${TOOL_STATUS[Chromium]}" = "not_installed" ] && ask_yn "  Install Chromium (browser automation, ~400MB)?" && INSTALL_CHROMIUM=true || true
 [ "${TOOL_STATUS[code-server]}" = "not_installed" ] && ask_yn "  Install code-server (browser IDE)?" && INSTALL_CODE_SERVER=true || true
 if [ "$IS_GLIBC" = true ] && [ "${TOOL_STATUS[OpenCode]}" = "not_installed" ]; then
     ask_yn "  Install OpenCode (AI coding assistant)?" && INSTALL_OPENCODE=true || true
@@ -130,7 +133,7 @@ fi
 # --- Check if anything selected ---
 ANYTHING_SELECTED=false
 for var in INSTALL_TMUX INSTALL_TTYD INSTALL_DUFS INSTALL_ANDROID_TOOLS \
-           INSTALL_CODE_SERVER INSTALL_OPENCODE INSTALL_CLAUDE_CODE \
+           INSTALL_CHROMIUM INSTALL_CODE_SERVER INSTALL_OPENCODE INSTALL_CLAUDE_CODE \
            INSTALL_GEMINI_CLI INSTALL_CODEX_CLI; do
     if [ "${!var}" = true ]; then
         ANYTHING_SELECTED=true
@@ -146,7 +149,7 @@ fi
 
 # --- Download scripts (needed for code-server and OpenCode) ---
 NEEDS_TARBALL=false
-if [ "$INSTALL_CODE_SERVER" = true ] || [ "$INSTALL_OPENCODE" = true ]; then
+if [ "$INSTALL_CODE_SERVER" = true ] || [ "$INSTALL_OPENCODE" = true ] || [ "$INSTALL_CHROMIUM" = true ]; then
     NEEDS_TARBALL=true
 fi
 
@@ -193,6 +196,14 @@ if [ "$INSTALL_OPENCODE" = true ]; then
         echo -e "${GREEN}[OK]${NC}   OpenCode installed"
     else
         echo -e "${YELLOW}[WARN]${NC} OpenCode installation failed (non-critical)"
+    fi
+fi
+
+if [ "$INSTALL_CHROMIUM" = true ]; then
+    if bash "$RELEASE_TMP/scripts/install-chromium.sh" install; then
+        echo -e "${GREEN}[OK]${NC}   Chromium installed"
+    else
+        echo -e "${YELLOW}[WARN]${NC} Chromium installation failed (non-critical)"
     fi
 fi
 

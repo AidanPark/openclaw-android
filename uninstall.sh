@@ -47,7 +47,7 @@ fi
 
 step() {
     echo ""
-    echo -e "${BOLD}[$1/6] $2${NC}"
+    echo -e "${BOLD}[$1/7] $2${NC}"
     echo "----------------------------------------"
 }
 
@@ -88,7 +88,15 @@ rmdir "$HOME/.local/bin" 2>/dev/null || true
 rmdir "$HOME/.local/lib" 2>/dev/null || true
 rmdir "$HOME/.local" 2>/dev/null || true
 
-step 3 "oa and oaupdate commands"
+step 3 "Chromium"
+if command -v chromium-browser &>/dev/null || command -v chromium &>/dev/null; then
+    pkg uninstall -y chromium 2>/dev/null || true
+    echo -e "${GREEN}[OK]${NC}   Removed Chromium"
+else
+    echo -e "${YELLOW}[SKIP]${NC} Chromium not installed"
+fi
+
+step 4 "oa and oaupdate commands"
 if [ -f "${PREFIX:-}/bin/oa" ]; then
     rm -f "${PREFIX:-}/bin/oa"
     echo -e "${GREEN}[OK]${NC}   Removed ${PREFIX:-}/bin/oa"
@@ -103,7 +111,7 @@ else
     echo -e "${YELLOW}[SKIP]${NC} ${PREFIX:-}/bin/oaupdate not found"
 fi
 
-step 4 "glibc components"
+step 5 "glibc components"
 if command -v pacman &>/dev/null && pacman -Q glibc-runner &>/dev/null; then
     pacman -R glibc-runner --noconfirm || true
     echo -e "${GREEN}[OK]${NC}   Removed glibc-runner package"
@@ -111,7 +119,7 @@ else
     echo -e "${YELLOW}[SKIP]${NC} glibc-runner not installed"
 fi
 
-step 5 "shell configuration"
+step 6 "shell configuration"
 BASHRC="$HOME/.bashrc"
 if [ -f "$BASHRC" ] && grep -qF "$BASHRC_MARKER_START" "$BASHRC"; then
     sed -i "/${BASHRC_MARKER_START//\//\\/}/,/${BASHRC_MARKER_END//\//\\/}/d" "$BASHRC"
@@ -121,7 +129,7 @@ else
     echo -e "${YELLOW}[SKIP]${NC} No environment block found in $BASHRC"
 fi
 
-step 6 "installation directory"
+step 7 "installation directory"
 
 if [ -d "$PROJECT_DIR" ]; then
     if ask_yn "Remove installation directory (~/.openclaw-android)? Includes Node.js, patches, configs."; then

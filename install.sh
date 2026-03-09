@@ -40,11 +40,13 @@ INSTALL_OPENCODE=false
 INSTALL_CLAUDE_CODE=false
 INSTALL_GEMINI_CLI=false
 INSTALL_CODEX_CLI=false
+INSTALL_CHROMIUM=false
 
 if ask_yn "Install tmux (terminal multiplexer)?"; then INSTALL_TMUX=true; fi
 if ask_yn "Install ttyd (web terminal)?"; then INSTALL_TTYD=true; fi
 if ask_yn "Install dufs (file server)?"; then INSTALL_DUFS=true; fi
 if ask_yn "Install android-tools (adb)?"; then INSTALL_ANDROID_TOOLS=true; fi
+if ask_yn "Install Chromium (browser automation for OpenClaw, ~400MB)?"; then INSTALL_CHROMIUM=true; fi
 if ask_yn "Install code-server (browser IDE)?"; then INSTALL_CODE_SERVER=true; fi
 if ask_yn "Install OpenCode (AI coding assistant)?"; then INSTALL_OPENCODE=true; fi
 if ask_yn "Install Claude Code CLI?"; then INSTALL_CLAUDE_CODE=true; fi
@@ -105,6 +107,8 @@ step 7 "Install Optional Tools (L3)"
 [ "$INSTALL_TTYD" = true ] && pkg install -y ttyd || true
 [ "$INSTALL_DUFS" = true ] && pkg install -y dufs || true
 [ "$INSTALL_ANDROID_TOOLS" = true ] && pkg install -y android-tools || true
+
+[ "$INSTALL_CHROMIUM" = true ] && bash "$SCRIPT_DIR/scripts/install-chromium.sh" install || true
 
 [ "$INSTALL_CODE_SERVER" = true ] && mkdir -p "$PROJECT_DIR/patches" && cp "$SCRIPT_DIR/patches/argon2-stub.js" "$PROJECT_DIR/patches/argon2-stub.js" && bash "$SCRIPT_DIR/scripts/install-code-server.sh" install || true
 

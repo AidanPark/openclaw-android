@@ -53,6 +53,13 @@ else
     echo -e "  OpenCode:    ${YELLOW}not installed${NC}"
 fi
 
+if command -v chromium-browser &>/dev/null || command -v chromium &>/dev/null; then
+    cr_bin=$(command -v chromium-browser 2>/dev/null || command -v chromium 2>/dev/null)
+    cr_ver=$($cr_bin --version 2>/dev/null | head -1 || echo 'installed')
+    echo "  Chromium:    $cr_ver"
+else
+    echo -e "  Chromium:    ${YELLOW}not installed${NC}"
+fi
 
 echo ""
 echo -e "${BOLD}Architecture${NC}"

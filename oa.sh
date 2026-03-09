@@ -7,7 +7,7 @@ if [ -f "$HOME/.openclaw-android/scripts/lib.sh" ]; then
     # shellcheck source=/dev/null
     source "$HOME/.openclaw-android/scripts/lib.sh"
 else
-    OA_VERSION="1.0.4"
+    OA_VERSION="1.0.5"
     RED='\033[0;31m'
     GREEN='\033[0;32m'
     YELLOW='\033[1;33m'
