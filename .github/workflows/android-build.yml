@@ -32,7 +32,7 @@ jobs:
       - run: npm run build
       - run: cd dist && zip -r ../www.zip .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: www-zip
           path: android/www/www.zip
@@ -66,7 +66,7 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
