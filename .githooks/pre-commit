@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Pre-commit hook: runs ktlint and detekt on staged Kotlin files
+# Enable with: git config core.hooksPath .githooks
+
+set -e
+
+ANDROID_DIR="$(git rev-parse --show-toplevel)/android"
+
+# Check if any Kotlin files are staged
+STAGED_KT=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.kts?$' || true)
+
+if [ -z "$STAGED_KT" ]; then
+    exit 0
+fi
+
+echo "Running ktlint check..."
+if ! (cd "$ANDROID_DIR" && ./gradlew ktlintCheck --daemon -q 2>/dev/null); then
+    echo ""
+    echo "ktlint check failed. Run './gradlew ktlintFormat' to auto-fix."
+    exit 1
+fi
+
+echo "Running detekt..."
+if ! (cd "$ANDROID_DIR" && ./gradlew detekt --daemon -q 2>/dev/null); then
+    echo ""
+    echo "detekt check failed. Fix the issues above before committing."
+    exit 1
+fi
+
+echo "All checks passed."

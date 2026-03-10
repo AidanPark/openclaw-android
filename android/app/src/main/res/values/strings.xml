@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Claw on Android</string>
+    <string name="app_name">Claw</string>
     <string name="notification_channel_id">openclaw_service</string>
     <string name="notification_channel_name">OpenClaw Service</string>
     <string name="notification_title">OpenClaw is running</string>

@@ -54,6 +54,17 @@
 | 성능 | 느림 (proot 레이어) | 네이티브 속도 |
 | 설정 과정 | 디스트로 설치, Linux 설정, Node.js 설치, 경로 수정... | 명령어 하나 실행 |
 
+## <img src="docs/images/claw-icon.svg" width="28"> Claw 앱
+
+독립 실행형 Android 앱도 제공됩니다. 터미널 에뮬레이터와 WebView 기반 UI를 하나의 APK에 담았으며, Termux 없이 사용할 수 있습니다.
+
+- 원탭 설치: 앱 안에서 부트스트랩, Node.js, OpenClaw 자동 설치
+- 내장 대시보드: 게이트웨이 제어, 런타임 정보, 도구 관리
+- Termux와 독립 실행 — 앱 설치가 기존 Termux + `oa` 환경에 영향을 주지 않음
+
+[Releases](https://github.com/AidanPark/openclaw-android/releases) 페이지에서 APK를 다운로드하세요.
+
+
 ## 요구사항
 
 - Android 7.0 이상 (Android 10 이상 권장)

@@ -1,0 +1,50 @@
+# CodeRabbit configuration for OpenClaw on Android
+# Documentation: https://docs.coderabbit.ai/reference/configuration
+
+language: en-US
+early_access: false
+
+reviews:
+  request_changes_workflow: false
+  high_level_summary: true
+  sequence_diagrams: true
+
+  auto_review:
+    enabled: true
+    base_branches:
+      - main
+    drafts: false
+
+  poem: false
+
+  reviewer:
+    enabled: true
+    auto_assign: false
+
+  finishing_touches:
+    docstrings:
+      enabled: true
+    unit_tests:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+# Path filters — ignore generated and build artifacts
+path_filters:
+  - "!**/build/**"
+  - "!**/node_modules/**"
+  - "!**/.gradle/**"
+  - "!**/android/www/dist/**"
+  - "!**/*.apk"
+
+# Review instructions specific to this project
+review_instructions:
+  - "Focus on Kotlin best practices and idiomatic Android code"
+  - "Check for Android memory leaks (Activity/Context references, unregistered receivers)"
+  - "Verify proper lifecycle handling (Activity, Service, coroutine scope cancellation)"
+  - "Ensure shell scripts are POSIX-compatible and follow scripts/lib.sh conventions"
+  - "Check path handling — Termux paths ($PREFIX) vs standard Linux paths"
+  - "Review glibc-runner compatibility (bionic vs glibc boundary issues)"
+  - "Verify WebView ↔ Kotlin JsBridge interface consistency"
+  - "Ensure no hardcoded paths that break on different Android versions"

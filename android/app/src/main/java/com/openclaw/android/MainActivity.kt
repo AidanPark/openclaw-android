@@ -168,6 +168,8 @@ class MainActivity : AppCompatActivity() {
     override fun onBackPressed() {
         if (binding.terminalContainer.visibility == View.VISIBLE) {
             showWebView()
+        } else if (binding.webView.canGoBack()) {
+            binding.webView.goBack()
         } else {
             super.onBackPressed()
         }

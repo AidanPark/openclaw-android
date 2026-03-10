@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useRoute } from '../lib/router'
 import { bridge } from '../lib/bridge'
-import { useNativeEvent } from '../lib/useNativeEvent'
 
 interface BootstrapStatus {
   installed: boolean
@@ -17,10 +16,7 @@ export function Dashboard() {
   const { navigate } = useRoute()
   const [status, setStatus] = useState<BootstrapStatus | null>(null)
   const [platform, setPlatform] = useState<PlatformInfo | null>(null)
-  const [gatewayRunning, setGatewayRunning] = useState(false)
-  const gatewayUrl = 'http://localhost:3000'
   const [runtimeInfo, setRuntimeInfo] = useState<Record<string, string>>({})
-  const [copied, setCopied] = useState(false)
 
   function refreshStatus() {
     const bs = bridge.callJson<BootstrapStatus>('getBootstrapStatus')
@@ -28,10 +24,6 @@ export function Dashboard() {
 
     const ap = bridge.callJson<PlatformInfo>('getActivePlatform')
     if (ap) setPlatform(ap)
-
-    // Check gateway
-    const result = bridge.callJson<{ stdout: string }>('runCommand', 'pgrep -f "openclaw gateway" 2>/dev/null')
-    setGatewayRunning(!!(result?.stdout?.trim()))
 
     // Get runtime versions
     const nodeV = bridge.callJson<{ stdout: string }>('runCommand', 'node -v 2>/dev/null')
@@ -46,26 +38,13 @@ export function Dashboard() {
 
   useEffect(() => {
     refreshStatus()
-    const interval = setInterval(refreshStatus, 15000) // Poll every 15s
-    return () => clearInterval(interval)
   }, [])
-
-  const handleCommandOutput = useCallback(() => {
-    // Refresh after command completes
-    setTimeout(refreshStatus, 2000)
-  }, [])
-  useNativeEvent('command_output', handleCommandOutput)
-
-  function handleCopy() {
-    bridge.call('copyToClipboard', gatewayUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
 
   function handleCheckStatus() {
     bridge.call('showTerminal')
-    bridge.call('writeToTerminal', '', 'echo "=== OpenClaw Status ==="; echo "Node.js: $(node -v)"; echo "git: $(git --version 2>/dev/null)"; echo "openclaw: $(openclaw --version 2>/dev/null)"; echo "npm: $(npm -v)"; echo "Prefix: $PREFIX"; echo "Arch: $(uname -m)"; df -h $HOME | tail -1; echo "========================"\n')
+    bridge.call('writeToTerminal', '', 'openclaw status\n')
   }
+
 
   function handleUpdate() {
     bridge.call('showTerminal')
@@ -78,7 +57,6 @@ export function Dashboard() {
 
   function handleStartGateway() {
     bridge.call('showTerminal')
-    // Auto-type command
     bridge.call('writeToTerminal', '', 'openclaw gateway\n')
   }
 
@@ -105,66 +83,23 @@ export function Dashboard() {
           <div style={{ fontSize: 20, fontWeight: 700 }}>
             {platform?.name || 'OpenClaw'}
           </div>
-          <div style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span className={`status-dot ${gatewayRunning ? 'success' : 'pending'}`} />
-            {gatewayRunning ? 'Running' : 'Not running'}
-          </div>
         </div>
       </div>
 
-      {/* Gateway card */}
-      {gatewayRunning ? (
-        <div className="card">
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
-            Gateway
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <code style={{ fontSize: 14, color: 'var(--accent)' }}>{gatewayUrl}</code>
-            <button className="btn btn-small btn-secondary" onClick={handleCopy}>
-              {copied ? 'Copied!' : 'Copy'}
-            </button>
-          </div>
+      {/* Gateway */}
+      <div className="card">
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+          Gateway
         </div>
-      ) : (
-        <div className="card">
-          <div style={{ textAlign: 'center', padding: '12px 0' }}>
-            <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>
-              Gateway is not running. Start it from Terminal:
-            </div>
-            <div className="code-block" style={{ display: 'inline-block', marginBottom: 16 }}>
-              $ openclaw gateway
-            </div>
-            <div>
-              <button className="btn btn-primary" onClick={handleStartGateway}>
-                Open Terminal
-              </button>
-            </div>
-          </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleStartGateway}>
+            Start Gateway
+          </button>
+          <button className="btn btn-secondary" style={{ flex: 1 }} onClick={handleCheckStatus}>
+            Check Status
+          </button>
         </div>
-      )}
-
-      {/* Quick actions */}
-      {gatewayRunning && (
-        <div className="card">
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
-            Quick Actions
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button
-              className="btn btn-small btn-secondary"
-              onClick={() => bridge.call('runCommandAsync', 'restart', 'pkill -f "openclaw gateway"; sleep 1; openclaw gateway &')}
-            >
-              🔄 Restart
-            </button>
-            <button
-              className="btn btn-small btn-secondary"
-              onClick={() => bridge.call('runCommandAsync', 'stop', 'pkill -f "openclaw gateway"')}
-            >
-              ⏹ Stop
-            </button>
-          </div>
-        </div>
-      )}
+      </div>
 
       {/* Runtime info */}
       <div className="section-title">Runtime</div>
@@ -179,16 +114,6 @@ export function Dashboard() {
 
       {/* Management */}
       <div className="section-title">Management</div>
-      <div className="card" style={{ cursor: 'pointer' }} onClick={handleCheckStatus}>
-        <div className="card-row">
-          <div className="card-icon">📊</div>
-          <div className="card-content">
-            <div className="card-label">Status</div>
-            <div className="card-desc">Check versions and environment info</div>
-          </div>
-          <div className="card-chevron">›</div>
-        </div>
-      </div>
       <div className="card" style={{ cursor: 'pointer' }} onClick={handleUpdate}>
         <div className="card-row">
           <div className="card-icon">⬆️</div>

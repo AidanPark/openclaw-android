@@ -105,6 +105,16 @@ class JsBridge(
         session?.write(data)
     }
 
+    @JavascriptInterface
+    fun runInNewSession(command: String) {
+        val session = sessionManager.createSession()
+        activity.showTerminal()
+        // Delay write until shell process initializes (same pattern as showTerminal post-setup)
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            session.write(command)
+        }, 500)
+    }
+
     // ═══════════════════════════════════════════
     // Setup domain
     // ═══════════════════════════════════════════

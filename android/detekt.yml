@@ -1,0 +1,50 @@
+build:
+  maxIssues: 0
+  excludeCorrectable: false
+
+complexity:
+  LongMethod:
+    threshold: 60
+  LargeClass:
+    threshold: 600
+  ComplexMethod:
+    threshold: 15
+  TooManyFunctions:
+    threshold: 20
+    ignorePrivate: true
+
+style:
+  MagicNumber:
+    active: true
+    ignoreNumbers:
+      - '-1'
+      - '0'
+      - '1'
+      - '2'
+    ignoreHashCodeFunction: true
+    ignorePropertyDeclaration: true
+    ignoreAnnotation: true
+    ignoreEnums: true
+  MaxLineLength:
+    maxLineLength: 120
+  WildcardImport:
+    active: false
+  ReturnCount:
+    max: 4
+
+naming:
+  FunctionNaming:
+    functionPattern: '[a-zA-Z][a-zA-Z0-9]*'
+  TopLevelPropertyNaming:
+    constantPattern: '[A-Z][A-Za-z0-9_]*'
+  VariableNaming:
+    variablePattern: '[a-z][A-Za-z0-9]*'
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: true
+    exceptionNames:
+      - 'Error'
+      - 'Throwable'
+  SwallowedException:
+    active: true

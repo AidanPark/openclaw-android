@@ -1,6 +1,10 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.kotlinAndroid)
+    alias(libs.plugins.detekt)
+    alias(libs.plugins.ktlint)
 }
 
 android {
@@ -18,7 +22,7 @@ android {
         //noinspection ExpiredTargetSdkVersion
         targetSdk = 28
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = "0.3.0"
 
         ndk { abiFilters += listOf("arm64-v8a") }
 
@@ -37,8 +41,22 @@ android {
         )
     }
 
+    signingConfigs {
+        create("release") {
+            val props = project.rootProject.file("local.properties")
+            if (props.exists()) {
+                val localProps = Properties().apply { props.inputStream().use { load(it) } }
+                storeFile = file(localProps.getProperty("RELEASE_STORE_FILE", ""))
+                storePassword = localProps.getProperty("RELEASE_STORE_PASSWORD", "")
+                keyAlias = localProps.getProperty("RELEASE_KEY_ALIAS", "")
+                keyPassword = localProps.getProperty("RELEASE_KEY_PASSWORD", "")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(
@@ -81,4 +99,34 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.gson)
     // WebView + @JavascriptInterface — Android SDK built-in, no extra dependency
+}
+
+
+detekt {
+    buildUponDefaultConfig = true
+    allRules = false
+    config.setFrom("$rootDir/detekt.yml")
+}
+
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    jvmTarget = "17"
+    reports {
+        html.required.set(true)
+        sarif.required.set(true)
+        xml.required.set(false)
+        txt.required.set(false)
+    }
+}
+
+tasks.withType<io.gitlab.arturbosch.detekt.DetektCreateBaselineTask>().configureEach {
+    jvmTarget = "17"
+}
+
+configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+    android.set(true)
+    outputToConsole.set(true)
+    ignoreFailures.set(false)
+    filter {
+        exclude("**/generated/**")
+    }
 }

@@ -20,7 +20,7 @@ object EnvironmentBuilder {
             put("PREFIX", prefix.absolutePath)
             put("HOME", home.absolutePath)
             put("TMPDIR", tmp.absolutePath)
-            put("PATH", "${prefix.absolutePath}/bin:${prefix.absolutePath}/bin/applets")
+            put("PATH", "${home.absolutePath}/.openclaw-android/node/bin:${home.absolutePath}/.local/bin:${prefix.absolutePath}/bin:${prefix.absolutePath}/bin/applets")
             put("LD_LIBRARY_PATH", "${prefix.absolutePath}/lib")
 
             // libtermux-exec path conversion (§2.2.4)
@@ -69,6 +69,12 @@ object EnvironmentBuilder {
             // Android-specific
             put("ANDROID_DATA", "/data")
             put("ANDROID_ROOT", "/system")
+
+            // OpenClaw platform
+            put("OA_GLIBC", "1")
+            put("CONTAINER", "1")
+            put("CLAWDHUB_WORKDIR", "${home.absolutePath}/.openclaw/workspace")
+            put("CPATH", "${prefix.absolutePath}/include/glib-2.0:${prefix.absolutePath}/lib/glib-2.0/include")
         }
     }
 }

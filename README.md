@@ -54,6 +54,17 @@ The standard approach to running OpenClaw on Android requires installing proot-d
 | Performance | Slower (proot layer) | Native speed |
 | Setup steps | Install distro, configure Linux, install Node.js, fix paths... | Run one command |
 
+## <img src="docs/images/claw-icon.svg" width="28"> Claw App
+
+A standalone Android app is also available. It bundles a terminal emulator and a WebView-based UI into a single APK — no Termux required.
+
+- One-tap setup: bootstrap, Node.js, and OpenClaw installed from within the app
+- Built-in dashboard for gateway control, runtime info, and tool management
+- Works independently of Termux — installing the app does not affect an existing Termux + `oa` setup
+
+Download the APK from the [Releases](https://github.com/AidanPark/openclaw-android/releases) page.
+
+
 ## Requirements
 
 - Android 7.0 or higher (Android 10+ recommended)

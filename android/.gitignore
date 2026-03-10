@@ -20,3 +20,8 @@
 # WebView UI build output
 www/node_modules/
 www/dist/
+
+
+# Release keystore
+*.jks
+*.keystore

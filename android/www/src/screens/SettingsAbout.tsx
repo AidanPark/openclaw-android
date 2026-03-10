@@ -11,11 +11,16 @@ interface AppInfo {
 export function SettingsAbout() {
   const { navigate } = useRoute()
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
-  const [runtimeInfo, setRuntimeInfo] = useState<Record<string, string>>({})
+  const [runtimeInfo, setRuntimeInfo] = useState<Record<string, string>>({})  
+  const [scriptVersion, setScriptVersion] = useState<string>('—')
 
   useEffect(() => {
     const info = bridge.callJson<AppInfo>('getAppInfo')
     if (info) setAppInfo(info)
+
+    // Get script version (oa CLI)
+    const oaV = bridge.callJson<{ stdout: string }>('runCommand', 'oa --version 2>/dev/null')
+    setScriptVersion(oaV?.stdout?.trim()?.replace(/^oa\s+/, '') || '—')
 
     // Get runtime versions
     const nodeV = bridge.callJson<{ stdout: string }>('runCommand', 'node -v 2>/dev/null')
@@ -35,7 +40,7 @@ export function SettingsAbout() {
 
       <div style={{ textAlign: 'center', padding: '24px 0' }}>
         <div style={{ fontSize: 48, marginBottom: 8 }}>🧠</div>
-        <div style={{ fontSize: 20, fontWeight: 700 }}>Claw on Android</div>
+        <div style={{ fontSize: 20, fontWeight: 700 }}>Claw</div>
       </div>
 
       <div className="section-title">Version</div>
@@ -43,6 +48,10 @@ export function SettingsAbout() {
         <div className="info-row">
           <span className="label">APK</span>
           <span>{appInfo?.versionName || '—'}</span>
+        </div>
+        <div className="info-row">
+          <span className="label">Script (oa)</span>
+          <span>{scriptVersion}</span>
         </div>
         <div className="info-row">
           <span className="label">Package</span>

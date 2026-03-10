@@ -7,6 +7,8 @@ material = "1.13.0"
 constraintlayout = "2.2.1"
 lifecycleRuntimeKtx = "2.10.0"
 kotlinxCoroutines = "1.10.2"
+detekt = "1.23.8"
+ktlintGradle = "14.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -21,3 +23,5 @@ gson = { module = "com.google.code.gson:gson", version = "2.12.1" }
 androidApplication = { id = "com.android.application", version.ref = "agp" }
 kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 androidLibrary = { id = "com.android.library", version.ref = "agp" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintGradle" }

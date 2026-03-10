@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <circle cx="54" cy="54" r="54" fill="#111827"/>
+  <g transform="rotate(-25 54 54)">
+    <path fill="#FFF" d="M31,22 C28,44,28,64,31,86 C34,64,34,44,31,22Z"/>
+    <path fill="#FFF" d="M43,16 C40,40,40,64,43,92 C46,64,46,40,43,16Z"/>
+    <path fill="#FFF" d="M55,16 C52,40,52,64,55,92 C58,64,58,40,55,16Z"/>
+    <path fill="#FFF" d="M67,22 C64,44,64,64,67,86 C70,64,70,44,67,22Z"/>
+  </g>
+</svg>

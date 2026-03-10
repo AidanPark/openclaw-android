@@ -6,10 +6,28 @@
     android:viewportHeight="108">
     <!-- Background circle -->
     <path
-        android:fillColor="#1A1A2E"
-        android:pathData="M54,54m-54,0a54,54 0,1 1,108 0a54,54 0,1 1,-108 0" />
-    <!-- Terminal prompt icon -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M30,38L44,54L30,70L34.24,74L52,54L34.24,34L30,38ZM52,66H78V74H52V66Z" />
+        android:fillColor="#111827"
+        android:pathData="M54,54m-54,0a54,54,0,1,1,108,0a54,54,0,1,1,-108,0" />
+    <!-- 4 claw scratch marks, rotated diagonally -->
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-25">
+        <!-- Scratch 1 (outer left, shorter) -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M31,22 C28,44,28,64,31,86 C34,64,34,44,31,22Z" />
+        <!-- Scratch 2 (inner left, longer) -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M43,16 C40,40,40,64,43,92 C46,64,46,40,43,16Z" />
+        <!-- Scratch 3 (inner right, longer) -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M55,16 C52,40,52,64,55,92 C58,64,58,40,55,16Z" />
+        <!-- Scratch 4 (outer right, shorter) -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M67,22 C64,44,64,64,67,86 C70,64,70,44,67,22Z" />
+    </group>
 </vector>
