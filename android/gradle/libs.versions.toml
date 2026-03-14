@@ -17,7 +17,7 @@ material = { group = "com.google.android.material", name = "material", version.r
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
-gson = { module = "com.google.code.gson:gson", version = "2.12.1" }
+gson = { module = "com.google.code.gson:gson", version = "2.13.2" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
