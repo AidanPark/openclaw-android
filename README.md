@@ -588,3 +588,22 @@ Updates tools that are already installed:
 ## License
 
 MIT
+
+
+## Installation
+
+```bash
+# Installation instructions
+```
+
+
+## Usage
+
+```python
+# Usage examples
+```
+
+
+## Contributing
+
+Contributions are welcome!
