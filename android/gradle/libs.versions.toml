@@ -8,7 +8,7 @@ constraintlayout = "2.2.1"
 lifecycleRuntimeKtx = "2.10.0"
 kotlinxCoroutines = "1.10.2"
 detekt = "1.23.8"
-ktlintGradle = "14.1.0"
+ktlintGradle = "14.2.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
