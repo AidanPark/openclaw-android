@@ -7,12 +7,11 @@ import org.junit.jupiter.api.io.TempDir
 import java.io.File
 
 class CommandRunnerTest {
-
     @TempDir
     lateinit var tempDir: File
 
-    // PREFIX=/usr makes CommandRunner use /usr/bin/sh which exists on Linux JVM
-    private val env = mapOf("PREFIX" to "/usr", "PATH" to "/usr/bin:/bin")
+    // PREFIX="" makes shell path "/bin/sh" — works on both macOS and Linux
+    private val env = mapOf("PREFIX" to "", "PATH" to "/usr/bin:/bin")
 
     @Test
     fun `runSync returns stdout for echo command`() {

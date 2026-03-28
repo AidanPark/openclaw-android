@@ -1,6 +1,5 @@
 package com.openclaw.android
 
-import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -11,11 +10,10 @@ import java.util.concurrent.TimeUnit
  * Uses Termux bootstrap environment for all commands.
  */
 object CommandRunner {
-
     data class CommandResult(
         val exitCode: Int,
         val stdout: String,
-        val stderr: String
+        val stderr: String,
     )
 
     /**
@@ -26,9 +24,9 @@ object CommandRunner {
         command: String,
         env: Map<String, String>,
         workDir: File,
-        timeoutMs: Long = 5_000
-    ): CommandResult {
-        return try {
+        timeoutMs: Long = 5_000,
+    ): CommandResult =
+        try {
             val shell = env["PREFIX"]?.let { "$it/bin/sh" } ?: "/system/bin/sh"
             val pb = ProcessBuilder(shell, "-c", command)
             pb.environment().clear()
@@ -50,7 +48,6 @@ object CommandRunner {
         } catch (e: Exception) {
             CommandResult(-1, "", e.message ?: "Unknown error")
         }
-    }
 
     /**
      * Run a command asynchronously, streaming output line-by-line via callback.
@@ -59,7 +56,7 @@ object CommandRunner {
         command: String,
         env: Map<String, String>,
         workDir: File,
-        onOutput: (String) -> Unit
+        onOutput: (String) -> Unit,
     ) = withContext(Dispatchers.IO) {
         try {
             val shell = env["PREFIX"]?.let { "$it/bin/sh" } ?: "/system/bin/sh"

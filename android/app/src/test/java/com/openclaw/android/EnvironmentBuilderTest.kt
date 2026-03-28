@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test
 import java.io.File
 
 class EnvironmentBuilderTest {
-
     private lateinit var env: Map<String, String>
     private val filesDir = File("/data/data/com.openclaw.android/files")
 

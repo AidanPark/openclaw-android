@@ -28,16 +28,19 @@ android {
 
         // Initial download URLs (§2.9) — BuildConfig hardcoded fallbacks
         buildConfigField(
-            "String", "BOOTSTRAP_URL",
-            "\"https://github.com/termux/termux-packages/releases/download/bootstrap-2026.02.12-r1%2Bapt.android-7/bootstrap-aarch64.zip\""
+            "String",
+            "BOOTSTRAP_URL",
+            "\"https://github.com/termux/termux-packages/releases/download/bootstrap-2026.02.12-r1%2Bapt.android-7/bootstrap-aarch64.zip\"",
         )
         buildConfigField(
-            "String", "WWW_URL",
-            "\"https://github.com/AidanPark/openclaw-android-app/releases/download/v1.0.0/www.zip\""
+            "String",
+            "WWW_URL",
+            "\"https://github.com/AidanPark/openclaw-android-app/releases/download/v1.0.0/www.zip\"",
         )
         buildConfigField(
-            "String", "CONFIG_URL",
-            "\"https://raw.githubusercontent.com/AidanPark/openclaw-android-app/main/config.json\""
+            "String",
+            "CONFIG_URL",
+            "\"https://raw.githubusercontent.com/AidanPark/openclaw-android-app/main/config.json\"",
         )
     }
 
@@ -64,7 +67,7 @@ android {
             isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
         }
         debug {
@@ -116,11 +119,10 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
 }
 
-
 // --- www build automation ---
 // Builds the React UI (android/www) and copies dist/ into assets/www before every APK build.
-val wwwProjectDir = file("${rootDir}/www")
-val assetsWwwDir = file("${projectDir}/src/main/assets/www")
+val wwwProjectDir = file("$rootDir/www")
+val assetsWwwDir = file("$projectDir/src/main/assets/www")
 
 val buildWww by tasks.registering(Exec::class) {
     description = "Build React UI (npm run build)"
@@ -131,7 +133,7 @@ val buildWww by tasks.registering(Exec::class) {
     inputs.files(
         wwwProjectDir.resolve("package.json"),
         wwwProjectDir.resolve("tsconfig.json"),
-        wwwProjectDir.resolve("vite.config.ts")
+        wwwProjectDir.resolve("vite.config.ts"),
     )
     outputs.dir(wwwProjectDir.resolve("dist"))
 }

@@ -1,7 +1,6 @@
 package com.openclaw.android
 
 import android.content.Context
-
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -14,8 +13,9 @@ import java.util.zip.ZipInputStream
  * Phase 0: extracts from assets. Phase 1+: downloads from network.
  * Based on AnyClaw BootstrapInstaller.kt pattern (§2.2.1).
  */
-class BootstrapManager(private val context: Context) {
-
+class BootstrapManager(
+    private val context: Context,
+) {
     companion object {
         private const val TAG = "BootstrapManager"
         private const val PROGRESS_PREPARING = 0.05f
@@ -48,59 +48,59 @@ class BootstrapManager(private val context: Context) {
         val bootstrapInstalled: Boolean,
         val runtimeInstalled: Boolean,
         val wwwInstalled: Boolean,
-        val platformInstalled: Boolean
+        val platformInstalled: Boolean,
     )
 
-    fun getStatus(): SetupStatus = SetupStatus(
-        bootstrapInstalled = isInstalled(),
-        runtimeInstalled = prefixDir.resolve("bin/node").exists(),
-        wwwInstalled = wwwDir.resolve("index.html").exists(),
-        platformInstalled = File(homeDir, ".openclaw-android/.post-setup-done").exists()
-    )
+    fun getStatus(): SetupStatus =
+        SetupStatus(
+            bootstrapInstalled = isInstalled(),
+            runtimeInstalled = prefixDir.resolve("bin/node").exists(),
+            wwwInstalled = wwwDir.resolve("index.html").exists(),
+            platformInstalled = File(homeDir, ".openclaw-android/.post-setup-done").exists(),
+        )
 
     /**
      * Full setup flow. Reports progress via callback (0.0–1.0).
      */
-    suspend fun startSetup(onProgress: (Float, String) -> Unit) = withContext(Dispatchers.IO) {
-        // Clean up any incomplete previous attempt before starting
-        if (stagingDir.exists()) {
-            AppLogger.i(TAG, "Removing incomplete staging dir from previous attempt")
-            stagingDir.deleteRecursively()
+    suspend fun startSetup(onProgress: (Float, String) -> Unit) =
+        withContext(Dispatchers.IO) {
+            // Clean up any incomplete previous attempt before starting
+            if (stagingDir.exists()) {
+                AppLogger.i(TAG, "Removing incomplete staging dir from previous attempt")
+                stagingDir.deleteRecursively()
+            }
+            if (isInstalled()) {
+                // Bootstrap exists but setup is incomplete — wipe and reinstall
+                AppLogger.i(TAG, "Incomplete bootstrap detected, reinstalling...")
+                prefixDir.deleteRecursively()
+            }
+
+            // Step 1: Download or extract bootstrap
+            onProgress(PROGRESS_PREPARING, "Preparing bootstrap...")
+            val zipStream = getBootstrapStream(onProgress)
+
+            // Step 2: Extract bootstrap
+            onProgress(PROGRESS_EXTRACTING, "Extracting bootstrap...")
+            extractBootstrap(zipStream)
+
+            // Step 3: Fix paths and configure
+            onProgress(PROGRESS_CONFIGURING, "Configuring environment...")
+            fixTermuxPaths(stagingDir)
+            configureApt(stagingDir)
+
+            // Step 4: Atomic rename
+            stagingDir.renameTo(prefixDir)
+            setupDirectories()
+            copyAssetScripts()
+            syncWwwFromAssets()
+            setupTermuxExec()
+
+            onProgress(1f, "Setup complete")
         }
-        if (isInstalled()) {
-            // Bootstrap exists but setup is incomplete — wipe and reinstall
-            AppLogger.i(TAG, "Incomplete bootstrap detected, reinstalling...")
-            prefixDir.deleteRecursively()
-        }
-
-        // Step 1: Download or extract bootstrap
-        onProgress(PROGRESS_PREPARING, "Preparing bootstrap...")
-        val zipStream = getBootstrapStream(onProgress)
-
-        // Step 2: Extract bootstrap
-        onProgress(PROGRESS_EXTRACTING, "Extracting bootstrap...")
-        extractBootstrap(zipStream)
-
-        // Step 3: Fix paths and configure
-        onProgress(PROGRESS_CONFIGURING, "Configuring environment...")
-        fixTermuxPaths(stagingDir)
-        configureApt(stagingDir)
-
-        // Step 4: Atomic rename
-        stagingDir.renameTo(prefixDir)
-        setupDirectories()
-        copyAssetScripts()
-        syncWwwFromAssets()
-        setupTermuxExec()
-
-        onProgress(1f, "Setup complete")
-    }
 
     // --- Bootstrap source ---
 
-    private suspend fun getBootstrapStream(
-        onProgress: (Float, String) -> Unit
-    ): InputStream {
+    private suspend fun getBootstrapStream(onProgress: (Float, String) -> Unit): InputStream {
         // Phase 0: Try assets first
         try {
             return context.assets.open("bootstrap-aarch64.zip")
@@ -131,7 +131,7 @@ class BootstrapManager(private val context: Context) {
 
     private fun processZipEntry(
         zip: ZipInputStream,
-        entry: java.util.zip.ZipEntry
+        entry: java.util.zip.ZipEntry,
     ) {
         if (entry.name == "SYMLINKS.txt") {
             processSymlinks(zip, stagingDir)
@@ -143,13 +143,17 @@ class BootstrapManager(private val context: Context) {
         }
     }
 
-    private fun markExecutableIfNeeded(file: File, name: String) {
-        val knownExecutable = name.startsWith("bin/") ||
-            name.startsWith("libexec/") ||
-            name.startsWith("lib/apt/") ||
-            name.startsWith("lib/bash/") ||
-            name.endsWith(".so") ||
-            name.contains(".so.")
+    private fun markExecutableIfNeeded(
+        file: File,
+        name: String,
+    ) {
+        val knownExecutable =
+            name.startsWith("bin/") ||
+                name.startsWith("libexec/") ||
+                name.startsWith("lib/apt/") ||
+                name.startsWith("lib/bash/") ||
+                name.endsWith(".so") ||
+                name.contains(".so.")
         if (knownExecutable) {
             file.setExecutable(true)
         } else if (file.length() > ELF_MAGIC_SIZE && isElfBinary(file)) {
@@ -157,8 +161,8 @@ class BootstrapManager(private val context: Context) {
         }
     }
 
-    private fun isElfBinary(file: File): Boolean {
-        return try {
+    private fun isElfBinary(file: File): Boolean =
+        try {
             file.inputStream().use { fis ->
                 val magic = ByteArray(ELF_MAGIC_SIZE)
                 fis.read(magic) == ELF_MAGIC_SIZE &&
@@ -167,22 +171,24 @@ class BootstrapManager(private val context: Context) {
         } catch (_: Exception) {
             false
         }
-    }
 
     /**
      * Process SYMLINKS.txt: each line is "target←linkpath".
      * Replace com.termux paths with our package name.
      */
-    private fun processSymlinks(zip: ZipInputStream, targetDir: File) {
+    private fun processSymlinks(
+        zip: ZipInputStream,
+        targetDir: File,
+    ) {
         val content = zip.bufferedReader().readText()
         val ourPackage = context.packageName
-        content.lines()
+        content
+            .lines()
             .filter { it.isNotBlank() }
             .mapNotNull { line ->
                 val parts = line.split(SYMLINK_SEPARATOR)
                 if (parts.size == SYMLINK_PARTS_COUNT) parts else null
-            }
-            .forEach { parts ->
+            }.forEach { parts ->
                 val symlinkTarget = parts[0].trim().replace("com.termux", ourPackage)
                 val symlinkPath = parts[1].trim()
                 val linkFile = File(targetDir, symlinkPath)
@@ -224,7 +230,11 @@ class BootstrapManager(private val context: Context) {
         }
     }
 
-    private fun fixTextFile(file: File, oldText: String, newText: String) {
+    private fun fixTextFile(
+        file: File,
+        oldText: String,
+        newText: String,
+    ) {
         if (!file.exists() || !file.isFile) return
         try {
             val content = file.readText()
@@ -246,9 +256,10 @@ class BootstrapManager(private val context: Context) {
         val sourcesList = dir.resolve("etc/apt/sources.list")
         if (sourcesList.exists()) {
             sourcesList.writeText(
-                sourcesList.readText()
+                sourcesList
+                    .readText()
                     .replace("https://", "http://")
-                    .replace("com.termux", ourPackage)
+                    .replace("com.termux", ourPackage),
             )
         }
 
@@ -264,23 +275,23 @@ class BootstrapManager(private val context: Context) {
         aptConf.writeText(
             """
             Dir "/";
-            Dir::State "${prefix}/var/lib/apt/";
-            Dir::State::status "${prefix}/var/lib/dpkg/status";
-            Dir::Cache "${prefix}/var/cache/apt/";
-            Dir::Log "${prefix}/var/log/apt/";
-            Dir::Etc "${prefix}/etc/apt/";
-            Dir::Etc::SourceList "${prefix}/etc/apt/sources.list";
+            Dir::State "$prefix/var/lib/apt/";
+            Dir::State::status "$prefix/var/lib/dpkg/status";
+            Dir::Cache "$prefix/var/cache/apt/";
+            Dir::Log "$prefix/var/log/apt/";
+            Dir::Etc "$prefix/etc/apt/";
+            Dir::Etc::SourceList "$prefix/etc/apt/sources.list";
             Dir::Etc::SourceParts "";
-            Dir::Bin::dpkg "${prefix}/bin/dpkg";
-            Dir::Bin::Methods "${prefix}/lib/apt/methods/";
-            Dir::Bin::apt-key "${prefix}/bin/apt-key";
+            Dir::Bin::dpkg "$prefix/bin/dpkg";
+            Dir::Bin::Methods "$prefix/lib/apt/methods/";
+            Dir::Bin::apt-key "$prefix/bin/apt-key";
             Dpkg::Options:: "--force-configure-any";
             Dpkg::Options:: "--force-bad-path";
-            Dpkg::Options:: "--instdir=${prefix}";
-            Dpkg::Options:: "--admindir=${prefix}/var/lib/dpkg";
+            Dpkg::Options:: "--instdir=$prefix";
+            Dpkg::Options:: "--admindir=$prefix/var/lib/dpkg";
             Acquire::AllowInsecureRepositories "true";
             APT::Get::AllowUnauthenticated "true";
-            """.trimIndent()
+            """.trimIndent(),
         )
     }
 
@@ -315,8 +326,8 @@ class BootstrapManager(private val context: Context) {
 # dpkg wrapper: set PATH so dpkg can find sh, tar, rm, dpkg-deb etc.
 # Also suppresses confdir errors from hardcoded com.termux paths.
 export PATH="$realPath/../:$realPath/../applets:${d}PATH"
-"$realPath" "${d}@"
-_rc=${d}?
+"$realPath" "$d@"
+_rc=$d?
 if [ ${d}_rc -eq 2 ]; then exit 0; fi
 exit ${d}_rc
 """
@@ -363,7 +374,10 @@ exit ${d}_rc
         }
     }
 
-    private fun copyBundledAsset(assetName: String, target: File) {
+    private fun copyBundledAsset(
+        assetName: String,
+        target: File,
+    ) {
         try {
             context.assets.open(assetName).use { input ->
                 target.outputStream().use { output -> input.copyTo(output) }
@@ -403,7 +417,10 @@ exit ${d}_rc
         }
     }
 
-    private fun copyAssetDir(assetPath: String, targetDir: File) {
+    private fun copyAssetDir(
+        assetPath: String,
+        targetDir: File,
+    ) {
         val entries = context.assets.list(assetPath) ?: return
         targetDir.mkdirs()
         for (entry in entries) {
@@ -411,7 +428,10 @@ exit ${d}_rc
         }
     }
 
-    private fun copyAssetEntry(assetPath: String, targetFile: File) {
+    private fun copyAssetEntry(
+        assetPath: String,
+        targetFile: File,
+    ) {
         val children = context.assets.list(assetPath)
         if (!children.isNullOrEmpty()) {
             copyAssetDir(assetPath, targetFile)
@@ -439,7 +459,10 @@ exit ${d}_rc
 
 private object Os {
     @JvmStatic
-    fun symlink(target: String, path: String) {
+    fun symlink(
+        target: String,
+        path: String,
+    ) {
         android.system.Os.symlink(target, path)
     }
 }

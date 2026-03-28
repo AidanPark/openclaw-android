@@ -12,15 +12,18 @@ import java.net.URL
  *
  * Priority: cached config.json → remote config.json (5s timeout) → BuildConfig constants
  */
-class UrlResolver(private val context: Context) {
-
+class UrlResolver(
+    private val context: Context,
+) {
     companion object {
         private const val CONFIG_FETCH_TIMEOUT_MS = 5_000L
     }
 
-    private val configFile = File(
-        context.filesDir, "usr/share/openclaw-app/config.json"
-    )
+    private val configFile =
+        File(
+            context.filesDir,
+            "usr/share/openclaw-app/config.json",
+        )
     private val gson = Gson()
 
     suspend fun getBootstrapUrl(): String {
@@ -63,19 +66,19 @@ class UrlResolver(private val context: Context) {
         val bootstrap: ComponentConfig?,
         val www: ComponentConfig?,
         val platforms: List<PlatformConfig>?,
-        val features: Map<String, Boolean>?
+        val features: Map<String, Boolean>?,
     )
 
     data class ComponentConfig(
         val url: String,
         val version: String?,
-        @SerializedName("sha256") val sha256: String?
+        @SerializedName("sha256") val sha256: String?,
     )
 
     data class PlatformConfig(
         val id: String,
         val name: String,
         val icon: String?,
-        val description: String?
+        val description: String?,
     )
 }

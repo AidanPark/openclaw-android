@@ -1,6 +1,5 @@
 package com.openclaw.android
 
-
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 
@@ -11,7 +10,7 @@ import com.termux.terminal.TerminalSessionClient
 class TerminalSessionManager(
     private val activity: MainActivity,
     private val sessionClient: TerminalSessionClient,
-    private val eventBridge: EventBridge
+    private val eventBridge: EventBridge,
 ) {
     companion object {
         private const val TAG = "SessionManager"
@@ -40,29 +39,31 @@ class TerminalSessionManager(
         java.io.File(homeDir).mkdirs()
         tmpDir?.let { java.io.File(it).mkdirs() }
 
-        val shell = if (java.io.File("$prefix/bin/bash").exists()) {
-            "$prefix/bin/bash"
-        } else if (java.io.File("$prefix/bin/sh").exists()) {
-            "$prefix/bin/sh"
-        } else {
-            "/system/bin/sh"
-        }
+        val shell =
+            if (java.io.File("$prefix/bin/bash").exists()) {
+                "$prefix/bin/bash"
+            } else if (java.io.File("$prefix/bin/sh").exists()) {
+                "$prefix/bin/sh"
+            } else {
+                "/system/bin/sh"
+            }
 
-        val session = TerminalSession(
-            shell,
-            homeDir,
-            arrayOf<String>(),
-            env.entries.map { "${it.key}=${it.value}" }.toTypedArray(),
-            TRANSCRIPT_ROWS,
-            sessionClient
-        )
+        val session =
+            TerminalSession(
+                shell,
+                homeDir,
+                arrayOf<String>(),
+                env.entries.map { "${it.key}=${it.value}" }.toTypedArray(),
+                TRANSCRIPT_ROWS,
+                sessionClient,
+            )
 
         sessions.add(session)
         switchSession(sessions.size - 1)
 
         eventBridge.emit(
             "session_changed",
-            mapOf("id" to session.mHandle, "action" to "created")
+            mapOf("id" to session.mHandle, "action" to "created"),
         )
         activity.runOnUiThread { onSessionsChanged?.invoke() }
 
@@ -84,7 +85,7 @@ class TerminalSessionManager(
         }
         eventBridge.emit(
             "session_changed",
-            mapOf("id" to session.mHandle, "action" to "switched")
+            mapOf("id" to session.mHandle, "action" to "switched"),
         )
         activity.runOnUiThread { onSessionsChanged?.invoke() }
     }
@@ -100,9 +101,7 @@ class TerminalSessionManager(
     /**
      * Find a session by handle ID.
      */
-    fun getSessionById(handleId: String): TerminalSession? {
-        return sessions.find { it.mHandle == handleId }
-    }
+    fun getSessionById(handleId: String): TerminalSession? = sessions.find { it.mHandle == handleId }
 
     /**
      * Close a session by handle ID.
@@ -117,7 +116,7 @@ class TerminalSessionManager(
 
         eventBridge.emit(
             "session_changed",
-            mapOf("id" to handleId, "action" to "closed")
+            mapOf("id" to handleId, "action" to "closed"),
         )
 
         // Switch to another session if available
@@ -139,7 +138,7 @@ class TerminalSessionManager(
         finishedSessionIds.add(session.mHandle)
         eventBridge.emit(
             "session_changed",
-            mapOf("id" to session.mHandle, "action" to "finished")
+            mapOf("id" to session.mHandle, "action" to "finished"),
         )
         activity.runOnUiThread { onSessionsChanged?.invoke() }
     }
@@ -147,16 +146,15 @@ class TerminalSessionManager(
     /**
      * Get all sessions info for JsBridge.
      */
-    fun getSessionsInfo(): List<Map<String, Any>> {
-        return sessions.mapIndexed { index, session ->
+    fun getSessionsInfo(): List<Map<String, Any>> =
+        sessions.mapIndexed { index, session ->
             mapOf(
                 "id" to session.mHandle,
                 "name" to (session.title ?: "Session ${index + 1}"),
                 "active" to (index == activeSessionIndex),
-                "finished" to (session.mHandle in finishedSessionIds)
+                "finished" to (session.mHandle in finishedSessionIds),
             )
         }
-    }
 
     fun isSessionFinished(handleId: String): Boolean = handleId in finishedSessionIds
 

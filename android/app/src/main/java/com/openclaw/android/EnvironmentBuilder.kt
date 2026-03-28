@@ -8,7 +8,6 @@ import java.io.File
  * Based on AnyClaw CodexServerManager.kt pattern.
  */
 object EnvironmentBuilder {
-
     fun build(context: Context): Map<String, String> = build(context.filesDir)
 
     fun build(filesDir: File): Map<String, String> {
