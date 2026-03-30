@@ -11,7 +11,7 @@ junit5 = "5.11.4"
 mockk = "1.14.2"
 kotlinxCoroutinesTest = "1.10.2"
 detekt = "1.23.8"
-ktlintGradle = "14.1.0"
+ktlintGradle = "14.2.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
