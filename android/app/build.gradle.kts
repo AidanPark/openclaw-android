@@ -163,6 +163,20 @@ dependencies {
     testRuntimeOnly(libs.junit5.platform.launcher)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
+
+}
+
+// Force kotlin-stdlib to match the project's Kotlin version.
+// MockK 1.14.9 pulls kotlin-stdlib 2.2.x transitively, which causes
+// "Module was compiled with an incompatible version of Kotlin" errors
+// when the project compiler is 2.0.21.
+configurations.all {
+    resolutionStrategy.force(
+        "org.jetbrains.kotlin:kotlin-stdlib:2.0.21",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.0.21",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.0.21",
+        "org.jetbrains.kotlin:kotlin-reflect:2.0.21",
+    )
 }
 
 // --- www build automation ---
