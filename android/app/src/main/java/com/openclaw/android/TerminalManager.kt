@@ -222,6 +222,138 @@ class TerminalManager(
     }
 
     /**
+     * Ejecuta la instalación online dentro del terminal embebido.
+     *
+     * Flujo completo:
+     *   1. Inyectar variables de entorno (PREFIX, DEBIAN_FRONTEND, etc.)
+     *   2. Ejecutar: curl -sL myopenclawhub.com/install | bash
+     *   3. Si falla por dpkg inconsistente → ejecutar dpkg --configure -a
+     *      respondiendo "N" automáticamente al prompt de sources.list
+     *   4. Reintentar: curl -sL myopenclawhub.com/install | bash
+     *   5. Ejecutar source ~/.bashrc para activar el entorno instalado
+     *
+     * El prompt de dpkg que se maneja automáticamente:
+     *   "*** sources.list (Y/I/N/O/D/Z) [default=N] ?"
+     *   Respuesta: N (mantener sources.list actual de Termux — correcto)
+     *
+     * @param session   Sesión de terminal activa donde se ejecutarán los comandos.
+     * @param onDone    Callback opcional cuando el flujo completo termina.
+     */
+    fun runOnlineInstall(
+        session: TerminalSession,
+        onDone: (() -> Unit)? = null,
+    ) {
+        AppLogger.i(TAG, "Starting online install flow in terminal session")
+
+        handler.postDelayed({
+            // Paso 1: Inyectar entorno
+            val envFile = writeEnvFile()
+            session.write(". \"${envFile.absolutePath}\"\n")
+
+            handler.postDelayed({
+                // Paso 2: Ejecutar el script de instalación online.
+                // Usamos un wrapper que:
+                //   a) Ejecuta curl | bash
+                //   b) Si falla, corre dpkg --configure -a con "N" automático
+                //   c) Reintenta curl | bash
+                //   d) Hace source ~/.bashrc al final
+                val installFlow = buildOnlineInstallScript()
+                session.write(installFlow)
+                AppLogger.i(TAG, "Online install script sent to terminal")
+                onDone?.invoke()
+            }, ENV_APPLY_DELAY_MS)
+        }, SHELL_INIT_DELAY_MS)
+    }
+
+    /**
+     * Construye el script de instalación online completo como string.
+     *
+     * El script es autocontenido y maneja:
+     *   - Respuesta automática "N" al prompt de dpkg sobre sources.list
+     *   - Reintentos automáticos si la primera instalación falla
+     *   - source ~/.bashrc al finalizar
+     *
+     * Se escribe como un here-doc para evitar problemas de escape.
+     */
+    private fun buildOnlineInstallScript(): String {
+        val prefix = "${filesDir.absolutePath}/usr"
+        val home   = "${filesDir.absolutePath}/home"
+        val dpkg   = "$prefix/bin/dpkg"
+        val bash   = "$prefix/bin/bash"
+
+        return buildString {
+            // ── Función de reparación dpkg ────────────────────────────────────
+            // Responde "N" automáticamente al prompt de sources.list
+            appendLine("""
+                _oca_fix_dpkg() {
+                  echo '[install] Reparando dpkg --configure -a (respondiendo N)...'
+                  export DEBIAN_FRONTEND=noninteractive
+                  export DEBCONF_NONINTERACTIVE_SEEN=true
+                  # "yes N" responde N a cualquier prompt interactivo de dpkg
+                  # --force-confold: mantener archivos de config existentes sin preguntar
+                  yes N | "$dpkg" --configure -a --force-confold 2>&1 || true
+                  echo '[install] dpkg --configure -a completado'
+                }
+            """.trimIndent())
+
+            appendLine()
+
+            // ── Función de instalación online ─────────────────────────────────
+            appendLine("""
+                _oca_run_install() {
+                  echo '[install] Ejecutando: curl -sL myopenclawhub.com/install | bash'
+                  curl -sL myopenclawhub.com/install | bash
+                  return ${'$'}?
+                }
+            """.trimIndent())
+
+            appendLine()
+
+            // ── Flujo principal ───────────────────────────────────────────────
+            appendLine("""
+                echo '[install] === Iniciando instalación online ==='
+
+                # Intento 1
+                _oca_run_install
+                _INSTALL_EXIT=${'$'}?
+
+                if [ "${'$'}_INSTALL_EXIT" -ne 0 ]; then
+                  echo '[install] Primer intento falló (código: '"${'$'}_INSTALL_EXIT"')'
+                  echo '[install] Verificando si dpkg necesita reparación...'
+
+                  # Reparar dpkg si existe (bootstrap ya instalado)
+                  if [ -x "$dpkg" ]; then
+                    _oca_fix_dpkg
+                  else
+                    echo '[install] dpkg no encontrado, omitiendo reparación'
+                  fi
+
+                  echo '[install] Reintentando instalación...'
+                  # Intento 2
+                  _oca_run_install
+                  _INSTALL_EXIT=${'$'}?
+                fi
+
+                if [ "${'$'}_INSTALL_EXIT" -eq 0 ]; then
+                  echo '[install] === Instalación completada exitosamente ==='
+                  # Activar el entorno instalado
+                  if [ -f "$home/.bashrc" ]; then
+                    echo '[install] Cargando ~/.bashrc...'
+                    . "$home/.bashrc" 2>/dev/null || true
+                  fi
+                  echo '[install] Entorno listo. Puedes usar openclaw ahora.'
+                else
+                  echo '[install] === ERROR: Instalación falló después de 2 intentos ==='
+                  echo '[install] Código de salida: '"${'$'}_INSTALL_EXIT"
+                  echo '[install] Sugerencia: ejecuta manualmente: dpkg --configure -a'
+                fi
+            """.trimIndent())
+
+            appendLine() // newline final para que bash ejecute el último comando
+        }
+    }
+
+    /**
      * Writes diagnostic information to the terminal session.
      * Useful for debugging environment issues.
      */

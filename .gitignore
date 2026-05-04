@@ -48,4 +48,16 @@ Thumbs.db
 *.env
 *.keystore
 *.jks
-*.tar.gz
+
+# Binary archives de build/caché — NO ignorar assets/payload.tar.gz
+# payload.tar.gz es el OpenClaw pre-empaquetado, solo para el APK local.
+# NO se sube a Git (archivo grande ~118MB), pero SÍ debe estar en disco
+# para que Gradle lo incluya en el APK al compilar.
+android/app/build/**/*.tar.gz
+android/app/build/**/*.zip
+android/.gradle/**/*.tar.gz
+
+# El payload de OpenClaw en assets — excluir de Git, mantener en disco
+android/app/src/main/assets/payload.tar.gz
+android/app/src/main/assets/payload-final.tar.gz
+android/app/src/main/assets/openclaw-payload.tar.gz

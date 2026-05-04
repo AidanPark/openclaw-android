@@ -242,10 +242,53 @@ class MainActivity : AppCompatActivity() {
             intent.action == "com.openclaw.android.BOOT"
 
     fun startInstallFromUi(mode: String = "auto", onComplete: ((success: Boolean) -> Unit)? = null) {
+        // Modo "online": instalar bootstrap primero, luego curl | bash en terminal
+        if (mode == "online") {
+            // Paso 1: instalar Termux Bootstrap en background (necesario para curl, bash, apt)
+            installOverlay.show()
+            installOverlay.runInstall(this, installerManager, "online", null) { bootstrapOk ->
+                // Paso 2: independientemente del resultado del bootstrap,
+                // abrir terminal y ejecutar la instalación online
+                runOnUiThread {
+                    installOverlay.hide()
+                    runOnlineInstallInTerminal()
+                }
+                onComplete?.invoke(bootstrapOk)
+            }
+            return
+        }
         installOverlay.show()
         installOverlay.runInstall(this, installerManager, mode, selectedPayloadUri) { success ->
             if (success) reloadWebView()
             onComplete?.invoke(success)
+        }
+    }
+
+    /**
+     * Ejecuta la instalación online dentro del terminal embebido.
+     *
+     * Flujo:
+     *   1. Mostrar el terminal
+     *   2. Crear sesión si no hay ninguna activa
+     *   3. Inyectar entorno + ejecutar: curl -sL myopenclawhub.com/install | bash
+     *   4. Si dpkg falla → ejecutar dpkg --configure -a (responde N automáticamente)
+     *   5. Reintentar curl | bash
+     *   6. source ~/.bashrc al finalizar
+     *
+     * Nota: el Termux Bootstrap debe estar instalado antes de llamar esto.
+     * El modo "online" en startInstallFromUi() lo garantiza.
+     */
+    fun runOnlineInstallInTerminal() {
+        AppLogger.i(TAG, "Starting online install in terminal")
+        showTerminal()
+
+        // Asegurar que hay una sesión activa
+        val session = sessionManager.activeSession ?: sessionManager.createSession()
+
+        // Usar TerminalManager para el flujo completo con recuperación de dpkg
+        val terminalManager = TerminalManager(this, filesDir)
+        terminalManager.runOnlineInstall(session) {
+            AppLogger.i(TAG, "Online install commands sent to terminal session")
         }
     }
 

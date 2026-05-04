@@ -139,9 +139,9 @@ class InstallerManager(private val context: Context) {
     /** True if APK bundles a payload asset. */
     fun hasPayloadAsset(): Boolean {
         val names = listOf(
+            "payload.tar.gz",           // ← tu archivo actual
             "payload-final.tar.gz",
             "openclaw-payload.tar.gz",
-            "payload.tar.gz",
             "payload/openclaw-payload.tar.gz",
             "payload/payload.tar.gz",
         )
@@ -154,15 +154,21 @@ class InstallerManager(private val context: Context) {
             } catch (_: Exception) {
             }
         }
-        AppLogger.w(TAG, "No payload asset found in APK")
+        // Diagnóstico: listar assets disponibles en la raíz
+        try {
+            val rootAssets = context.assets.list("")?.joinToString(", ") ?: "(vacío)"
+            AppLogger.w(TAG, "No payload asset found. Root assets: [$rootAssets]")
+        } catch (e: Exception) {
+            AppLogger.w(TAG, "No payload asset found. Could not list assets: ${e.message}")
+        }
         return false
     }
 
     private fun getPayloadAssetPath(): String? {
         val names = listOf(
+            "payload.tar.gz",           // ← tu archivo actual
             "payload-final.tar.gz",
             "openclaw-payload.tar.gz",
-            "payload.tar.gz",
             "payload/openclaw-payload.tar.gz",
             "payload/payload.tar.gz",
         )
@@ -178,25 +184,30 @@ class InstallerManager(private val context: Context) {
     /**
      * Main entry point: decide offline vs online, execute, validate.
      *
-     * Modos de instalación:
-     *   1. "termux-bootstrap" (RECOMENDADO): Bootstrap oficial de Termux (~50MB)
-     *      - Terminal Termux completo con dpkg, apt, pkg
-     *      - Ligero y rápido
-     *      - Ideal para uso general
+     * Flujo correcto de instalación:
      *
-     *   2. "proot" (AVANZADO/OPCIONAL): Ubuntu completo via proot (~250MB)
-     *      - Sistema Linux completo
-     *      - Resistente al Phantom Process Killer
-     *      - Más pesado pero más robusto
-     *      - Solo para usuarios avanzados
+     *   PASO 1 — Termux Bootstrap (siempre primero si no está instalado)
+     *     Instala: dpkg, apt, bash, pkg y herramientas base de Termux.
+     *     Sin esto, la instalación online (curl | bash) no puede funcionar
+     *     porque no hay bash, curl ni apt disponibles.
      *
-     *   3. "offline": Usa payload bundled en assets (si existe)
-     *      - No requiere internet
-     *      - Payload pre-configurado
+     *   PASO 2 — Payload offline (payload.tar.gz en assets)
+     *     Contiene: OpenClaw pre-empaquetado (NO es Termux).
+     *     Se extrae ENCIMA del bootstrap ya instalado.
+     *     Solo existe en el APK local — NO se sube a Git.
+     *     Si no existe en assets, se salta este paso.
      *
-     *   4. "auto": Elige automáticamente el mejor método
-     *      - Si hay payload bundled → usa offline
-     *      - Si no → usa termux-bootstrap (recomendado)
+     *   PASO 3 — Instalación online (curl -sL myopenclawhub.com/install | bash)
+     *     Se ejecuta dentro del terminal embebido DESPUÉS del bootstrap.
+     *     Instala/actualiza OpenClaw desde internet.
+     *     Si dpkg falla → dpkg --configure -a (responde N) → reintento.
+     *
+     * Modos:
+     *   "auto"             → Paso 1 + Paso 2 (si hay payload) — sin internet
+     *   "termux-bootstrap" → Solo Paso 1
+     *   "offline"          → Paso 1 + Paso 2 (requiere payload en assets)
+     *   "online"           → Paso 1 (si no hay bootstrap) + Paso 3 en terminal
+     *   "proot"            → Ubuntu completo via proot (avanzado, sin bootstrap)
      */
     suspend fun install(mode: String, customUri: android.net.Uri?, listener: ProgressListener) = withContext(Dispatchers.IO) {
         try {
@@ -208,50 +219,71 @@ class InstallerManager(private val context: Context) {
             }
 
             when (mode) {
-                // ── Opción 1: Termux Bootstrap (RECOMENDADO) ──────────────
+                // ── Auto: Bootstrap + Payload offline si existe ───────────
+                // Orden: 1) Termux Bootstrap  2) payload.tar.gz (OpenClaw)
+                "auto" -> {
+                    // Paso 1: Termux Bootstrap (siempre)
+                    AppLogger.i(TAG, "Auto mode: step 1 — Termux Bootstrap")
+                    installViaTermuxBootstrap(listener)
+
+                    // Paso 2: Payload offline encima (si existe en assets)
+                    if (hasPayloadAsset()) {
+                        AppLogger.i(TAG, "Auto mode: step 2 — OpenClaw payload from assets")
+                        installOffline(listener)
+                    } else {
+                        AppLogger.i(TAG, "Auto mode: no payload asset — online install needed")
+                        // El usuario deberá ejecutar la instalación online desde el terminal
+                    }
+                }
+
+                // ── Termux Bootstrap solo ─────────────────────────────────
                 "termux-bootstrap" -> {
-                    AppLogger.i(TAG, "Installing Termux Bootstrap (recommended)")
+                    AppLogger.i(TAG, "Installing Termux Bootstrap only")
                     installViaTermuxBootstrap(listener)
                 }
 
-                // ── Opción 2: Proot + Ubuntu (AVANZADO) ───────────────────
-                "proot" -> {
-                    AppLogger.i(TAG, "Installing Proot + Ubuntu (advanced option)")
-                    installViaProot(listener)
-                }
-
-                // ── Opción 3: Payload Offline ─────────────────────────────
+                // ── Offline: Bootstrap + Payload ──────────────────────────
+                // payload.tar.gz = OpenClaw, NO es Termux
                 "offline" -> {
                     if (customUri != null) {
+                        // Archivo externo seleccionado por el usuario
                         installFromCustomPayload(customUri, listener)
                     } else if (hasPayloadAsset()) {
+                        // Paso 1: Bootstrap primero (necesario para que OpenClaw funcione)
+                        AppLogger.i(TAG, "Offline mode: step 1 — Termux Bootstrap")
+                        installViaTermuxBootstrap(listener)
+                        // Paso 2: Payload de OpenClaw encima
+                        AppLogger.i(TAG, "Offline mode: step 2 — OpenClaw payload")
                         installOffline(listener)
                     } else {
-                        // Sin payload → sugerir termux-bootstrap
                         listener.onError(
-                            "No hay payload bundled. Usa 'termux-bootstrap' o 'proot' en su lugar."
+                            "No hay payload bundled en el APK.\n" +
+                            "Usa 'auto' para instalar Termux Bootstrap, luego ejecuta\n" +
+                            "la instalación online desde el terminal."
                         )
                     }
                 }
 
-                // ── Opción 4: Auto (elige el mejor) ───────────────────────
-                "auto" -> {
-                    if (hasPayloadAsset()) {
-                        AppLogger.i(TAG, "Auto mode: using bundled payload")
-                        installOffline(listener)
-                    } else {
-                        AppLogger.i(TAG, "Auto mode: using Termux Bootstrap (recommended)")
+                // ── Online: Bootstrap + curl | bash en terminal ───────────
+                // El modo "online" solo prepara el bootstrap.
+                // La instalación online real (curl | bash) se ejecuta en el
+                // terminal embebido via MainActivity.runOnlineInstallInTerminal()
+                "online" -> {
+                    if (!TermuxBootstrapManager(context).isInstalled()) {
+                        AppLogger.i(TAG, "Online mode: installing Termux Bootstrap first")
                         installViaTermuxBootstrap(listener)
+                    } else {
+                        AppLogger.i(TAG, "Online mode: bootstrap already installed")
+                        listener.onSuccess()
                     }
+                    // La instalación online (curl | bash) se ejecuta en el terminal
+                    // via MainActivity.runOnlineInstallInTerminal() — no aquí
                 }
 
-                // ── Legacy: online mode ───────────────────────────────────
-                "online" -> {
-                    if (hasPayloadAsset()) {
-                        installOffline(listener)
-                    } else {
-                        installOnlineLegacy(listener)
-                    }
+                // ── Proot + Ubuntu (AVANZADO) ─────────────────────────────
+                "proot" -> {
+                    AppLogger.i(TAG, "Installing Proot + Ubuntu (advanced option)")
+                    installViaProot(listener)
                 }
 
                 else -> {
@@ -360,12 +392,29 @@ class InstallerManager(private val context: Context) {
             homeDir.mkdirs()
             File(filesDir, "tmp").mkdirs()
 
-            // Copiar el payload desde assets a homeDir
+            // ── Detectar el asset path ────────────────────────────────────────
+            val assetPath = getPayloadAssetPath()
+            if (assetPath == null) {
+                // Diagnóstico: listar todos los assets disponibles
+                val available = try {
+                    context.assets.list("")?.joinToString(", ") ?: "(vacío)"
+                } catch (e: Exception) { "(error: ${e.message})" }
+                AppLogger.e(TAG, "No payload asset found. Available root assets: $available")
+                listener.onError(
+                    "No se encontró payload en el APK.\n" +
+                    "Assets disponibles: $available\n" +
+                    "Esperado: payload.tar.gz en assets/"
+                )
+                return
+            }
+
+            AppLogger.i(TAG, "Payload asset found: $assetPath")
+
+            // ── Copiar el payload desde assets a homeDir ──────────────────────
             val payloadDest = File(homeDir, "openclaw-payload.tar.gz")
             if (!payloadDest.exists() || payloadDest.length() < 1_000_000) {
-                listener.onProgress(2, "Copiando payload desde APK (~167MB)...")
-                val assetPath = getPayloadAssetPath() ?: "openclaw-payload.tar.gz"
-                AppLogger.i(TAG, "Copying asset '$assetPath' to ${payloadDest.absolutePath}")
+                listener.onProgress(2, "Copiando payload desde APK...")
+                AppLogger.i(TAG, "Copying asset '$assetPath' → ${payloadDest.absolutePath}")
                 context.assets.open(assetPath).use { input ->
                     payloadDest.outputStream().use { output -> input.copyTo(output) }
                 }

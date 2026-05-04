@@ -133,8 +133,11 @@ defaultConfig {
     }
 
     androidResources {
-        // Modern replacement for aaptOptions.noCompress
-        noCompress += listOf("tar.gz", "tar.xz", "part_aa", "part_ab", "part_ac", "part_ad", "part_ae", "part_af")
+        // Evitar que aapt2 recomprima archivos ya comprimidos.
+        // IMPORTANTE: usar la extensión sin punto — aapt2 compara el sufijo del nombre.
+        // "tar.gz" no funciona porque aapt2 solo ve la última extensión ".gz"
+        // Usar "gz" cubre: .tar.gz, .tar.xz.gz, etc.
+        noCompress += listOf("gz", "xz", "tar.gz", "tar.xz", "part_aa", "part_ab", "part_ac", "part_ad", "part_ae", "part_af")
     }
     kotlinOptions {
         jvmTarget = "17"
