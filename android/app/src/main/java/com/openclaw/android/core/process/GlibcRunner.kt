@@ -43,25 +43,50 @@ object GlibcRunner {
 
     /**
      * Resolve the node binary from a payload directory.
-     * Checks multiple known locations in priority order.
+     *
+     * Priority order:
+     *   1. payload/lib/node/bin/node.real  — payload-final.tar.gz
+     *   2. payload/lib/node/bin/node
+     *   3. payload/../home/.openclaw-android/node/bin/node.real  — online install (curl | bash)
+     *   4. payload/glibc/bin/node          — legacy layout
      */
     fun resolveNode(payloadDir: File): File? {
-        val candidates = listOf(
-            File(payloadDir, "glibc/bin/node"),
-            File(payloadDir, "lib/node/bin/node.real"),
-            File(payloadDir, "lib/node/bin/node"),
-        )
+        // Derive homeDir from payloadDir: payloadDir is homeDir/payload or filesDir/payload
+        val homeDir = payloadDir.parentFile
+        val ocaDir = homeDir?.resolve(".openclaw-android")
+
+        val candidates = buildList {
+            add(File(payloadDir, "lib/node/bin/node.real"))   // payload-final.tar.gz
+            add(File(payloadDir, "lib/node/bin/node"))
+            if (ocaDir != null) {
+                add(File(ocaDir, "node/bin/node.real"))        // online install (curl | bash)
+                add(File(ocaDir, "node/bin/node"))
+            }
+            add(File(payloadDir, "glibc/bin/node"))            // legacy
+        }
         return candidates.firstOrNull { it.exists() && it.length() > 1_000_000 }
     }
 
     /**
      * Resolve the openclaw.mjs entry point from a payload directory.
+     *
+     * Priority order:
+     *   1. payload/lib/openclaw/openclaw.mjs   — payload-final.tar.gz
+     *   2. prefix/lib/node_modules/openclaw/openclaw.mjs  — online install
+     *   3. payload/openclaw/openclaw.mjs       — legacy layout
      */
     fun resolveOpenClawMjs(payloadDir: File): File? {
-        val candidates = listOf(
-            File(payloadDir, "openclaw/openclaw.mjs"),
-            File(payloadDir, "lib/openclaw/openclaw.mjs"),
-        )
+        // Derive prefix: if payloadDir is homeDir/payload, prefix is filesDir/usr
+        val filesDir = payloadDir.parentFile?.parentFile
+        val prefix = filesDir?.resolve("usr")
+
+        val candidates = buildList {
+            add(File(payloadDir, "lib/openclaw/openclaw.mjs"))   // payload-final.tar.gz
+            if (prefix != null) {
+                add(File(prefix, "lib/node_modules/openclaw/openclaw.mjs"))  // online install
+            }
+            add(File(payloadDir, "openclaw/openclaw.mjs"))        // legacy
+        }
         return candidates.firstOrNull { it.exists() }
     }
 
@@ -107,9 +132,12 @@ object GlibcRunner {
             put("OA_GLIBC", "1")
             put("CONTAINER", "1")
             put("TMPDIR", "/data/local/tmp")
-            // SSL certs
-            val certPem = File(payloadDir, "ssl/cert.pem")
-            if (certPem.exists()) {
+            // SSL certs — payload-final.tar.gz puts them in certs/cert.pem
+            val certPem = listOf(
+                File(payloadDir, "certs/cert.pem"),   // payload-final.tar.gz
+                File(payloadDir, "ssl/cert.pem"),      // legacy
+            ).firstOrNull { it.exists() && it.length() > 0 }
+            if (certPem != null) {
                 put("SSL_CERT_FILE", certPem.absolutePath)
                 put("CURL_CA_BUNDLE", certPem.absolutePath)
                 put("NODE_EXTRA_CA_CERTS", certPem.absolutePath)

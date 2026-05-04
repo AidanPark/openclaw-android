@@ -47,23 +47,6 @@ object InstallValidator {
         val errors = mutableListOf<String>()
         val warnings = mutableListOf<String>()
 
-        // ── Critical: binary directory ──────────────────────────────────────
-        val binDir = File(prefix, "bin")
-        if (!binDir.isDirectory) {
-            errors.add("bin/ directory missing")
-        } else {
-            val binFiles = binDir.listFiles()
-            if (binFiles.isNullOrEmpty()) {
-                errors.add("bin/ directory is empty")
-            }
-        }
-
-        // ── Critical: library directory ─────────────────────────────────────
-        val libDir = File(prefix, "lib")
-        if (!libDir.isDirectory) {
-            errors.add("lib/ directory missing")
-        }
-
         // ── Critical: glibc runtime ─────────────────────────────────────────
         val glibcLib = File(prefix, "glibc/lib")
         if (!glibcLib.isDirectory) {
@@ -73,30 +56,59 @@ object InstallValidator {
         val ldSo = File(prefix, "glibc/lib/ld-linux-aarch64.so.1")
         if (!ldSo.exists()) {
             errors.add("ld-linux-aarch64.so.1 missing (glibc dynamic linker)")
+        } else if (ldSo.length() < 100_000) {
+            errors.add("ld-linux-aarch64.so.1 too small (${ldSo.length()} bytes) — may be corrupt")
         }
 
-        // ── Important: etc directory ────────────────────────────────────────
-        val etcDir = File(prefix, "etc")
-        if (!etcDir.isDirectory) {
-            warnings.add("etc/ directory missing (may affect DNS/SSL)")
+        // ── Critical: node binary ────────────────────────────────────────────
+        // payload-final.tar.gz: lib/node/bin/node.real
+        // legacy layout: bin/node or glibc/bin/node
+        val nodeFile = listOf(
+            File(prefix, "lib/node/bin/node.real"),   // payload-final.tar.gz
+            File(prefix, "lib/node/bin/node"),
+            File(prefix, "glibc/bin/node"),
+            File(prefix, "bin/node"),
+        ).firstOrNull { it.exists() }
+
+        if (nodeFile == null) {
+            errors.add("node binary missing (checked lib/node/bin/node.real, glibc/bin/node, bin/node)")
+        } else if (nodeFile.length() < 1_000_000) {
+            errors.add("node binary too small (${nodeFile.length()} bytes) — may be corrupt or truncated")
+        }
+
+        // ── Critical: openclaw entry point ───────────────────────────────────
+        // payload-final.tar.gz: lib/openclaw/openclaw.mjs
+        // legacy layout: openclaw/openclaw.mjs or lib/node_modules/openclaw/openclaw.mjs
+        val ocMjs = listOf(
+            File(prefix, "lib/openclaw/openclaw.mjs"),            // payload-final.tar.gz
+            File(prefix, "openclaw/openclaw.mjs"),
+            File(prefix, "lib/node_modules/openclaw/openclaw.mjs"),
+        ).firstOrNull { it.exists() }
+
+        if (ocMjs == null) {
+            errors.add("openclaw.mjs missing (checked lib/openclaw/, openclaw/, lib/node_modules/openclaw/)")
         }
 
         // ── Critical: shell availability ────────────────────────────────────
-        // Accept either a shell in the payload OR the Android system shell.
-        // The system shell (/system/bin/sh) is always available on Android 7+
-        // and is a valid fallback when the payload doesn't bundle bash/sh.
-        val bashExists = File(binDir, "bash").exists()
-        val shExists = File(binDir, "sh").exists()
-        val systemShExists = File("/system/bin/sh").exists()
-        if (!bashExists && !shExists && !systemShExists) {
-            errors.add("No shell (bash/sh) found in bin/ — payload is incomplete or corrupt")
+        val hasSystemShell = File("/system/bin/sh").exists()
+        if (!hasSystemShell) {
+            errors.add("No shell found — /system/bin/sh missing")
         }
 
         // ── Important: SSL certs ────────────────────────────────────────────
-        val certPem = File(prefix, "etc/tls/cert.pem")
-        val certDir = File(prefix, "etc/tls/certs")
-        if (!certPem.exists() && !certDir.isDirectory) {
+        val certPem = listOf(
+            File(prefix, "certs/cert.pem"),       // payload-final.tar.gz
+            File(prefix, "ssl/cert.pem"),
+            File(prefix, "etc/tls/cert.pem"),
+        ).firstOrNull { it.exists() && it.length() > 0 }
+        if (certPem == null) {
             warnings.add("SSL certificates not found — HTTPS may fail")
+        }
+
+        // ── Important: glibc-compat.js ──────────────────────────────────────
+        val compatJs = File(prefix, "patches/glibc-compat.js")
+        if (!compatJs.exists()) {
+            warnings.add("patches/glibc-compat.js missing — some Node.js APIs may not work on Android")
         }
 
         val passed = errors.isEmpty()
@@ -121,9 +133,16 @@ object InstallValidator {
      *
      * Also accepts the Android system shell (/system/bin/sh) as a valid shell,
      * since it is always present on Android 7+ and can run post-setup scripts.
+     *
+     * payload-final.tar.gz layout:
+     *   glibc/lib/ld-linux-aarch64.so.1  ← linker (required)
+     *   lib/node/bin/node.real            ← node binary
+     *   lib/openclaw/openclaw.mjs         ← openclaw entry point
      */
     fun isStructurallyComplete(prefix: File): Boolean {
         val hasGlibcLinker = File(prefix, "glibc/lib/ld-linux-aarch64.so.1").exists()
+
+        // Traditional Termux layout
         val hasBinDir = File(prefix, "bin").isDirectory
         val hasLibDir = File(prefix, "lib").isDirectory
 
@@ -135,11 +154,14 @@ object InstallValidator {
 
         val hasShell = hasPayloadShell || hasSystemShell
 
-        // OpenClaw payload layout (glibc-wrapped node, no bash required)
-        val hasNode = File(prefix, "bin/node").exists() ||
+        // OpenClaw payload layout — payload-final.tar.gz structure
+        val hasNode = File(prefix, "lib/node/bin/node.real").exists() ||   // payload-final
+            File(prefix, "lib/node/bin/node").exists() ||
+            File(prefix, "bin/node").exists() ||
             File(prefix, "bin/openclaw").exists() ||
-            File(prefix, "lib/node_modules/openclaw/openclaw.mjs").exists()
+            File(prefix, "lib/openclaw/openclaw.mjs").exists() ||           // payload-final
+            File(prefix, "lib/node_modules/openclaw/openclaw.mjs").exists() // legacy
 
-        return hasBinDir && hasLibDir && hasGlibcLinker && (hasShell || hasNode)
+        return hasGlibcLinker && (hasShell || hasNode)
     }
 }

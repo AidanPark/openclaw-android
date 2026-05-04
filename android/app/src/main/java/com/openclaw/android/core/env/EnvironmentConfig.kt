@@ -25,9 +25,9 @@ data class EnvironmentConfig(
     val glibcLib: File,
     /** glibc dynamic linker: glibcLib/ld-linux-aarch64.so.1 */
     val linker: File,
-    /** node binary: payloadDir/glibc/bin/node */
+    /** node binary: payloadDir/lib/node/bin/node.real (payload-final.tar.gz) */
     val nodeBin: File,
-    /** openclaw.mjs: payloadDir/openclaw/openclaw.mjs */
+    /** openclaw.mjs: payloadDir/lib/openclaw/openclaw.mjs (payload-final.tar.gz) */
     val openClawMjs: File,
     /** SSL cert bundle */
     val certPem: File,

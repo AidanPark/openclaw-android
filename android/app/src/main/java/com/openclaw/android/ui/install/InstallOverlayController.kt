@@ -130,6 +130,17 @@ class InstallOverlayController(
             val filesDir = activity.filesDir
             val homeDir = File(filesDir, "home").also { it.mkdirs() }
             val envMap = EnvironmentBuilder.buildEnvironment(filesDir, activity.packageName)
+                .toMutableMap()
+
+            // CRITICAL: /system/bin/sh is a Bionic binary. If LD_LIBRARY_PATH
+            // contains the glibc lib dir, Android's linker finds glibc's libc.so
+            // there and fails with:
+            //   CANNOT LINK EXECUTABLE "sh": cannot find "libc.so" from verneed[0]
+            // Strip any glibc-related library paths — they are only valid inside
+            // glibc processes launched via ld-linux-aarch64.so.1, never in Bionic shells.
+            envMap.remove("LD_LIBRARY_PATH")
+            envMap.remove("LD_PRELOAD")
+
             val env = envMap.entries.map { "${it.key}=${it.value}" }.toTypedArray()
 
             installTerminalSession = TerminalSession(

@@ -221,7 +221,7 @@ object CommandRunner {
             appendLine("export PATH=\"$ocaBin:$nodeDir/bin:$prefix/bin:$prefix/bin/applets:/system/bin:/bin\"")
             appendLine("export NPM_CONFIG_PREFIX=\"$prefix\"")
             appendLine("export npm_config_prefix=\"$prefix\"")
-            appendLine("export LD_LIBRARY_PATH=\"$prefix/lib:$glibcLib\"")
+            appendLine("export LD_LIBRARY_PATH=\"$ocaBin:$nodeDir/bin:$prefix/lib:$glibcLib\"")
             appendLine("export SSL_CERT_FILE=\"$certBundle\"")
             appendLine("export CURL_CA_BUNDLE=\"$certBundle\"")
             appendLine("export GIT_SSL_CAINFO=\"$certBundle\"")

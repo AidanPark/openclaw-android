@@ -8,6 +8,7 @@ import com.openclaw.android.EventBridge
 import com.openclaw.android.InstallerManager
 import com.openclaw.android.MainActivity
 import com.openclaw.android.core.env.EnvironmentResolver
+import com.openclaw.android.core.install.VersionReader
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -87,32 +88,84 @@ class ToolsBridge(
 
     @JavascriptInterface
     fun getEnvironmentInfo(): String {
-        val env = CommandRunner.buildTermuxEnv(activity)
         val config = EnvironmentResolver.resolve(activity.filesDir)
 
-        fun runV(cmd: String): String {
-            val r = CommandRunner.runSync(cmd, env, config.homeDir, timeoutMs = CMD_TIMEOUT_MS)
-            return r.stdout.trim().ifEmpty { r.stderr.trim() }
+        // ── Proot mode: read versions from rootfs files directly ──────────────
+        // NEVER use CommandRunner.runSync("node -v") — /system/bin/sh cannot
+        // execute glibc ELF binaries and will produce "CANNOT LINK EXECUTABLE".
+        // VersionReader reads package.json files (no process spawn) and falls
+        // back to GlibcRunner which uses the correct ld-linux-aarch64.so.1 loader.
+        val versions = VersionReader.readAll(config)
+
+        // For proot mode, also check rootfs paths
+        val prootInstalled = java.io.File(activity.filesDir, ".proot-installed").exists()
+        val nodeVersion: String
+        val gitVersion: String
+        val ocVersion: String
+
+        if (prootInstalled) {
+            val paths = com.openclaw.android.ProotManager.getPaths(activity)
+            val rootfs = paths.rootfsDir
+
+            // Read node version from rootfs package.json (no process spawn needed)
+            val nodeFromRootfs = try {
+                // Try reading from node binary version string embedded in the binary
+                // Fastest: check if node exists and read version from npm's package.json
+                val npmPkg = rootfs.resolve("usr/local/lib/node_modules/npm/package.json")
+                if (npmPkg.exists()) {
+                    // npm package.json has engines.node field
+                    val content = npmPkg.readText()
+                    val engines = Regex(""""node"\s*:\s*"([^"]+)"""").find(content)?.groupValues?.getOrNull(1)
+                    engines?.removePrefix(">=")?.split(" ")?.firstOrNull()?.trim()
+                } else null
+            } catch (_: Exception) { null }
+
+            // Prefer VersionReader result (uses GlibcRunner or installed.json)
+            nodeVersion = when {
+                versions.node != "unknown" -> versions.node
+                nodeFromRootfs != null -> nodeFromRootfs
+                rootfs.resolve("usr/local/bin/node").exists() -> "installed"
+                rootfs.resolve("usr/bin/node").exists() -> "installed"
+                else -> ""
+            }
+
+            // git: check rootfs
+            gitVersion = when {
+                rootfs.resolve("usr/bin/git").exists() -> "installed"
+                rootfs.resolve("usr/local/bin/git").exists() -> "installed"
+                else -> ""
+            }
+
+            // openclaw: check rootfs
+            ocVersion = when {
+                versions.openclaw != "not installed" -> versions.openclaw
+                rootfs.resolve("usr/local/lib/node_modules/openclaw/openclaw.mjs").exists() -> "installed"
+                rootfs.resolve("usr/local/bin/openclaw").exists() -> "installed"
+                else -> ""
+            }
+        } else {
+            // Payload / legacy mode — VersionReader handles everything correctly
+            nodeVersion = if (versions.node != "unknown") versions.node else ""
+            gitVersion = ""  // git version not tracked in payload mode
+            ocVersion = if (versions.openclaw != "not installed") versions.openclaw else ""
         }
 
-        val nodeRaw = runV("node -v 2>/dev/null || node --version 2>/dev/null")
-        val gitRaw = runV("git --version 2>/dev/null")
-        val ocRaw = runV("openclaw --version 2>/dev/null")
+        AppLogger.d(TAG, "getEnvironmentInfo: node=$nodeVersion git=$gitVersion openclaw=$ocVersion proot=$prootInstalled")
 
         return gson.toJson(mapOf(
             "node" to mapOf(
-                "version" to nodeRaw.ifEmpty { null },
-                "detected" to nodeRaw.isNotEmpty(),
+                "version" to nodeVersion.ifEmpty { null },
+                "detected" to nodeVersion.isNotEmpty(),
                 "path" to "${config.ocaDir.absolutePath}/bin/node",
             ),
             "git" to mapOf(
-                "version" to gitRaw.replace("git version ", "").ifEmpty { null },
-                "detected" to gitRaw.isNotEmpty(),
+                "version" to gitVersion.ifEmpty { null },
+                "detected" to gitVersion.isNotEmpty(),
                 "path" to "${config.prefix.absolutePath}/bin/git",
             ),
             "openclaw" to mapOf(
-                "version" to ocRaw.ifEmpty { null },
-                "detected" to ocRaw.isNotEmpty(),
+                "version" to ocVersion.ifEmpty { null },
+                "detected" to ocVersion.isNotEmpty(),
                 "path" to "${config.prefix.absolutePath}/bin/openclaw",
             ),
             "prefix" to config.prefix.absolutePath,

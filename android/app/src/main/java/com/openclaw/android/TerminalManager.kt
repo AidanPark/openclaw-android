@@ -89,7 +89,13 @@ class TerminalManager(
             appendLine("export PATH=\"$ocaBin:$nodeDir/bin:$prefix/bin:$prefix/bin/applets:/system/bin:/bin\"")
             appendLine("export NPM_CONFIG_PREFIX=\"$prefix\"")
             appendLine("export npm_config_prefix=\"$prefix\"")
-            appendLine("export LD_LIBRARY_PATH=\"$prefix/lib:$glibcLib\"")
+            // CRITICAL: Do NOT include glibc/lib in LD_LIBRARY_PATH.
+            // This env block is sourced inside Bionic shells (bash/sh from Termux bootstrap).
+            // If glibc/lib is in LD_LIBRARY_PATH, Android's Bionic linker finds glibc's
+            // libc.so there and fails with:
+            //   CANNOT LINK EXECUTABLE "sh": cannot find "libc.so" from verneed[0]
+            // The glibc path is added ONLY by the node wrapper when launching node.real.
+            appendLine("export LD_LIBRARY_PATH=\"$prefix/lib\"")
 
             // dpkg/apt explicit overrides — prevent fallback to compiled-in Termux paths
             appendLine("export DPKG_ADMINDIR=\"$prefix/var/lib/dpkg\"")

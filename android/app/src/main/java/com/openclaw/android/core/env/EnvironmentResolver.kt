@@ -38,27 +38,45 @@ object EnvironmentResolver {
             File(filesDir, "usr").also { it.mkdirs() }
         }
 
-        val glibcLib = File(payloadDir, "glibc/lib")
+        val glibcLib = resolveGlibcLib(payloadDir, prefix)
         val linker = File(glibcLib, "ld-linux-aarch64.so.1")
 
+        // Node binary — check all known layouts in priority order:
+        //   1. payload-final.tar.gz:  payloadDir/lib/node/bin/node.real
+        //   2. online install (Termux): homeDir/.openclaw-android/node/bin/node.real
+        //   3. legacy payload:         payloadDir/glibc/bin/node
         val nodeBin = listOf(
-            File(payloadDir, "glibc/bin/node"),
-            File(payloadDir, "lib/node/bin/node.real"),
+            File(payloadDir, "lib/node/bin/node.real"),          // payload-final.tar.gz
+            File(ocaDir, "node/bin/node.real"),                   // online install (curl | bash)
+            File(ocaDir, "node/bin/node"),
             File(payloadDir, "lib/node/bin/node"),
-        ).firstOrNull { it.exists() } ?: File(payloadDir, "glibc/bin/node")
+            File(payloadDir, "glibc/bin/node"),                   // legacy
+            File(prefix, "bin/node"),
+        ).firstOrNull { it.exists() } ?: File(payloadDir, "lib/node/bin/node.real")
 
+        // openclaw.mjs — check all known layouts:
+        //   1. payload-final.tar.gz:  payloadDir/lib/openclaw/openclaw.mjs
+        //   2. online install (Termux): prefix/lib/node_modules/openclaw/openclaw.mjs
+        //   3. legacy payload:         payloadDir/openclaw/openclaw.mjs
         val openClawMjs = listOf(
-            File(payloadDir, "openclaw/openclaw.mjs"),
-            File(payloadDir, "lib/openclaw/openclaw.mjs"),
-        ).firstOrNull { it.exists() } ?: File(payloadDir, "openclaw/openclaw.mjs")
+            File(payloadDir, "lib/openclaw/openclaw.mjs"),                    // payload-final.tar.gz
+            File(prefix, "lib/node_modules/openclaw/openclaw.mjs"),           // online install
+            File(payloadDir, "openclaw/openclaw.mjs"),                        // legacy
+        ).firstOrNull { it.exists() } ?: File(payloadDir, "lib/openclaw/openclaw.mjs")
 
+        // SSL cert — check all known layouts:
+        //   1. payload-final.tar.gz:  payloadDir/certs/cert.pem
+        //   2. online install (Termux): prefix/etc/tls/cert.pem
+        //   3. legacy:                 payloadDir/ssl/cert.pem
         val certPem = listOf(
-            File(payloadDir, "ssl/cert.pem"),
-            File(payloadDir, "certs/cert.pem"),
-            File(prefix, "etc/tls/cert.pem"),
-        ).firstOrNull { it.exists() } ?: File(payloadDir, "ssl/cert.pem")
+            File(payloadDir, "certs/cert.pem"),              // payload-final.tar.gz
+            File(prefix, "etc/tls/cert.pem"),                // online install / Termux
+            File(payloadDir, "ssl/cert.pem"),                // legacy
+        ).firstOrNull { it.exists() } ?: File(payloadDir, "certs/cert.pem")
 
-        AppLogger.d(TAG, "Resolved: filesDir=${filesDir.absolutePath} payload=${payloadDir.absolutePath} glibc=${linker.exists()}")
+        AppLogger.d(TAG, "Resolved: filesDir=${filesDir.absolutePath} payload=${payloadDir.absolutePath} " +
+            "node=${nodeBin.absolutePath}(exists=${nodeBin.exists()}) " +
+            "glibc=${linker.exists()}")
 
         return EnvironmentConfig(
             filesDir = filesDir,
@@ -73,6 +91,24 @@ object EnvironmentResolver {
             openClawMjs = openClawMjs,
             certPem = certPem,
         )
+    }
+
+    /**
+     * Resolve the glibc lib directory from payload or prefix.
+     * Online install puts glibc in prefix/glibc/lib.
+     * payload-final.tar.gz puts it in payloadDir/glibc/lib.
+     */
+    private fun resolveGlibcLib(payloadDir: File, prefix: File): File {
+        val fromPayload = File(payloadDir, "glibc/lib")
+        if (fromPayload.isDirectory && File(fromPayload, "ld-linux-aarch64.so.1").exists()) {
+            return fromPayload
+        }
+        val fromPrefix = File(prefix, "glibc/lib")
+        if (fromPrefix.isDirectory && File(fromPrefix, "ld-linux-aarch64.so.1").exists()) {
+            return fromPrefix
+        }
+        // Default to payloadDir (will be checked by isGlibcReady)
+        return fromPayload
     }
 
     /**
@@ -112,7 +148,16 @@ object EnvironmentResolver {
             put("NPM_CONFIG_PREFIX", prefixPath)
             put("npm_config_prefix", prefixPath)
 
-            put("LD_LIBRARY_PATH", "$prefixPath/lib:$glibcLibPath")
+            // CRITICAL: Do NOT include glibc/lib in LD_LIBRARY_PATH here.
+            // This map is used for Bionic shells (/system/bin/sh, prefix/bin/bash).
+            // If glibc/lib is in LD_LIBRARY_PATH, Android's Bionic linker finds
+            // glibc's libc.so there and fails with:
+            //   CANNOT LINK EXECUTABLE "sh": cannot find "libc.so" from verneed[0]
+            //
+            // The glibc LD_LIBRARY_PATH is added ONLY by the node wrapper script
+            // (generated by ScriptWriter/EnvironmentBuilder) when launching node.real
+            // via ld-linux-aarch64.so.1. It must never leak into Bionic processes.
+            put("LD_LIBRARY_PATH", "$prefixPath/lib")
 
             // Only set LD_PRELOAD if the file actually exists
             val termuxExec = File("$prefixPath/lib/libtermux-exec.so")
