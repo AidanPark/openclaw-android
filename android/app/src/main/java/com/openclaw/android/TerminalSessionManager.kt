@@ -31,9 +31,10 @@ class TerminalSessionManager(
      *
      * Shell selection priority:
      *   1. proot mode: openclaw-shell.sh (bash inside Ubuntu rootfs via proot)
-     *   2. online install: bash from prefix/bin/bash with full glibc env
-     *   3. payload mode: glibc-wrapped bash from payload
-     *   4. fallback: /system/bin/sh (limited, no glibc tools)
+     *   2. termux-bootstrap: bash from Termux Bootstrap installation
+     *   3. online install: bash from prefix/bin/bash with full glibc env
+     *   4. payload mode: glibc-wrapped bash from payload
+     *   5. fallback: /system/bin/sh (limited, no glibc tools)
      *
      * NOTE: /system/bin/sh is ONLY used as last resort. It cannot run glibc
      * binaries (node, git, openclaw) and will fail with "CANNOT LINK EXECUTABLE"
@@ -73,6 +74,148 @@ class TerminalSessionManager(
             activity.runOnUiThread { onSessionsChanged?.invoke() }
             return session
         }
+
+        // ── Termux Bootstrap mode: bash from Termux Bootstrap installation ──
+        // Detected when: .termux-bootstrap-installed marker exists
+        val termuxBootstrapMarker = File(base, ".termux-bootstrap-installed")
+        val termuxPrefix = File(base, "usr") // Siempre usar files/usr
+        val termuxBash = File(termuxPrefix, "bin/bash")
+        val termuxDpkg = File(termuxPrefix, "bin/dpkg")
+        val termuxApt = File(termuxPrefix, "bin/apt")
+        
+        val isTermuxBootstrapInstalled = termuxBootstrapMarker.exists() &&
+            termuxBash.exists() && termuxBash.canExecute() &&
+            termuxDpkg.exists() && termuxApt.exists()
+
+        if (isTermuxBootstrapInstalled) {
+            AppLogger.i(TAG, "Termux Bootstrap mode: using ${termuxBash.absolutePath}")
+            
+            // Configurar entorno para Termux Bootstrap
+            val termuxEnv = arrayOf(
+                "HOME=${homeDir.absolutePath}",
+                "PREFIX=${termuxPrefix.absolutePath}",
+                "TMPDIR=${tmpDir.absolutePath}",
+                "TERM=xterm-256color",
+                "LANG=en_US.UTF-8",
+                "PATH=${termuxPrefix.absolutePath}/bin:${termuxPrefix.absolutePath}/bin/applets:/system/bin:/bin",
+                "LD_LIBRARY_PATH=${termuxPrefix.absolutePath}/lib",
+                // Variables de entorno específicas de Termux
+                "PACKAGE_MANAGER=apt",
+                "TERMUX_VERSION=1.0",
+                "TERMUX_APP_PID=${android.os.Process.myPid()}",
+                // Configuración para evitar problemas de permisos con dpkg/apt
+                "DEBIAN_FRONTEND=noninteractive",
+                "DEBCONF_NONINTERACTIVE_SEEN=true",
+            )
+            
+            val session = TerminalSession(
+                termuxBash.absolutePath,
+                homeDir.absolutePath,
+                arrayOf("bash", "-i"),
+                termuxEnv,
+                TRANSCRIPT_ROWS,
+                sessionClient,
+            )
+            sessions.add(session)
+            switchSession(sessions.size - 1)
+            eventBridge.emit("session_changed", mapOf("id" to session.mHandle, "action" to "created"))
+            activity.runOnUiThread { onSessionsChanged?.invoke() }
+            return session
+        }
+
+        // ── Ningún entorno instalado: usar system shell con mensaje útil ──
+        AppLogger.w(TAG, "No environment installed, using system shell with help message")
+        
+        // Escribir un mensaje de ayuda en el terminal
+        val helpMessage = """
+            ╔══════════════════════════════════════════════════════════════╗
+            ║                 OpenClaw Android - Terminal                  ║
+            ╠══════════════════════════════════════════════════════════════╣
+            ║                                                              ║
+            ║  ❗ Entorno de terminal no instalado                         ║
+            ║                                                              ║
+            ║  Para usar este terminal, necesitas instalar un entorno:    ║
+            ║                                                              ║
+            ║  1. Ve al Dashboard (botón superior izquierdo)              ║
+            ║  2. Haz clic en "Instalar Termux Bootstrap"                 ║
+            ║  3. Espera 2-3 minutos mientras se descarga (~50MB)         ║
+            ║  4. ¡Listo! Podrás usar bash, apt, dpkg, git, curl, etc.    ║
+            ║                                                              ║
+            ║  Alternativa avanzada:                                      ║
+            ║  • Proot + Ubuntu (sistema completo, ~250MB)                ║
+            ║    - Resistente a Phantom Process Killer                    ║
+            ║    - Ideal para procesos largos                             ║
+            ║                                                              ║
+            ╚══════════════════════════════════════════════════════════════╝
+            
+            Mientras tanto, solo tienes acceso limitado a /system/bin/sh
+            Comandos disponibles: ls, cd, echo, cat, etc.
+            
+            Para instalar ahora, escribe: install-termux
+            Para ver diagnóstico: diagnostic
+            
+        """.trimIndent()
+        
+        // Crear sesión con system shell
+        val systemEnv = arrayOf(
+            "HOME=${homeDir.absolutePath}",
+            "TERM=xterm-256color",
+            "PATH=/system/bin:/bin",
+        )
+        
+        val session = TerminalSession(
+            "/system/bin/sh",
+            homeDir.absolutePath,
+            arrayOf("sh", "-i"),
+            systemEnv,
+            TRANSCRIPT_ROWS,
+            object : TerminalSessionClient by sessionClient {
+                override fun onTextChanged(session: TerminalSession) {
+                    sessionClient.onTextChanged(session)
+                }
+                
+                override fun onSessionFinished(session: TerminalSession) {
+                    sessionClient.onSessionFinished(session)
+                }
+                
+                override fun onTitleChanged(session: TerminalSession) {
+                    sessionClient.onTitleChanged(session)
+                }
+                
+                override fun onCopyTextToClipboard(session: TerminalSession, text: String) {
+                    sessionClient.onCopyTextToClipboard(session, text)
+                }
+                
+                override fun onPasteTextFromClipboard(session: TerminalSession) {
+                    sessionClient.onPasteTextFromClipboard(session)
+                }
+                
+                override fun onBell(session: TerminalSession) {
+                    sessionClient.onBell(session)
+                }
+                
+                override fun onColorsChanged(session: TerminalSession) {
+                    sessionClient.onColorsChanged(session)
+                }
+                
+                override fun setTerminalShellPid(session: TerminalSession, pid: Int) {
+                    sessionClient.setTerminalShellPid(session, pid)
+                }
+            },
+        )
+        
+        // Escribir mensaje de ayuda después de que la sesión se inicialice
+        activity.runOnUiThread {
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                session.write(helpMessage.toByteArray())
+            }, 100)
+        }
+        
+        sessions.add(session)
+        switchSession(sessions.size - 1)
+        eventBridge.emit("session_changed", mapOf("id" to session.mHandle, "action" to "created"))
+        activity.runOnUiThread { onSessionsChanged?.invoke() }
+        return session
 
         // ── Online install mode: bash from Termux bootstrap with glibc env ──
         // Detected when: prefix/bin/bash exists + .openclaw-android/installed.json

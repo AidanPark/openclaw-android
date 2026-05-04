@@ -40,11 +40,12 @@ class TerminalManager(
         private const val TAG = "TerminalManager"
 
         // Time to wait for the shell process to initialize before writing.
-        // 600ms covers slow devices; the env file approach makes this less critical.
-        private const val SHELL_INIT_DELAY_MS = 600L
+        // 1200ms para asegurar que el shell esté completamente listo, especialmente después de instalar bootstrap
+        private const val SHELL_INIT_DELAY_MS = 1200L
 
         // Extra delay between sourcing the env file and running the main command.
-        private const val ENV_APPLY_DELAY_MS = 250L
+        // 500ms para asegurar que las variables de entorno se apliquen correctamente
+        private const val ENV_APPLY_DELAY_MS = 500L
 
         // Name of the env file written to TMPDIR
         private const val ENV_FILE_NAME = "oca-env.sh"

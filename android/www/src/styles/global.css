@@ -1226,6 +1226,18 @@ body {
   }
 }
 
+@keyframes skeleton-pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
 .spinner {
   width: 20px;
   height: 20px;
@@ -1234,6 +1246,11 @@ body {
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   display: inline-block;
+}
+
+.skeleton {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
 }
 
 /* ─── Empty state ────────────────────────────── */

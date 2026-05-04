@@ -6,6 +6,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * Ejemplo de integración del TermuxBootstrapManager.
@@ -81,7 +82,8 @@ class BootstrapExampleActivity : AppCompatActivity() {
 
                 override fun onError(message: String, cause: Throwable?) {
                     runOnUiThread {
-                        AppLogger.e("Bootstrap", "Error: $message", cause)
+                        if (cause != null) AppLogger.e("Bootstrap", "Error: $message", cause)
+                        else AppLogger.e("Bootstrap", "Error: $message")
                         showErrorDialog(message)
                     }
                 }
@@ -135,7 +137,8 @@ class DirectBootstrapExample(private val context: Context) {
             }
 
             override fun onError(message: String, cause: Throwable?) {
-                AppLogger.e("Bootstrap", "Error: $message", cause)
+                if (cause != null) AppLogger.e("Bootstrap", "Error: $message", cause)
+                else AppLogger.e("Bootstrap", "Error: $message")
                 success = false
             }
         })
@@ -374,7 +377,8 @@ class BootstrapInstallService : android.app.Service() {
                 }
 
                 override fun onError(message: String, cause: Throwable?) {
-                    AppLogger.e("Service", "Error: $message", cause)
+                    if (cause != null) AppLogger.e("Service", "Error: $message", cause)
+                    else AppLogger.e("Service", "Error: $message")
                     stopSelf()
                 }
             })

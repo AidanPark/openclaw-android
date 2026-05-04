@@ -68,6 +68,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [activeSessionId, setActiveSessionId] = useState<string>('')
   const [refreshing, setRefreshing] = useState(false)
+  const [envLoading, setEnvLoading] = useState(true)
   const bridgeReadyRef = useRef(false)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -80,9 +81,22 @@ export function Dashboard() {
     const bs = bridge.callJson<BootstrapStatus>('getBootstrapStatus')
     if (bs) setBootstrapStatus(bs)
 
-    // Fetch real versions from getEnvironmentInfo
-    const env = bridge.callJson<EnvInfo>('getEnvironmentInfo')
-    if (env) setEnvInfo(env)
+    // Fetch real versions from getEnvironmentInfo with retry logic
+    const loadEnvInfo = async () => {
+      setEnvLoading(true)
+      let attempts = 0
+      while (attempts < 5) {
+        const env = bridge.callJson<EnvInfo>('getEnvironmentInfo')
+        if (env) {
+          setEnvInfo(env)
+          break
+        }
+        await new Promise(r => setTimeout(r, 500))
+        attempts++
+      }
+      setEnvLoading(false)
+    }
+    loadEnvInfo()
 
     const ap = bridge.callJson<PlatformInfo>('getActivePlatform')
     if (ap) setPlatform(ap)
@@ -130,6 +144,8 @@ export function Dashboard() {
   useNativeEvent('setup_progress', onSetupProgress)
 
   function runInTerminal(cmd: string) {
+    // Show toast feedback
+    showToast(t('toast_opening_terminal'))
     bridge.call('showTerminal')
     setTimeout(() => bridge.call('writeToTerminal', activeSessionId, cmd + '\n'), 150)
   }
@@ -152,8 +168,55 @@ export function Dashboard() {
   if (loading) {
     return (
       <div className="page">
-        <div className="empty-state" style={{ minHeight: 'calc(100dvh - 80px)' }}>
-          <div className="spinner" style={{ width: 36, height: 36, borderWidth: 3 }} />
+        {/* Skeleton header */}
+        <div className="dash-header">
+          <div className="dash-platform-icon skeleton" style={{ background: 'var(--bg-tertiary)' }} />
+          <div className="dash-platform-info" style={{ flex: 1 }}>
+            <div className="skeleton" style={{ height: 20, width: '60%', marginBottom: 6, background: 'var(--bg-tertiary)' }} />
+            <div className="skeleton" style={{ height: 12, width: '40%', background: 'var(--bg-tertiary)' }} />
+          </div>
+          <div className="dash-refresh-btn skeleton" style={{ background: 'var(--bg-tertiary)' }} />
+        </div>
+
+        {/* Skeleton runtime grid */}
+        <div className="section-title skeleton" style={{ height: 11, width: '30%', background: 'var(--bg-tertiary)' }} />
+        <div className="runtime-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 16 }}>
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="dash-env-item">
+              <div className="skeleton" style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bg-tertiary)' }} />
+              <div className="skeleton" style={{ width: '60%', height: 8, marginTop: 4, background: 'var(--bg-tertiary)' }} />
+              <div className="skeleton" style={{ width: '80%', height: 8, marginTop: 2, background: 'var(--bg-tertiary)' }} />
+            </div>
+          ))}
+        </div>
+
+        {/* Skeleton command cards */}
+        <div className="section-title skeleton" style={{ height: 11, width: '40%', background: 'var(--bg-tertiary)' }} />
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              padding: '13px 16px',
+              borderTop: i > 1 ? '1px solid var(--border-subtle)' : 'none',
+            }}>
+              <div className="skeleton" style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--bg-tertiary)' }} />
+              <div style={{ flex: 1 }}>
+                <div className="skeleton" style={{ height: 14, width: '40%', marginBottom: 4, background: 'var(--bg-tertiary)' }} />
+                <div className="skeleton" style={{ height: 10, width: '70%', background: 'var(--bg-tertiary)' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Skeleton quick actions */}
+        <div className="section-title skeleton" style={{ height: 11, width: '50%', marginTop: 20, background: 'var(--bg-tertiary)' }} />
+        <div className="dash-quick-grid">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="dash-quick-btn skeleton" style={{ background: 'var(--bg-tertiary)' }}>
+              <div className="skeleton" style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bg-tertiary)' }} />
+              <div className="skeleton" style={{ width: '80%', height: 8, marginTop: 4, background: 'var(--bg-tertiary)' }} />
+            </div>
+          ))}
         </div>
       </div>
     )
@@ -174,24 +237,32 @@ export function Dashboard() {
   const isInstalled = bootstrapStatus?.installed && bootstrapStatus?.openclawInstalled
 
   // Resolve display versions from envInfo (real versions) or fallback to bootstrapStatus
-  const nodeVersion = envInfo.node?.detected
-    ? (envInfo.node.version || t('env_detected'))
-    : (bootstrapStatus?.installed ? t('env_detected') : t('env_not_detected'))
+  const nodeVersion = envLoading
+    ? '...'
+    : envInfo.node?.detected
+      ? (envInfo.node.version || t('env_detected'))
+      : (bootstrapStatus?.installed ? t('env_detected') : t('env_not_detected'))
   const nodeActive = !!(envInfo.node?.detected || bootstrapStatus?.installed)
 
-  const npmVersion = envInfo.npm?.detected
-    ? (envInfo.npm.version || t('env_detected'))
-    : t('env_not_detected')
+  const npmVersion = envLoading
+    ? '...'
+    : envInfo.npm?.detected
+      ? (envInfo.npm.version || t('env_detected'))
+      : t('env_not_detected')
   const npmActive = !!(envInfo.npm?.detected)
 
-  const gitVersion = envInfo.git?.detected
-    ? (envInfo.git.version || t('env_detected'))
-    : t('env_not_detected')
+  const gitVersion = envLoading
+    ? '...'
+    : envInfo.git?.detected
+      ? (envInfo.git.version || t('env_detected'))
+      : t('env_not_detected')
   const gitActive = !!(envInfo.git?.detected)
 
-  const ocVersion = envInfo.openclaw?.detected
-    ? (envInfo.openclaw.version || t('env_detected'))
-    : (bootstrapStatus?.openclawInstalled ? t('env_detected') : t('env_not_detected'))
+  const ocVersion = envLoading
+    ? '...'
+    : envInfo.openclaw?.detected
+      ? (envInfo.openclaw.version || t('env_detected'))
+      : (bootstrapStatus?.openclawInstalled ? t('env_detected') : t('env_not_detected'))
   const ocActive = !!(envInfo.openclaw?.detected || bootstrapStatus?.openclawInstalled)
 
   return (
@@ -385,6 +456,18 @@ function QuickAction({ icon, label, onClick }: { icon: string; label: string; on
     </button>
   )
 }
+
+// Toast system
+const [toasts, setToasts] = useState<Array<{ id: number; message: string }>>([])
+const toastIdRef = useRef(0)
+
+const showToast = useCallback((message: string) => {
+  const id = ++toastIdRef.current
+  setToasts(prev => [...prev, { id, message }])
+  setTimeout(() => {
+    setToasts(prev => prev.filter(toast => toast.id !== id))
+  }, 3000)
+}, [])
 
 function CommandRow({
   icon, label, cmd, color, borderTop, onClick,

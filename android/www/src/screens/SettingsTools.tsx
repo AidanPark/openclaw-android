@@ -66,6 +66,13 @@ export function SettingsTools() {
   }
 
   function handleUninstall(id: string) {
+    const tool = tools.find(t => t.id === id)
+    if (!tool) return
+
+    if (!confirm(t('tools_confirm_uninstall', { name: tool.name }))) {
+      return
+    }
+
     setUninstalling(id)
     bridge.call('uninstallTool', id)
     setTimeout(() => {
