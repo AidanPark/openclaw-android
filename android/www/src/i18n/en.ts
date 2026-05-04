@@ -174,7 +174,20 @@ export const en = {
   platforms_active: 'Active',
   platforms_install: 'Install & Switch',
 
-  // Settings - Tools
+  // Dashboard - git install hint
+  git_not_available: 'git not available',
+  git_install_hint: 'Required for cloning repositories',
+  git_install_btn: 'Install git',
+
+  // Storage additional
+  storage_payload: 'Extracted payload',
+  storage_node: 'Node.js',
+  storage_openclaw: 'OpenClaw',
+  storage_cache: 'Cache',
+  storage_total_disk: 'Total storage',
+  storage_available: 'Available on device',
+  storage_retry: 'Retry',
+
   tools_title: 'Additional Tools',
   tools_installing: 'Installing {name}...',
   tools_installed: 'Installed ✓',

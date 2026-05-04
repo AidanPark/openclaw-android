@@ -173,7 +173,20 @@ export const es = {
   platforms_active: 'Activa',
   platforms_install: 'Instalar y cambiar',
 
-  // Herramientas adicionales
+  // Panel - git install hint
+  git_not_available: 'git no disponible',
+  git_install_hint: 'Necesario para clonar repositorios',
+  git_install_btn: 'Instalar git',
+
+  // Almacenamiento adicional
+  storage_payload: 'Payload extraído',
+  storage_node: 'Node.js',
+  storage_openclaw: 'OpenClaw',
+  storage_cache: 'Caché',
+  storage_total_disk: 'Almacenamiento total',
+  storage_available: 'Disponible en el dispositivo',
+  storage_retry: 'Reintentar',
+
   tools_title: 'Herramientas adicionales',
   tools_installing: 'Instalando {name}...',
   tools_installed: 'Instalado ✓',

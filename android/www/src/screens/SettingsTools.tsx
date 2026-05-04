@@ -4,21 +4,20 @@ import { bridge } from '../lib/bridge'
 import { useNativeEvent } from '../lib/useNativeEvent'
 import { t } from '../i18n'
 
-interface Tool { id: string; name: string; desc: string; category: string }
+interface Tool { id: string; name: string; desc: string; category: string; size?: string }
 
-// Las descripciones se generan dentro del componente para respetar el locale
 function getTools(): Tool[] {
   return [
-    { id: 'tmux', name: 'tmux', desc: t('tool_tmux'), category: 'terminal' },
-    { id: 'code-server', name: 'code-server', desc: t('tool_code_server'), category: 'terminal' },
-    { id: 'claude-code', name: 'Claude Code', desc: t('tool_claude_code'), category: 'ai' },
-    { id: 'gemini-cli', name: 'Gemini CLI', desc: t('tool_gemini_cli'), category: 'ai' },
-    { id: 'codex-cli', name: 'Codex CLI', desc: t('tool_codex_cli'), category: 'ai' },
-    { id: 'openssh-server', name: 'SSH Server', desc: t('tool_ssh_server'), category: 'network' },
-    { id: 'ttyd', name: 'ttyd', desc: t('tool_ttyd'), category: 'network' },
-    { id: 'dufs', name: 'dufs', desc: t('tool_dufs'), category: 'network' },
-    { id: 'android-tools', name: 'Android Tools', desc: 'ADB — Phantom Process Killer', category: 'system' },
-    { id: 'chromium', name: 'Chromium', desc: 'Browser automation (~400MB)', category: 'system' },
+    { id: 'tmux', name: 'tmux', desc: t('tool_tmux'), category: 'terminal', size: '~2MB' },
+    { id: 'code-server', name: 'code-server', desc: t('tool_code_server'), category: 'terminal', size: '~350MB' },
+    { id: 'claude-code', name: 'Claude Code', desc: t('tool_claude_code'), category: 'ai', size: '~50MB' },
+    { id: 'gemini-cli', name: 'Gemini CLI', desc: t('tool_gemini_cli'), category: 'ai', size: '~30MB' },
+    { id: 'codex-cli', name: 'Codex CLI', desc: t('tool_codex_cli'), category: 'ai', size: '~25MB' },
+    { id: 'openssh-server', name: 'SSH Server', desc: t('tool_ssh_server'), category: 'network', size: '~5MB' },
+    { id: 'ttyd', name: 'ttyd', desc: t('tool_ttyd'), category: 'network', size: '~3MB' },
+    { id: 'dufs', name: 'dufs', desc: t('tool_dufs'), category: 'network', size: '~8MB' },
+    { id: 'android-tools', name: 'Android Tools', desc: 'ADB — Phantom Process Killer', category: 'system', size: '~15MB' },
+    { id: 'chromium', name: 'Chromium', desc: 'Browser automation', category: 'system', size: '~400MB' },
   ]
 }
 
@@ -36,6 +35,7 @@ export function SettingsTools() {
   const { navigate } = useRoute()
   const [installed, setInstalled] = useState<Set<string>>(new Set())
   const [installing, setInstalling] = useState<string | null>(null)
+  const [uninstalling, setUninstalling] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
   const [progressMsg, setProgressMsg] = useState('')
 
@@ -65,18 +65,28 @@ export function SettingsTools() {
   }
 
   function handleUninstall(id: string) {
+    setUninstalling(id)
     bridge.call('uninstallTool', id)
-    setInstalled(prev => { const n = new Set(prev); n.delete(id); return n })
+    setTimeout(() => {
+      setInstalled(prev => { const n = new Set(prev); n.delete(id); return n })
+      setUninstalling(null)
+    }, 1000)
   }
 
   const tools = getTools()
   const categories = [...new Set(tools.map(tool => tool.category))]
+  const installedCount = installed.size
 
   return (
     <div className="page">
       <div className="page-header">
         <button className="back-btn" onClick={() => navigate('/settings')}>←</button>
         <div className="page-title">{t('tools_title')}</div>
+        {installedCount > 0 && (
+          <span className="pill pill-success" style={{ marginLeft: 'auto' }}>
+            {installedCount} instalada{installedCount !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
 
       {/* Progreso de instalación */}
@@ -92,7 +102,7 @@ export function SettingsTools() {
             <div className="progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
           </div>
           {progressMsg && (
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, fontFamily: 'monospace' }}>
               {progressMsg}
             </div>
           )}
@@ -106,6 +116,8 @@ export function SettingsTools() {
           {tools.filter(tool => tool.category === cat).map(tool => {
             const isInstalled = installed.has(tool.id)
             const isInstalling = installing === tool.id
+            const isUninstalling = uninstalling === tool.id
+
             return (
               <div key={tool.id} className="card">
                 <div className="card-row">
@@ -116,25 +128,34 @@ export function SettingsTools() {
                         <span className="pill pill-success" style={{ fontSize: 10 }}>✓</span>
                       )}
                     </div>
-                    <div className="card-desc">{tool.desc}</div>
+                    <div className="card-desc">
+                      {tool.desc}
+                      {tool.size && (
+                        <span style={{ marginLeft: 6, color: 'var(--text-muted)' }}>{tool.size}</span>
+                      )}
+                    </div>
                   </div>
-                  {isInstalled ? (
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => handleUninstall(tool.id)}
-                      disabled={installing !== null}
-                    >
-                      {t('tools_installed')}
-                    </button>
-                  ) : (
-                    <button
-                      className="btn btn-primary btn-sm"
-                      onClick={() => handleInstall(tool.id)}
-                      disabled={installing !== null}
-                    >
-                      {isInstalling ? '...' : t('tools_install')}
-                    </button>
-                  )}
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    {isInstalled ? (
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => handleUninstall(tool.id)}
+                        disabled={installing !== null || isUninstalling}
+                      >
+                        {isUninstalling ? '...' : t('tools_uninstall')}
+                      </button>
+                    ) : (
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => handleInstall(tool.id)}
+                        disabled={installing !== null}
+                      >
+                        {isInstalling ? (
+                          <><span className="spinner" style={{ width: 12, height: 12, marginRight: 4 }} />...</>
+                        ) : t('tools_install')}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )

@@ -4,11 +4,19 @@ import { bridge } from '../lib/bridge'
 import { t } from '../i18n'
 
 interface AppInfo { versionName: string; versionCode: number; packageName: string }
-interface EnvComponent { version?: string; detected: boolean }
-interface EnvInfo { node?: EnvComponent; git?: EnvComponent; openclaw?: EnvComponent }
+interface EnvComponent { version?: string; detected: boolean; path?: string }
+interface EnvInfo {
+  node?: EnvComponent
+  git?: EnvComponent
+  openclaw?: EnvComponent
+  prefix?: string
+  home?: string
+}
 interface BootstrapStatus {
   installed: boolean
   openclawInstalled: boolean
+  source?: string
+  prefixPath?: string
 }
 
 export function SettingsAbout() {
@@ -39,6 +47,12 @@ export function SettingsAbout() {
     }, 0)
   }
 
+  const runtimeComponents: Array<{ key: keyof EnvInfo; label: string; icon: string }> = [
+    { key: 'node', label: 'Node.js', icon: '⬢' },
+    { key: 'git', label: 'git', icon: '⎇' },
+    { key: 'openclaw', label: 'openclaw', icon: '🦀' },
+  ]
+
   return (
     <div className="page">
       <div className="page-header">
@@ -46,6 +60,7 @@ export function SettingsAbout() {
         <div className="page-title">{t('about_title')}</div>
       </div>
 
+      {/* Logo */}
       <div style={{ textAlign: 'center', padding: '20px 0 28px' }}>
         <div style={{
           width: 80, height: 80, borderRadius: 20,
@@ -61,6 +76,7 @@ export function SettingsAbout() {
         </div>
       </div>
 
+      {/* APK version */}
       <div className="section-title">{t('about_version')}</div>
       <div className="card">
         <div className="info-row">
@@ -86,6 +102,14 @@ export function SettingsAbout() {
             {appInfo?.packageName || '—'}
           </span>
         </div>
+        {bootstrapStatus?.source && (
+          <div className="info-row">
+            <span className="label">Fuente</span>
+            <span className="pill pill-accent" style={{ fontSize: 11 }}>
+              {bootstrapStatus.source}
+            </span>
+          </div>
+        )}
         <div style={{ marginTop: 12 }}>
           <button
             className="btn btn-secondary btn-sm"
@@ -99,15 +123,13 @@ export function SettingsAbout() {
         </div>
       </div>
 
+      {/* Runtime — versiones reales */}
       <div className="section-title">{t('about_runtime')}</div>
       <div className="card">
-        {([
-          { key: 'node' as const, label: 'Node.js' },
-          { key: 'git' as const, label: 'git' },
-          { key: 'openclaw' as const, label: 'openclaw' },
-        ]).map(({ key, label }) => {
-          const comp = envInfo[key]
+        {runtimeComponents.map(({ key, label, icon }) => {
+          const comp = envInfo[key] as EnvComponent | undefined
           const detected = comp?.detected ?? false
+          const version = comp?.version
           return (
             <div className="info-row" key={key}>
               <span className="label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -116,19 +138,36 @@ export function SettingsAbout() {
                   background: detected ? 'var(--success)' : 'var(--error)',
                   display: 'inline-block',
                 }} />
+                <span style={{ fontSize: 14 }}>{icon}</span>
                 {label}
               </span>
               <span style={{
                 fontFamily: 'monospace', fontSize: 13,
                 color: detected ? 'var(--text-primary)' : 'var(--text-muted)',
               }}>
-                {detected ? (comp?.version || '✓ installed') : t('env_not_detected')}
+                {detected
+                  ? (version || '✓ instalado')
+                  : t('env_not_detected')}
               </span>
             </div>
           )
         })}
+        {/* Prefix path */}
+        {(envInfo.prefix || bootstrapStatus?.prefixPath) && (
+          <div className="info-row">
+            <span className="label">PREFIX</span>
+            <span style={{
+              fontSize: 10, fontFamily: 'monospace', color: 'var(--text-muted)',
+              maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              direction: 'rtl', textAlign: 'right',
+            }}>
+              {envInfo.prefix || bootstrapStatus?.prefixPath}
+            </span>
+          </div>
+        )}
       </div>
 
+      {/* Installation status */}
       <div className="section-title">{t('about_installation')}</div>
       <div className="card">
         {([
@@ -147,6 +186,7 @@ export function SettingsAbout() {
         })}
       </div>
 
+      {/* License */}
       <div className="section-title">{t('about_license')}</div>
       <div className="card">
         <div className="info-row">
@@ -155,6 +195,7 @@ export function SettingsAbout() {
         </div>
       </div>
 
+      {/* Actions */}
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
         <button
           className="btn btn-secondary"
