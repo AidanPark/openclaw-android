@@ -4,10 +4,21 @@ import { bridge } from '../lib/bridge'
 import { t } from '../i18n'
 
 interface StorageInfo {
-  totalBytes: number
-  freeBytes: number
-  bootstrapBytes: number
-  wwwBytes: number
+  // Device-level
+  total: number
+  free: number
+  used: number
+  totalMb: number
+  freeMb: number
+  usedMb: number
+  // App-level (actual files in sandbox)
+  appUsedBytes: number
+  appUsedMb: number
+  // Legacy fields (may be 0 if not reported)
+  totalBytes?: number
+  freeBytes?: number
+  bootstrapBytes?: number
+  wwwBytes?: number
   payloadBytes?: number
   cacheBytes?: number
   nodeBytes?: number
@@ -61,61 +72,37 @@ function StorageBar({ segments, total }: { segments: BarSegment[]; total: number
   )
 }
 
-function StorageRow({
-  label, bytes, total, color, desc,
-}: {
-  label: string; bytes: number; total: number; color: string; desc?: string
-}) {
-  return (
-    <div className="card" style={{ marginBottom: 8 }}>
-      <div className="card-row" style={{ cursor: 'default', marginBottom: 8 }}>
-        <div className="card-content">
-          <div className="card-label">{label}</div>
-          {desc && <div className="card-desc">{desc}</div>}
-        </div>
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace' }}>
-            {formatBytes(bytes)}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-            {pct(bytes, total)}
-          </div>
-        </div>
-      </div>
-      <div className="storage-bar">
-        <div className="storage-fill" style={{
-          width: `${Math.min(100, total > 0 ? (bytes / total) * 100 : 0)}%`,
-          background: color,
-        }} />
-      </div>
-    </div>
-  )
-}
-
 export function SettingsStorage() {
   const { navigate } = useRoute()
   const [info, setInfo] = useState<StorageInfo | null>(null)
-  const [source, setSource] = useState<string>('bootstrap')
   const [clearing, setClearing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   function loadInfo() {
     setError(null)
     try {
-      const data = bridge.callJson<StorageInfo>('getStorageInfo')
-      if (data && typeof data === 'object') {
-        // Normalize: ensure all fields are numbers
-        const normalized: StorageInfo = {
-          totalBytes: Number(data.totalBytes) || 0,
-          freeBytes: Number(data.freeBytes) || 0,
-          bootstrapBytes: Number(data.bootstrapBytes) || 0,
-          wwwBytes: Number(data.wwwBytes) || 0,
-          payloadBytes: Number(data.payloadBytes) || 0,
-          cacheBytes: Number(data.cacheBytes) || 0,
-          nodeBytes: Number(data.nodeBytes) || 0,
-          openclawBytes: Number(data.openclawBytes) || 0,
+      const raw = bridge.callJson<Record<string, number>>('getStorageInfo')
+      if (raw && typeof raw === 'object') {
+        const data: StorageInfo = {
+          total: Number(raw.total) || 0,
+          free: Number(raw.free) || 0,
+          used: Number(raw.used) || 0,
+          totalMb: Number(raw.totalMb) || 0,
+          freeMb: Number(raw.freeMb) || 0,
+          usedMb: Number(raw.usedMb) || 0,
+          appUsedBytes: Number(raw.appUsedBytes) || 0,
+          appUsedMb: Number(raw.appUsedMb) || 0,
+          // legacy fields
+          totalBytes: Number(raw.totalBytes) || Number(raw.total) || 0,
+          freeBytes: Number(raw.freeBytes) || Number(raw.free) || 0,
+          bootstrapBytes: Number(raw.bootstrapBytes) || 0,
+          wwwBytes: Number(raw.wwwBytes) || 0,
+          payloadBytes: Number(raw.payloadBytes) || 0,
+          cacheBytes: Number(raw.cacheBytes) || 0,
+          nodeBytes: Number(raw.nodeBytes) || 0,
+          openclawBytes: Number(raw.openclawBytes) || 0,
         }
-        setInfo(normalized)
+        setInfo(data)
       } else {
         setError('No se pudo obtener información de almacenamiento')
       }
@@ -125,7 +112,7 @@ export function SettingsStorage() {
 
     try {
       const bs = bridge.callJson<{ source?: string }>('getBootstrapStatus')
-      if (bs?.source) setSource(bs.source)
+      if (bs?.source) { /* source info available but not displayed in simplified view */ void bs.source }
     } catch { /* ignore */ }
   }
 
@@ -140,18 +127,13 @@ export function SettingsStorage() {
     }, 2000)
   }
 
-  // Compute totals
-  const usedBytes = info
-    ? (info.bootstrapBytes || 0) + (info.wwwBytes || 0) +
-    (info.payloadBytes || 0) + (info.cacheBytes || 0)
-    : 0
-  const diskTotal = info?.totalBytes || 1
+  // Compute totals — use appUsedBytes (real app usage) as primary
+  const appUsedBytes = info?.appUsedBytes || 0
+  const diskTotal = info?.total || 1
+  const diskFree = info?.free || 0
 
   const segments: BarSegment[] = info ? [
-    { label: source === 'payload' ? 'Payload' : 'Bootstrap', bytes: info.bootstrapBytes || 0, color: '#58a6ff' },
-    { label: 'Web UI', bytes: info.wwwBytes || 0, color: '#3fb950' },
-    { label: 'Payload', bytes: info.payloadBytes || 0, color: '#d29922' },
-    { label: 'Caché', bytes: info.cacheBytes || 0, color: '#8b949e' },
+    { label: 'App instalada', bytes: appUsedBytes, color: '#58a6ff' },
   ] : []
 
   return (
@@ -182,80 +164,21 @@ export function SettingsStorage() {
 
       {info && (
         <>
-          {/* Resumen total con barra combinada */}
+          {/* Resumen: uso real de la app */}
           <div className="card" style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                {t('storage_total')}
+                Usado por la app
               </div>
               <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'monospace' }}>
-                {formatBytes(usedBytes)}
+                {formatBytes(appUsedBytes)}
               </div>
             </div>
             <StorageBar segments={segments} total={diskTotal} />
+            <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)' }}>
+              {pct(appUsedBytes, diskTotal)} del almacenamiento del dispositivo
+            </div>
           </div>
-
-          {/* Bootstrap / Payload */}
-          <StorageRow
-            label={source === 'payload' ? 'Payload (glibc + node)' : t('storage_bootstrap')}
-            bytes={info.bootstrapBytes || 0}
-            total={diskTotal}
-            color="#58a6ff"
-            desc={source === 'payload' ? 'Entorno de ejecución glibc' : 'Entorno Termux embebido'}
-          />
-
-          {/* Payload adicional si existe */}
-          {(info.payloadBytes || 0) > 0 && (
-            <StorageRow
-              label="Payload extraído"
-              bytes={info.payloadBytes || 0}
-              total={diskTotal}
-              color="#d29922"
-              desc="payload-final.tar.gz extraído"
-            />
-          )}
-
-          {/* Node.js si se reporta por separado */}
-          {(info.nodeBytes || 0) > 0 && (
-            <StorageRow
-              label="Node.js"
-              bytes={info.nodeBytes || 0}
-              total={diskTotal}
-              color="#79c0ff"
-              desc="node.real + módulos npm"
-            />
-          )}
-
-          {/* OpenClaw si se reporta por separado */}
-          {(info.openclawBytes || 0) > 0 && (
-            <StorageRow
-              label="OpenClaw"
-              bytes={info.openclawBytes || 0}
-              total={diskTotal}
-              color="#56d364"
-              desc="openclaw.mjs + node_modules"
-            />
-          )}
-
-          {/* Web UI */}
-          <StorageRow
-            label={t('storage_www')}
-            bytes={info.wwwBytes || 0}
-            total={diskTotal}
-            color="#3fb950"
-            desc="Interfaz React"
-          />
-
-          {/* Caché */}
-          {(info.cacheBytes || 0) > 0 && (
-            <StorageRow
-              label="Caché"
-              bytes={info.cacheBytes || 0}
-              total={diskTotal}
-              color="#8b949e"
-              desc="Archivos temporales"
-            />
-          )}
 
           {/* Espacio libre */}
           <div className="card" style={{ marginBottom: 8 }}>
@@ -266,10 +189,10 @@ export function SettingsStorage() {
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace' }}>
-                  {formatBytes(info.freeBytes || 0)}
+                  {formatBytes(diskFree)}
                 </div>
                 <span className="pill pill-success" style={{ fontSize: 11 }}>
-                  {pct(info.freeBytes || 0, diskTotal)}
+                  {pct(diskFree, diskTotal)}
                 </span>
               </div>
             </div>

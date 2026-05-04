@@ -69,6 +69,12 @@ interface OpenClawBridge {
   getStorageInfo(): string
   clearCache(): void
   openUrl(url: string): void
+  /** Fix executable permissions on .sh scripts and wrappers in the app sandbox. */
+  fixScriptPermissions(): string
+  /** Get detailed version info for node, npm, openclaw, glibc. */
+  getDetailedVersionInfo(): string
+  /** Get version info (alias used by SetupBridge). */
+  getVersionInfo(): string
 }
 
 declare global {

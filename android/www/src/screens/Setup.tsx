@@ -181,9 +181,9 @@ export function Setup({ onComplete }: Props) {
       <div className="setup-container">
         {renderStepper()}
         <div className="setup-title">{t('setup_mode_title')}</div>
-        
+
         <div className="card-group" style={{ width: '100%', maxWidth: 400 }}>
-          <div 
+          <div
             className={`card clickable ${installMode === 'online' ? 'selected' : ''}`}
             onClick={() => setInstallMode('online')}
             style={installMode === 'online' ? { borderColor: 'var(--accent)', background: 'var(--accent-dim)' } : {}}
@@ -195,9 +195,24 @@ export function Setup({ onComplete }: Props) {
                 <div className="card-desc">{t('setup_mode_online_desc')}</div>
               </div>
             </div>
+            {installMode === 'online' && (
+              <div style={{ marginTop: 10, padding: '0 4px' }}>
+                <div style={{
+                  background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                  borderRadius: 6, padding: '8px 12px',
+                  fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)',
+                  wordBreak: 'break-all', lineHeight: 1.6,
+                }}>
+                  curl -sL myopenclawhub.com/install | bash
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                  {t('setup_mode_online_hint')}
+                </div>
+              </div>
+            )}
           </div>
 
-          <div 
+          <div
             className={`card clickable ${installMode === 'offline' ? 'selected' : ''}`}
             onClick={() => setInstallMode('offline')}
             style={installMode === 'offline' ? { borderColor: 'var(--accent)', background: 'var(--accent-dim)' } : {}}
@@ -209,7 +224,7 @@ export function Setup({ onComplete }: Props) {
                 <div className="card-desc">{t('setup_mode_offline_desc')}</div>
               </div>
             </div>
-            
+
             {installMode === 'offline' && (
               <div style={{ marginTop: 12, padding: '0 8px' }}>
                 {!hasAsset && !selectedFileName ? (
@@ -217,14 +232,14 @@ export function Setup({ onComplete }: Props) {
                     ⚠️ {t('setup_offline_not_found')}
                   </div>
                 ) : null}
-                
+
                 {selectedFileName ? (
                   <div style={{ fontSize: 12, color: 'var(--success)', marginBottom: 8 }}>
                     ✓ {t('setup_offline_selected', { name: selectedFileName })}
                   </div>
                 ) : null}
 
-                <button 
+                <button
                   className="btn btn-secondary btn-sm btn-full"
                   onClick={(e) => {
                     e.stopPropagation()
@@ -242,8 +257,8 @@ export function Setup({ onComplete }: Props) {
           <button className="btn btn-ghost btn-sm" onClick={() => setPhase('welcome')}>
             ← {t('step_platform')}
           </button>
-          <button 
-            className="btn btn-primary" 
+          <button
+            className="btn btn-primary"
             onClick={() => setPhase('tool-select')}
             disabled={installMode === 'offline' && !hasAsset && !selectedFileName}
           >

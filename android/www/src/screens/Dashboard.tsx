@@ -15,6 +15,7 @@ interface InstalledTool { id: string; name: string; version?: string }
 interface EnvComponent { version?: string; detected: boolean; path?: string }
 interface EnvInfo {
   node?: EnvComponent
+  npm?: EnvComponent
   git?: EnvComponent
   openclaw?: EnvComponent
   prefix?: string
@@ -134,9 +135,18 @@ export function Dashboard() {
   }
 
   function installGit() {
-    bridge.call('createSession')
     bridge.call('showTerminal')
-    setTimeout(() => bridge.call('writeToTerminal', activeSessionId, 'pkg install -y git\n'), 300)
+    const sessions = bridge.callJson<Array<{ id: string; active: boolean }>>('getTerminalSessions')
+    const active = sessions?.find(s => s.active)
+    const id = active?.id || bridge.callJson<{ id: string }>('createSession')?.id || ''
+    if (id) {
+      setTimeout(() => {
+        // Try apt-get first (payload/proot), then pkg (Termux), then inform user
+        bridge.call('writeToTerminal', id,
+          'apt-get install -y git 2>/dev/null || pkg install -y git 2>/dev/null || echo "Instala git via: openclaw gateway (git viene incluido en el entorno)"\n'
+        )
+      }, 300)
+    }
   }
 
   if (loading) {
@@ -168,6 +178,11 @@ export function Dashboard() {
     ? (envInfo.node.version || t('env_detected'))
     : (bootstrapStatus?.installed ? t('env_detected') : t('env_not_detected'))
   const nodeActive = !!(envInfo.node?.detected || bootstrapStatus?.installed)
+
+  const npmVersion = envInfo.npm?.detected
+    ? (envInfo.npm.version || t('env_detected'))
+    : t('env_not_detected')
+  const npmActive = !!(envInfo.npm?.detected)
 
   const gitVersion = envInfo.git?.detected
     ? (envInfo.git.version || t('env_detected'))
@@ -226,13 +241,20 @@ export function Dashboard() {
 
       {/* Runtime — shows real versions */}
       <div className="section-title">{t('dash_runtime')}</div>
-      <div className="runtime-grid">
+      <div className="runtime-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
         <RuntimeItem
           icon="⬢"
           label="Node.js"
           version={nodeVersion}
           active={nodeActive}
           onClick={!nodeActive ? () => (window.location.hash = '/setup') : undefined}
+        />
+        <RuntimeItem
+          icon="📦"
+          label="npm"
+          version={npmVersion}
+          active={npmActive}
+          onClick={!npmActive ? () => (window.location.hash = '/setup') : undefined}
         />
         <RuntimeItem
           icon="⎇"

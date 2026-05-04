@@ -1,17 +1,17 @@
 # OpenClaw Android
 
-> Ejecuta OpenClaw directamente en tu dispositivo Android mediante un entorno Termux completo, con terminal nativa PTY, interfaz WebView React y actualizaciones OTA.
+> Ejecuta OpenClaw directamente en tu dispositivo Android con terminal nativa PTY, interfaz WebView React y actualizaciones OTA. Versión actual: **0.4.180-DEBUG**.
 
 ---
 
 ## ¿Qué es esto?
 
-APK autónoma (~5MB) que instala y ejecuta OpenClaw en Android sin necesidad de root. Incluye:
+APK autónoma que instala y ejecuta OpenClaw en Android sin necesidad de root. Incluye:
 
 - **Terminal PTY nativa** — sesiones múltiples con emulador completo
 - **Interfaz WebView React** — setup, dashboard y configuración
-- **Bootstrap Termux** — entorno Linux completo con apt, bash, glibc
-- **grun (glibc-runner)** — ejecutor obligatorio para Node.js en Android
+- **Tres modos de instalación** — payload offline, proot+Ubuntu, online curl
+- **GlibcRunner** — ejecutor obligatorio para Node.js en Android (via ld-linux-aarch64.so.1)
 - **OTA** — actualizaciones de UI sin reinstalar el APK
 
 ---
@@ -29,39 +29,48 @@ APK autónoma (~5MB) que instala y ejecuta OpenClaw en Android sin necesidad de 
 
 ---
 
-## Instalación manual validada
+## Modos de instalación
 
-La app replica exactamente este flujo de instalación manual en Termux:
+### Modo 1 — Payload offline (payload-final.tar.gz, 113MB)
+Asset principal bundleado en el APK. Contiene glibc, Node.js y OpenClaw listos para usar.
 
-```bash
-# 1. Configurar almacenamiento
-termux-setup-storage
-
-# 2. Instalar dependencias glibc
-pkg install glibc-runner
-
-# 3. Instalar OpenClaw
-npm install -g openclaw
-
-# 4. Ejecutar gateway (SIEMPRE con grun, nunca node directamente)
-grun openclaw gateway --host 0.0.0.0
+```
+payload/
+├── glibc/lib/              ← ld-linux-aarch64.so.1 + .so files
+├── lib/node/bin/node.real  ← Node.js ELF (120MB)
+├── lib/openclaw/           ← openclaw.mjs + node_modules/
+├── certs/cert.pem          ← CA certs
+└── patches/glibc-compat.js
 ```
 
-> ⚠️ **Crítico:** Node.js en Android requiere `grun` (glibc-runner). Llamar `node` directamente falla.
+### Modo 2 — proot + Ubuntu rootfs (online)
+Descarga proot y un rootfs Ubuntu mínimo. Instala Node.js y OpenClaw dentro del entorno Ubuntu.
+
+### Modo 3 — Online install (curl)
+```bash
+curl -sL myopenclawhub.com/install | bash
+```
+Detectado por: `prefix/bin/bash` + `ocaDir/installed.json` + `ocaDir/node/bin/node.real` + `prefix/glibc/lib/ld-linux-aarch64.so.1` + `prefix/lib/node_modules/openclaw/openclaw.mjs`
 
 ---
 
 ## Rutas del sistema
 
 ```
-/data/data/com.termux/files/
+filesDir/
 ├── home/
-│   ├── .openclaw-android/
-│   │   ├── bin/           ← binarios OpenClaw + grun
-│   │   ├── installed.json ← marcador de instalación completa
-│   │   └── post-setup.sh
-│   └── openclaw-start.sh  ← wrapper script (usa grun)
-└── usr/                   ← bootstrap Termux (bash, apt, etc.)
+│   ├── payload/                    ← payload extraído (modo offline)
+│   │   ├── glibc/lib/              ← ld-linux-aarch64.so.1
+│   │   ├── lib/node/bin/node.real  ← Node.js ELF
+│   │   ├── lib/openclaw/           ← openclaw.mjs
+│   │   └── certs/cert.pem
+│   └── .openclaw-android/
+│       ├── installed.json          ← marcador de instalación completa
+│       └── node/bin/node.real      ← (modo online install)
+└── usr/                            ← PREFIX (modo online install)
+    ├── bin/bash                    ← bash del online install
+    ├── glibc/lib/                  ← glibc del online install
+    └── lib/node_modules/openclaw/  ← openclaw del online install
 ```
 
 ---
@@ -69,7 +78,7 @@ grun openclaw gateway --host 0.0.0.0
 ## Arquitectura
 
 ```
-APK (~5MB)
+APK
 ├── Native:     TerminalView  — PTY via libtermux.so
 ├── WebView:    React SPA     — setup, dashboard, settings
 ├── JsBridge:   34 métodos    — WebView ↔ Kotlin (8 dominios)
@@ -77,17 +86,28 @@ APK (~5MB)
 └── OTA:        www.zip       — actualización atómica de UI
 ```
 
+### Tres modos de terminal (TerminalSessionManager)
+
+| Modo | Shell | Condición |
+|---|---|---|
+| proot | `openclaw-shell.sh` | proot instalado |
+| online install | `prefix/bin/bash` | online install detectado |
+| payload/legacy | fallback `/system/bin/sh` | ninguno de los anteriores |
+
+> ⚠️ **Regla crítica:** `LD_LIBRARY_PATH` con `glibc/lib` NUNCA debe estar en el entorno de shells Bionic (`/system/bin/sh`). Causa: `CANNOT LINK EXECUTABLE sh: cannot find libc.so from verneed[0]`. `InstallOverlayController` y `TerminalManager` eliminan esta variable antes de pasar el entorno a `/system/bin/sh`.
+
 ### Flujo de ejecución
 
 ```
 App inicia
   └─► requestStoragePermissions()
-        └─► termux-setup-storage (auto yes)
-              └─► Bootstrap Termux (si no instalado)
-                    └─► post-setup.sh
-                          └─► installed.json ✓
-                                └─► openclaw-start.sh
-                                      └─► grun openclaw gateway
+        └─► InstallerManager.install()
+              ├─► hasPayloadAsset()? → installOffline() (payload-final.tar.gz)
+              ├─► isOnlineInstallPresent()? → configureOnlineInstall()
+              └─► installViaProot() → proot + Ubuntu rootfs
+                    └─► installed.json ✓
+                          └─► TerminalSessionManager (modo correcto)
+                                └─► GlibcRunner → ld-linux-aarch64.so.1 → node → openclaw
 ```
 
 ---
@@ -98,46 +118,68 @@ App inicia
 android/
 ├── app/src/main/
 │   ├── java/com/openclaw/android/
-│   │   ├── MainActivity.kt           # Contenedor WebView + TerminalView + permisos
-│   │   ├── OpenClawService.kt        # Foreground Service (START_STICKY)
-│   │   ├── InstallerManager.kt       # Orquestador de instalación (online/offline)
-│   │   ├── PayloadExtractor.kt       # Extracción streaming tar.gz (sin saturar RAM)
-│   │   ├── PayloadManager.kt         # Fachada de compatibilidad sobre InstallerManager
-│   │   ├── OpenClawManager.kt        # Instalación online vía npm
-│   │   ├── RootfsManager.kt          # Instalación desde rootfs pre-construido
-│   │   ├── InstallValidator.kt       # Verificación post-instalación
-│   │   ├── JsBridge.kt               # 34 métodos @JavascriptInterface
-│   │   ├── EventBridge.kt            # Eventos Kotlin → WebView
-│   │   ├── CommandRunner.kt          # bash -l -c + grun + rutas Termux + wrapper
-│   │   ├── EnvironmentBuilder.kt     # Variables de entorno Termux reales
-│   │   ├── UrlResolver.kt            # URLs BuildConfig + config.json remoto
-│   │   ├── TerminalManager.kt        # Gestión PTY terminal
-│   │   ├── TerminalSessionManager.kt # Gestión multi-sesión terminal
-│   │   ├── BootReceiver.kt           # Auto-arranque al iniciar el dispositivo
-│   │   └── AppLogger.kt              # Logging centralizado
+│   │   ├── MainActivity.kt               # Contenedor WebView + TerminalView + permisos
+│   │   ├── OpenClawService.kt            # Foreground Service (START_STICKY)
+│   │   ├── InstallerManager.kt           # Orquestador: offline/online/proot, isOnlineInstallPresent()
+│   │   ├── PayloadExtractor.kt           # Extracción streaming tar.gz (sin saturar RAM)
+│   │   ├── PayloadManager.kt             # Fachada de compatibilidad sobre InstallerManager
+│   │   ├── InstallValidator.kt           # Verifica lib/node/bin/node.real, lib/openclaw/, certs/cert.pem
+│   │   ├── JsBridge.kt                   # 34 métodos @JavascriptInterface
+│   │   ├── EventBridge.kt                # Eventos Kotlin → WebView
+│   │   ├── CommandRunner.kt              # bash -l -c + rutas + wrapper
+│   │   ├── EnvironmentBuilder.kt         # Variables de entorno (shim sobre EnvironmentResolver)
+│   │   ├── UrlResolver.kt                # URLs BuildConfig + config.json remoto
+│   │   ├── TerminalManager.kt            # Gestión PTY (LD_LIBRARY_PATH solo prefix/lib)
+│   │   ├── TerminalSessionManager.kt     # 3 modos: proot / online install / payload-legacy
+│   │   ├── BootReceiver.kt               # Auto-arranque al iniciar el dispositivo
+│   │   ├── AppLogger.kt                  # Logging centralizado
+│   │   ├── core/
+│   │   │   ├── env/
+│   │   │   │   ├── EnvironmentConfig.kt      # Snapshot inmutable de rutas
+│   │   │   │   └── EnvironmentResolver.kt    # Resuelve rutas + detecta online install + resolveGlibcLib()
+│   │   │   ├── process/
+│   │   │   │   └── GlibcRunner.kt            # Ejecuta ELF via ld-linux-aarch64.so.1
+│   │   │   └── install/
+│   │   │       ├── InstallProgress.kt        # Interfaz de progreso
+│   │   │       ├── ScriptWriter.kt           # Genera scripts de lanzamiento
+│   │   │       ├── DnsAndSslSetup.kt         # Configura DNS y SSL (certs/cert.pem primero)
+│   │   │       └── VersionReader.kt          # Lee versiones sin shell (evita CANNOT LINK EXECUTABLE)
+│   │   ├── bridge/
+│   │   │   ├── TerminalBridge.kt             # show/hide, sesiones, write
+│   │   │   ├── SetupBridge.kt                # estado instalación, triggers
+│   │   │   ├── PlatformBridge.kt             # plataformas
+│   │   │   ├── ToolsBridge.kt                # herramientas (usa VersionReader)
+│   │   │   ├── SystemBridge.kt               # info app, batería, almacenamiento, OTA
+│   │   │   └── JsBridgeFacade.kt             # compone todos los bridges
+│   │   └── ui/
+│   │       ├── install/
+│   │       │   └── InstallOverlayController.kt  # Elimina LD_LIBRARY_PATH/LD_PRELOAD para /system/bin/sh
+│   │       └── permissions/
+│   │           └── PermissionsController.kt
 │   ├── assets/
-│   │   ├── www/                      # UI React compilada (fallback)
-│   │   ├── post-setup.sh             # Script de configuración post-extracción
-│   │   ├── run-openclaw.sh           # Lanzador del gateway OpenClaw
-│   │   ├── env-init.sh               # Inicialización de variables de entorno
-│   │   └── glibc-compat.js           # Shim Node.js para compatibilidad glibc
-│   └── res/                          # Recursos Android
+│   │   ├── www/                          # UI React compilada (fallback)
+│   │   ├── payload-final.tar.gz          # Asset principal (113MB) — payload offline
+│   │   ├── oa-backup.tar.gz              # Asset de respaldo (145MB)
+│   │   ├── run-openclaw.sh               # Lanzador del gateway OpenClaw
+│   │   ├── env-init.sh                   # Inicialización de variables de entorno
+│   │   └── glibc-compat.js               # Shim Node.js para compatibilidad glibc
+│   └── res/                              # Recursos Android
 ├── app/src/test/java/com/openclaw/android/
-│   ├── AppLoggerTest.kt              # 7 tests — delegación de Log
-│   ├── CommandRunnerTest.kt          # 22 tests — runSync, constantes, env
-│   ├── EnvironmentBuilderTest.kt     # 27 tests — variables de entorno
-│   ├── BootstrapManagerTest.kt       # 14 tests — detección, wrapper, ELF
-│   └── VersionCompareTest.kt         # 8 tests — lógica semver OTA
-├── www/                              # React SPA (UI producción)
+│   ├── AppLoggerTest.kt                  # 7 tests — delegación de Log
+│   ├── CommandRunnerTest.kt              # 22 tests — runSync, constantes, env
+│   ├── EnvironmentBuilderTest.kt         # 27 tests — variables de entorno
+│   ├── BootstrapManagerTest.kt           # 14 tests — detección, wrapper, ELF
+│   └── VersionCompareTest.kt             # 8 tests — lógica semver OTA
+├── www/                                  # React SPA (UI producción)
 │   └── src/
-│       ├── lib/bridge.ts             # Wrapper tipado JsBridge (34 métodos)
-│       ├── lib/useNativeEvent.ts     # Hook EventBridge para React
-│       ├── lib/router.tsx            # Router hash-based (file:// compatible)
-│       ├── components/               # Componentes reutilizables (Button, Card)
-│       ├── i18n/                     # Internacionalización (EN, ES)
-│       └── screens/                  # Pantallas: Dashboard, Setup, Settings*
-├── terminal-emulator/                # Emulador PTY (fork ReTerminal)
-└── terminal-view/                    # Renderizado terminal (fork ReTerminal)
+│       ├── lib/bridge.ts                 # Wrapper tipado JsBridge (34 métodos)
+│       ├── lib/useNativeEvent.ts         # Hook EventBridge para React
+│       ├── lib/router.tsx                # Router hash-based (file:// compatible)
+│       ├── components/                   # Componentes reutilizables
+│       ├── i18n/                         # Internacionalización (EN, ES) — incluye git_not_available, storage_payload, etc.
+│       └── screens/                      # Dashboard (versiones reales via getEnvironmentInfo), Settings, Setup
+├── terminal-emulator/                    # Emulador PTY (fork ReTerminal)
+└── terminal-view/                        # Renderizado terminal (fork ReTerminal)
 ```
 
 ---

@@ -152,11 +152,19 @@ class ToolsBridge(
 
         AppLogger.d(TAG, "getEnvironmentInfo: node=$nodeVersion git=$gitVersion openclaw=$ocVersion proot=$prootInstalled")
 
+        // npm version — read from package.json (no process spawn)
+        val npmVersion = versions.npm
+
         return gson.toJson(mapOf(
             "node" to mapOf(
                 "version" to nodeVersion.ifEmpty { null },
                 "detected" to nodeVersion.isNotEmpty(),
                 "path" to "${config.ocaDir.absolutePath}/bin/node",
+            ),
+            "npm" to mapOf(
+                "version" to npmVersion.ifEmpty { null },
+                "detected" to (npmVersion != "unknown" && npmVersion.isNotEmpty()),
+                "path" to "${config.ocaDir.absolutePath}/bin/npm",
             ),
             "git" to mapOf(
                 "version" to gitVersion.ifEmpty { null },
@@ -179,9 +187,15 @@ class ToolsBridge(
             val env = CommandRunner.buildTermuxEnv(activity)
             val config = EnvironmentResolver.resolve(activity.filesDir)
             val prefix = config.prefix.absolutePath
-            val aptGet = "DEBIAN_FRONTEND=noninteractive $prefix/bin/apt-get" +
-                " -y -o Acquire::AllowInsecureRepositories=true" +
-                " -o APT::Get::AllowUnauthenticated=true"
+
+            // Determine install method: npm for AI tools, apt-get for system tools
+            // apt-get path: try payload prefix first, then system
+            val aptGet = listOf(
+                "$prefix/bin/apt-get",
+                "/usr/bin/apt-get",
+            ).firstOrNull { java.io.File(it).exists() }?.let { apt ->
+                "$apt -y -o Acquire::AllowInsecureRepositories=true -o APT::Get::AllowUnauthenticated=true"
+            } ?: "apt-get -y"
 
             val cmd = when (id) {
                 "tmux" -> "$aptGet install tmux"
@@ -207,7 +221,7 @@ class ToolsBridge(
             eventBridge.emit("install_progress", mapOf(
                 "target" to id,
                 "progress" to if (success) PROGRESS_DONE else PROGRESS_START,
-                "message" to if (success) "$id installed" else result.stderr,
+                "message" to if (success) "$id installed" else (result.stderr.take(200).ifEmpty { "Install failed (exit ${result.exitCode})" }),
             ))
         }
     }
@@ -232,5 +246,38 @@ class ToolsBridge(
             CommandRunner.runSync(cmd, env, config.homeDir)
             eventBridge.emit("install_progress", mapOf("target" to id, "progress" to PROGRESS_DONE, "message" to "$id uninstalled"))
         }
+    }
+
+    @JavascriptInterface
+    fun isToolInstalled(id: String): String {
+        val config = EnvironmentResolver.resolve(activity.filesDir)
+        val prefixesToCheck = linkedSetOf(config.prefix.absolutePath, CommandRunner.TERMUX_PREFIX)
+        
+        // System tools
+        val pkgChecks: Map<String, String> = mapOf(
+            "tmux" to "tmux", "ttyd" to "ttyd", "dufs" to "dufs",
+            "openssh-server" to "sshd", "android-tools" to "adb", "code-server" to "code-server",
+        )
+        
+        val systemBin = pkgChecks.get(id)
+        if (systemBin != null) {
+            if (prefixesToCheck.any { p: String -> java.io.File("$p/bin/$systemBin").exists() }) return "true"
+        }
+        
+        if (id == "chromium") {
+            if (prefixesToCheck.any { p: String -> java.io.File("$p/bin/chromium").exists() || java.io.File("$p/bin/chromium-browser").exists() }) return "true"
+        }
+
+        // NPM tools
+        val npmBinChecks: Map<String, String> = mapOf(
+            "claude-code" to "claude", "gemini-cli" to "gemini",
+            "codex-cli" to "codex", "opencode" to "opencode",
+        )
+        val npmBin = npmBinChecks.get(id)
+        if (npmBin != null) {
+            if (java.io.File(config.ocaDir, "bin/$npmBin").exists()) return "true"
+        }
+        
+        return "false"
     }
 }

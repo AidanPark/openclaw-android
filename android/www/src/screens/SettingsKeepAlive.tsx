@@ -26,8 +26,10 @@ export function SettingsKeepAlive() {
     setRequesting(true)
     bridge.call('requestBatteryOptimizationExclusion')
     setTimeout(() => {
-      const status = bridge.callJson<{ isIgnoring: boolean }>('getBatteryOptimizationStatus')
-      if (status) setBatteryExcluded(status.isIgnoring)
+      try {
+        const status = bridge.callJson<{ isIgnoring: boolean }>('getBatteryOptimizationStatus')
+        if (status) setBatteryExcluded(status.isIgnoring)
+      } catch { /* ignore */ }
       setRequesting(false)
     }, 3000)
   }

@@ -12,6 +12,7 @@ import { SettingsAbout } from './screens/SettingsAbout'
 import { SettingsUpdates } from './screens/SettingsUpdates'
 import { SettingsPlatforms } from './screens/SettingsPlatforms'
 import { SettingsTools } from './screens/SettingsTools'
+import { SettingsAdvanced } from './screens/SettingsAdvanced'
 
 type Tab = 'terminal' | 'dashboard' | 'settings'
 
@@ -37,8 +38,8 @@ export function App() {
       setSetupDone(true)
     }
 
-    const updates = bridge.callJson<unknown[]>('checkForUpdates')
-    if (updates && updates.length > 0) setHasUpdates(true)
+    const updates = bridge.callJson<{ updateAvailable?: boolean }>('checkForUpdates')
+    if (updates?.updateAvailable) setHasUpdates(true)
   }, [])
 
   const onUpdateAvailable = useCallback(() => setHasUpdates(true), [])
@@ -133,5 +134,6 @@ function SettingsRouter() {
   if (path === '/settings/updates') return <SettingsUpdates />
   if (path === '/settings/platforms') return <SettingsPlatforms />
   if (path === '/settings/tools') return <SettingsTools />
+  if (path === '/settings/advanced') return <SettingsAdvanced />
   return <Settings />
 }

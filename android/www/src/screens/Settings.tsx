@@ -16,6 +16,7 @@ function getMenu(): MenuItem[] {
     { icon: '🔄', label: t('settings_updates'), desc: t('settings_updates_desc'), route: '/settings/updates' },
     { icon: '⚡', label: t('settings_keep_alive'), desc: t('settings_keep_alive_desc'), route: '/settings/keep-alive' },
     { icon: '💾', label: t('settings_storage'), desc: t('settings_storage_desc'), route: '/settings/storage' },
+    { icon: '🛠', label: t('settings_advanced'), desc: t('settings_advanced_desc'), route: '/settings/advanced' },
     { icon: 'ℹ️', label: t('settings_about'), desc: t('settings_about_desc'), route: '/settings/about' },
   ]
 }

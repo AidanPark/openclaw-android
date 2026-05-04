@@ -65,8 +65,9 @@ object VersionReader {
 
     fun readNpmVersion(config: EnvironmentConfig): String {
         val candidates = listOf(
-            File(config.payloadDir, "glibc/lib/node_modules/npm/package.json"),
-            File(config.prefix, "lib/node_modules/npm/package.json"),
+            File(config.payloadDir, "lib/node/lib/node_modules/npm/package.json"),  // payload-final.tar.gz
+            File(config.payloadDir, "glibc/lib/node_modules/npm/package.json"),     // legacy
+            File(config.prefix, "lib/node_modules/npm/package.json"),               // online install
         )
         for (pkg in candidates) {
             if (pkg.exists()) {

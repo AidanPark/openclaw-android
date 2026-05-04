@@ -103,7 +103,16 @@ if [ -f "$OC_MJS" ]; then
     [ -L "$OC_BIN" ] && rm -f "$OC_BIN"
     printf '#!/system/bin/sh\nexec "%s/node" "%s" "$@"\n' "${OCA_BIN}" "${OC_MJS}" > "$OC_BIN"
     chmod +x "$OC_BIN"
-    echo "[env-init]   openclaw wrapper written"
+    echo "[env-init]   openclaw wrapper written: $OC_BIN"
+
+    # IMPORTANT: Also create wrapper in OCA_BIN (first in PATH) to intercept
+    # any ELF openclaw binary in payload/bin/ before the kernel tries to run it.
+    # Without this, Android fails with "invalid ELF header" because it lacks
+    # /lib/ld-linux-aarch64.so.1.
+    OCA_OC_BIN="${OCA_BIN}/openclaw"
+    printf '#!/system/bin/sh\n# OpenClaw glibc-wrapped launcher — auto-generated\nunset LD_PRELOAD\nexec "%s/node" "%s" "$@"\n' "${OCA_BIN}" "${OC_MJS}" > "$OCA_OC_BIN"
+    chmod +x "$OCA_OC_BIN"
+    echo "[env-init]   openclaw wrapper in OCA_BIN written: $OCA_OC_BIN"
 fi
 
 # ── 4. Patch npm global CLI entry points ──────────────────────────────────────

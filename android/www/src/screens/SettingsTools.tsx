@@ -61,6 +61,7 @@ export function SettingsTools() {
     setInstalling(id)
     setProgress(0)
     setProgressMsg(t('tools_installing', { name: id }))
+    // installTool runs in the Kotlin layer which handles apt-get/npm routing
     bridge.call('installTool', id)
   }
 
@@ -70,7 +71,7 @@ export function SettingsTools() {
     setTimeout(() => {
       setInstalled(prev => { const n = new Set(prev); n.delete(id); return n })
       setUninstalling(null)
-    }, 1000)
+    }, 1500)
   }
 
   const tools = getTools()

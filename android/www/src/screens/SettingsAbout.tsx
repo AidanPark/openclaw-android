@@ -41,8 +41,10 @@ export function SettingsAbout() {
   function checkApkUpdate() {
     setCheckingApk(true)
     setTimeout(() => {
-      const apkInfo = bridge.callJson<{ updateAvailable?: boolean }>('getApkUpdateInfo')
-      if (apkInfo?.updateAvailable) setApkUpdateAvailable(true)
+      try {
+        const apkInfo = bridge.callJson<{ updateAvailable?: boolean; currentVersion?: string }>('getApkUpdateInfo')
+        if (apkInfo?.updateAvailable) setApkUpdateAvailable(true)
+      } catch { /* ignore */ }
       setCheckingApk(false)
     }, 0)
   }

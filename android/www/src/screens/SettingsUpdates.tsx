@@ -1,38 +1,50 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useRoute } from '../lib/router'
 import { bridge } from '../lib/bridge'
-import { useNativeEvent } from '../lib/useNativeEvent'
 import { t } from '../i18n'
 
-interface UpdateItem { component: string; currentVersion: string; newVersion: string }
+interface UpdateInfo {
+  currentVersion?: string
+  updateUrl?: string
+  updateAvailable?: boolean
+}
 
 export function SettingsUpdates() {
   const { navigate } = useRoute()
-  const [updates, setUpdates] = useState<UpdateItem[]>([])
-  const [updating, setUpdating] = useState<string | null>(null)
-  const [progress, setProgress] = useState(0)
+  const [info, setInfo] = useState<UpdateInfo | null>(null)
   const [checking, setChecking] = useState(true)
+  const [updating, setUpdating] = useState(false)
 
   useEffect(() => {
-    const data = bridge.callJson<UpdateItem[]>('checkForUpdates')
-    setUpdates(data || [])
+    try {
+      // checkForUpdates returns {currentVersion, updateUrl} — NOT an array
+      const data = bridge.callJson<UpdateInfo>('checkForUpdates')
+      setInfo(data || {})
+    } catch {
+      setInfo({})
+    }
     setChecking(false)
   }, [])
 
-  const onProgress = useCallback((data: unknown) => {
-    const d = data as { target?: string; progress?: number }
-    if (d.progress !== undefined) setProgress(d.progress)
-    if (d.progress !== undefined && d.progress >= 1) {
-      setUpdating(null)
-      setUpdates(prev => prev.filter(u => u.component !== d.target))
-    }
-  }, [])
-  useNativeEvent('install_progress', onProgress)
+  function handleOpenReleasePage() {
+    const url = info?.updateUrl || 'https://github.com/AidanPark/openclaw-android/releases/latest'
+    bridge.call('openUrl', url)
+  }
 
-  function handleApply(component: string) {
-    setUpdating(component)
-    setProgress(0)
-    bridge.call('applyUpdate', component)
+  function handleUpdateOpenClaw() {
+    setUpdating(true)
+    bridge.call('showTerminal')
+    const sessions = bridge.callJson<Array<{ id: string; active: boolean }>>('getTerminalSessions')
+    const active = sessions?.find(s => s.active)
+    const id = active?.id || bridge.callJson<{ id: string }>('createSession')?.id || ''
+    if (id) {
+      setTimeout(() => {
+        bridge.call('writeToTerminal', id, 'openclaw update\n')
+        setUpdating(false)
+      }, 300)
+    } else {
+      setUpdating(false)
+    }
   }
 
   return (
@@ -42,21 +54,6 @@ export function SettingsUpdates() {
         <div className="page-title">{t('updates_title')}</div>
       </div>
 
-      {/* Progreso de actualización */}
-      {updating && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            <div className="spinner" />
-            <div style={{ fontSize: 14, fontWeight: 600 }}>
-              {t('updates_updating', { name: updating })}
-            </div>
-          </div>
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
-          </div>
-        </div>
-      )}
-
       {checking && (
         <div className="empty-state">
           <div className="spinner" />
@@ -64,34 +61,55 @@ export function SettingsUpdates() {
         </div>
       )}
 
-      {!checking && updates.length === 0 && (
-        <div className="empty-state">
-          <div className="empty-state-icon">✓</div>
-          <div className="empty-state-text">{t('updates_up_to_date')}</div>
-        </div>
-      )}
+      {!checking && (
+        <>
+          {/* APK version */}
+          <div className="section-title">APK</div>
+          <div className="card">
+            <div className="info-row">
+              <span className="label">{t('about_version')}</span>
+              <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                {info?.currentVersion || '—'}
+              </span>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={handleOpenReleasePage}
+              >
+                ↗ {t('about_check_apk')}
+              </button>
+            </div>
+          </div>
 
-      {updates.map(u => (
-        <div key={u.component} className="card">
-          <div className="card-row">
-            <div className="card-content">
-              <div className="card-label">{u.component}</div>
-              <div className="card-desc">
-                <span style={{ fontFamily: 'monospace' }}>{u.currentVersion}</span>
-                {' → '}
-                <span style={{ fontFamily: 'monospace', color: 'var(--success)' }}>{u.newVersion}</span>
-              </div>
+          {/* OpenClaw update */}
+          <div className="section-title">OpenClaw</div>
+          <div className="card">
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.6 }}>
+              Para actualizar OpenClaw ejecuta <code style={{ fontFamily: 'monospace', background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: 4 }}>openclaw update</code> en el terminal.
             </div>
             <button
-              className="btn btn-primary btn-sm"
-              onClick={() => handleApply(u.component)}
-              disabled={updating !== null}
+              className="btn btn-primary"
+              style={{ width: '100%' }}
+              onClick={handleUpdateOpenClaw}
+              disabled={updating}
             >
-              {updating === u.component ? '...' : t('updates_update')}
+              {updating
+                ? <><span className="spinner" style={{ width: 16, height: 16, marginRight: 8 }} />Abriendo terminal...</>
+                : '▶ Actualizar OpenClaw en terminal'}
             </button>
           </div>
-        </div>
-      ))}
+
+          {/* Estado */}
+          <div className="section-title">Estado</div>
+          <div className="card">
+            <div className="empty-state" style={{ padding: '20px 0' }}>
+              <div style={{ fontSize: 28 }}>✓</div>
+              <div className="empty-state-text">{t('updates_up_to_date')}</div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

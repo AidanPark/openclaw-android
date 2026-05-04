@@ -196,4 +196,28 @@ export const es = {
   tools_cat_ai: 'Herramientas de IA',
   tools_cat_network: 'Red y acceso',
   tools_cat_system: 'Sistema',
+
+  // Ajustes - Avanzado
+  settings_advanced: 'Avanzado',
+  settings_advanced_desc: 'Versiones, permisos, diagnósticos',
+
+  // Setup - modo online hint
+  setup_mode_online_hint: 'Requiere conexión a internet. Instala Node.js + OpenClaw via script oficial.',
+
+  // Pantalla Avanzado
+  advanced_title: 'Avanzado',
+  advanced_versions: 'Versiones instaladas',
+  advanced_wrappers: 'Wrappers y binarios',
+  advanced_paths: 'Rutas del sistema',
+  advanced_permissions: 'Permisos de scripts',
+  advanced_permissions_desc: 'Corrige los permisos de ejecución de todos los scripts .sh, wrappers node/npm/openclaw y binarios en el sandbox de la app. Necesario si ves errores "Permission denied".',
+  advanced_fix_permissions: '🔧 Corregir permisos',
+  advanced_fixing_perms: 'Corrigiendo...',
+  advanced_perms_fixed: '{n} archivos corregidos',
+  advanced_online_install: 'Instalación online',
+  advanced_online_install_desc: 'Instala OpenClaw desde internet usando el script oficial. Se ejecuta en el terminal embebido.',
+  advanced_run_install: 'Ejecutar en terminal',
+  advanced_diagnostics: 'Diagnósticos',
+  advanced_source: 'Fuente',
+  advanced_installed_at: 'Instalado el',
 }
