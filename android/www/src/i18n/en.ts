@@ -193,6 +193,7 @@ export const en = {
   tools_installed: 'Installed ✓',
   tools_install: 'Install',
   tools_uninstall: 'Uninstall',
+  tools_confirm_uninstall: 'Uninstall {name}?',
   tools_cat_terminal: 'Terminal Tools',
   tools_cat_ai: 'AI Tools',
   tools_cat_network: 'Network & Access',

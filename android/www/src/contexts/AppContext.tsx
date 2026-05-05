@@ -11,7 +11,7 @@
  * Automatically refreshes on native events from Kotlin bridge.
  */
 
-import React, {
+import {
     createContext,
     useContext,
     useState,
@@ -143,7 +143,7 @@ export function AppProvider({ children }: Props) {
 
     // ── Refresh method ───────────────────────────────────────────────────
 
-    const refresh = useCallback(async (showSpinner = false) => {
+    const refresh = useCallback(async (_showSpinner = false) => {
         if (!bridge.isAvailable()) {
             setState(s => ({ ...s, loading: false }))
             return

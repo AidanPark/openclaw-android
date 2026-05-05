@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Route, useRoute } from './lib/router'
 import { bridge } from './lib/bridge'
 import { useNativeEvent } from './lib/useNativeEvent'

@@ -144,8 +144,6 @@ export function Dashboard() {
   useNativeEvent('setup_progress', onSetupProgress)
 
   function runInTerminal(cmd: string) {
-    // Show toast feedback
-    showToast(t('toast_opening_terminal'))
     bridge.call('showTerminal')
     setTimeout(() => bridge.call('writeToTerminal', activeSessionId, cmd + '\n'), 150)
   }
@@ -457,17 +455,8 @@ function QuickAction({ icon, label, onClick }: { icon: string; label: string; on
   )
 }
 
-// Toast system
-const [toasts, setToasts] = useState<Array<{ id: number; message: string }>>([])
-const toastIdRef = useRef(0)
-
-const showToast = useCallback((message: string) => {
-  const id = ++toastIdRef.current
-  setToasts(prev => [...prev, { id, message }])
-  setTimeout(() => {
-    setToasts(prev => prev.filter(toast => toast.id !== id))
-  }, 3000)
-}, [])
+// Toast system — removed (was declared outside component scope)
+// runInTerminal now opens terminal directly without toast
 
 function CommandRow({
   icon, label, cmd, color, borderTop, onClick,

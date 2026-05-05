@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback } from 'react'
-import { bridge, type OpenClawBridge } from '../lib/bridge'
+import { bridge } from '../lib/bridge'
 
 interface BatchQueryResult<T = unknown> {
     method: string

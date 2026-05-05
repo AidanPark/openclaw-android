@@ -192,6 +192,7 @@ export const es = {
   tools_installed: 'Instalado ✓',
   tools_install: 'Instalar',
   tools_uninstall: 'Desinstalar',
+  tools_confirm_uninstall: '¿Desinstalar {name}?',
   tools_cat_terminal: 'Herramientas de terminal',
   tools_cat_ai: 'Herramientas de IA',
   tools_cat_network: 'Red y acceso',

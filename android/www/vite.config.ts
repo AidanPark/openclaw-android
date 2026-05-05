@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
@@ -12,10 +12,19 @@ export default defineConfig({
     minify: 'esbuild',
     rollupOptions: {
       output: {
-        // Keep a single chunk — WebView loads from file://, no HTTP/2 multiplexing benefit
-        // Splitting would require multiple file:// requests with no performance gain
         manualChunks: undefined,
       },
+    },
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/test/**', 'src/vite-env.d.ts'],
     },
   },
 })
