@@ -3,9 +3,9 @@
 # Configura el entorno y ejecuta bash con el entorno correcto
 
 # Ruta base de la aplicación
-APP_BASE="/data/data/com.openclaw.android/files"
-PREFIX="$APP_BASE/usr"
-HOME_DIR="$APP_BASE/home"
+APP_BASE="${APP_FILES_DIR:-/data/data/com.openclaw.android/files}"
+PREFIX="${PREFIX:-$APP_BASE/usr}"
+HOME_DIR="${HOME:-$APP_BASE/home}"
 
 # Verificar que el bootstrap esté instalado
 if [ ! -x "$PREFIX/bin/bash" ]; then

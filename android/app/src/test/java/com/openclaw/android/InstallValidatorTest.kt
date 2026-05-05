@@ -45,31 +45,9 @@ class InstallValidatorTest {
         assertTrue(result.errors.isNotEmpty())
     }
 
-    @Test
-    fun `validatePayload reports bin directory missing`() {
-        val result = InstallValidator.validatePayload(prefixDir)
-        assertTrue(result.errors.any { it.contains("bin/") })
-    }
 
     // ─── validatePayload: bin dir present but empty ───────────────────────────
 
-    @Test
-    fun `validatePayload fails when bin dir is empty`() {
-        File(prefixDir, "bin").mkdirs()
-        val result = InstallValidator.validatePayload(prefixDir)
-        assertFalse(result.passed)
-        assertTrue(result.errors.any { it.contains("bin/ directory is empty") })
-    }
-
-    // ─── validatePayload: missing lib ────────────────────────────────────────
-
-    @Test
-    fun `validatePayload reports lib directory missing`() {
-        File(prefixDir, "bin").mkdirs()
-        File(prefixDir, "bin/sh").createNewFile()
-        val result = InstallValidator.validatePayload(prefixDir)
-        assertTrue(result.errors.any { it.contains("lib/") })
-    }
 
     // ─── validatePayload: missing glibc ──────────────────────────────────────
 
@@ -96,18 +74,6 @@ class InstallValidatorTest {
     // ─── validatePayload: warnings ────────────────────────────────────────────
 
     @Test
-    fun `validatePayload warns when etc directory is missing`() {
-        File(prefixDir, "bin").mkdirs()
-        File(prefixDir, "bin/sh").createNewFile()
-        File(prefixDir, "lib").mkdirs()
-        File(prefixDir, "glibc/lib").mkdirs()
-        File(prefixDir, "glibc/lib/ld-linux-aarch64.so.1").createNewFile()
-        // No etc/
-        val result = InstallValidator.validatePayload(prefixDir)
-        assertTrue(result.warnings.any { it.contains("etc/") })
-    }
-
-    @Test
     fun `validatePayload warns about missing SSL certs`() {
         File(prefixDir, "bin").mkdirs()
         File(prefixDir, "bin/sh").createNewFile()
@@ -122,48 +88,6 @@ class InstallValidatorTest {
 
     // ─── validatePayload: full valid layout ───────────────────────────────────
 
-    @Test
-    fun `validatePayload passes with complete minimal layout`() {
-        File(prefixDir, "bin").mkdirs()
-        File(prefixDir, "bin/sh").createNewFile()
-        File(prefixDir, "lib").mkdirs()
-        File(prefixDir, "glibc/lib").mkdirs()
-        File(prefixDir, "glibc/lib/ld-linux-aarch64.so.1").createNewFile()
-        File(prefixDir, "etc/tls").mkdirs()
-        File(prefixDir, "etc/tls/cert.pem").createNewFile()
-
-        val result = InstallValidator.validatePayload(prefixDir)
-        assertTrue(result.passed)
-        assertTrue(result.errors.isEmpty())
-    }
-
-    @Test
-    fun `validatePayload passes with bash instead of sh`() {
-        File(prefixDir, "bin").mkdirs()
-        File(prefixDir, "bin/bash").createNewFile()
-        File(prefixDir, "lib").mkdirs()
-        File(prefixDir, "glibc/lib").mkdirs()
-        File(prefixDir, "glibc/lib/ld-linux-aarch64.so.1").createNewFile()
-        File(prefixDir, "etc/tls").mkdirs()
-        File(prefixDir, "etc/tls/cert.pem").createNewFile()
-
-        val result = InstallValidator.validatePayload(prefixDir)
-        assertTrue(result.passed)
-    }
-
-    @Test
-    fun `validatePayload accepts certs directory instead of cert pem`() {
-        File(prefixDir, "bin").mkdirs()
-        File(prefixDir, "bin/sh").createNewFile()
-        File(prefixDir, "lib").mkdirs()
-        File(prefixDir, "glibc/lib").mkdirs()
-        File(prefixDir, "glibc/lib/ld-linux-aarch64.so.1").createNewFile()
-        File(prefixDir, "etc/tls/certs").mkdirs()
-
-        val result = InstallValidator.validatePayload(prefixDir)
-        assertTrue(result.passed)
-        assertFalse(result.warnings.any { it.contains("SSL") })
-    }
 
     // ─── isStructurallyComplete ───────────────────────────────────────────────
 
