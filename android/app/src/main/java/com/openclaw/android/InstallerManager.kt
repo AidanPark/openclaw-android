@@ -38,6 +38,7 @@ class InstallerManager(private val context: Context) {
     fun isReady(): Boolean = stateChecker.isReady()
     fun isOpenClawInstalled(): Boolean = stateChecker.isOpenClawInstalled()
     fun getStatus(): String = stateChecker.getStatus()
+    fun getDetailedStatus(): InstallationOrchestrator.InstallationStatus = orchestrator.getStatus()
     fun hasPayloadAsset(): Boolean = assetResolver.hasPayloadAsset()
 
     suspend fun install(mode: String, customUri: Uri?, listener: ProgressListener) {

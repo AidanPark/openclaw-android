@@ -9,31 +9,22 @@ import com.openclaw.android.InstallerManager
 import com.openclaw.android.databinding.ActivityMainBinding
 
 /**
- * Maneja el cambio entre TerminalView y WebView.
- *
- * Responsabilidad única: mostrar/ocultar las vistas principales y
- * configurar el teclado virtual apropiadamente.
+ * ActivityViewSwitcher — handles switching between TerminalView and WebView.
  */
 internal class ActivityViewSwitcher(
     private val activity: AppCompatActivity,
     private val binding: ActivityMainBinding,
     private val installerManager: InstallerManager,
 ) {
-
     private val TAG = "ActivityViewSwitcher"
     private val KEYBOARD_SHOW_DELAY_MS = 200L
 
-    /**
-     * Muestra el terminal y oculta el WebView.
-     * Solicita el teclado virtual después de un breve retraso.
-     */
     fun showTerminal() {
         activity.runOnUiThread {
             binding.installOverlay.visibility = View.GONE
             binding.webView.visibility = View.GONE
-            binding.terminalContainer.isVisible = true
+            binding.terminalContainer.visibility = View.VISIBLE
             binding.terminalView.requestFocus()
-            // La actualización de tabs se delega al caller
             binding.terminalView.postDelayed({
                 WindowInsetsControllerCompat(activity.window, activity.window.decorView)
                     .show(WindowInsetsCompat.Type.ime())
@@ -41,10 +32,6 @@ internal class ActivityViewSwitcher(
         }
     }
 
-    /**
-     * Muestra el WebView y oculta el terminal.
-     * Carga la URL apropiada (assets o directorio instalado).
-     */
     fun showWebView() {
         activity.runOnUiThread {
             setupWebViewIfNeeded()
@@ -59,26 +46,17 @@ internal class ActivityViewSwitcher(
                 binding.webView.loadUrl(url)
             }
             binding.installOverlay.visibility = View.GONE
-            binding.terminalContainer.isVisible = false
-            binding.webView.isVisible = true
+            binding.terminalContainer.visibility = View.GONE
+            binding.webView.visibility = View.VISIBLE
         }
     }
 
-    /**
-     * Recarga el WebView.
-     */
     fun reloadWebView() {
-        binding.webView.reload()
+        activity.runOnUiThread { binding.webView.reload() }
     }
 
-    /**
-     * Configura el WebView si no está ya configurado.
-     * Se llama internamente antes de mostrar el WebView.
-     */
     private fun setupWebViewIfNeeded() {
         if (binding.webView.settings.javaScriptEnabled) return
-
-        // Configuración básica del WebView
         binding.webView.apply {
             setBackgroundColor(android.graphics.Color.parseColor("#0d1117"))
             clearCache(true)

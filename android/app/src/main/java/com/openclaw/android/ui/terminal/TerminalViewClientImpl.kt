@@ -2,6 +2,7 @@ package com.openclaw.android.ui.terminal
 
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.View
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -11,10 +12,10 @@ import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalViewClient
 
 /**
- * Implementación de TerminalViewClient para OpenClaw.
+ * TerminalViewClientImpl — handles terminal view events for OpenClaw.
  *
- * Responsabilidad única: manejar eventos de la vista de terminal
- * (escalado, toques, teclas modificadoras, logging).
+ * Single responsibility: react to view events
+ * (scale, tap, modifier keys, logging).
  */
 internal class TerminalViewClientImpl(
     private val activity: MainActivity,
@@ -23,8 +24,6 @@ internal class TerminalViewClientImpl(
     private val MIN_TEXT_SIZE = 8
     private val MAX_TEXT_SIZE = 32
     private var currentTextSize = 32
-    private var ctrlDown = false
-    private var altDown = false
 
     override fun onScale(scale: Float): Float {
         val newSize = if (scale > 1f) currentTextSize + 1 else currentTextSize - 1
@@ -36,8 +35,8 @@ internal class TerminalViewClientImpl(
     override fun onSingleTapUp(e: MotionEvent) {
         val controller = WindowInsetsControllerCompat(activity.window, activity.window.decorView)
         val rootInsets = ViewCompat.getRootWindowInsets(activity.window.decorView)
-        val isVisible = rootInsets?.isVisible(WindowInsetsCompat.Type.ime()) ?: false
-        if (isVisible) {
+        val imeVisible = rootInsets?.isVisible(WindowInsetsCompat.Type.ime()) ?: false
+        if (imeVisible) {
             controller.hide(WindowInsetsCompat.Type.ime())
         } else {
             activity.binding.terminalView.requestFocus()
@@ -48,26 +47,37 @@ internal class TerminalViewClientImpl(
     override fun shouldBackButtonBeMappedToEscape(): Boolean = false
     override fun shouldEnforceCharBasedInput(): Boolean = true
     override fun shouldUseCtrlSpaceWorkaround(): Boolean = false
-    override fun isTerminalViewSelected(): Boolean = activity.binding.terminalContainer.isVisible
+
+    override fun isTerminalViewSelected(): Boolean =
+        activity.binding.terminalContainer.visibility == View.VISIBLE
+
     override fun copyModeChanged(copyMode: Boolean) = Unit
     override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean = false
     override fun onKeyUp(keyCode: Int, e: KeyEvent): Boolean = false
     override fun onLongPress(event: MotionEvent): Boolean = false
 
     override fun readControlKey(): Boolean {
-        val v = ctrlDown
+        val v = activity.ctrlDown
         if (v) {
-            ctrlDown = false
-            activity.runOnUiThread { activity.updateModifierButton(activity.findViewById(com.openclaw.android.R.id.btnCtrl), false) }
+            activity.ctrlDown = false
+            activity.runOnUiThread {
+                activity.updateModifierButton(
+                    activity.findViewById(com.openclaw.android.R.id.btnCtrl), false
+                )
+            }
         }
         return v
     }
 
     override fun readAltKey(): Boolean {
-        val v = altDown
+        val v = activity.altDown
         if (v) {
-            altDown = false
-            activity.runOnUiThread { activity.updateModifierButton(activity.findViewById(com.openclaw.android.R.id.btnAlt), false) }
+            activity.altDown = false
+            activity.runOnUiThread {
+                activity.updateModifierButton(
+                    activity.findViewById(com.openclaw.android.R.id.btnAlt), false
+                )
+            }
         }
         return v
     }
@@ -76,8 +86,6 @@ internal class TerminalViewClientImpl(
     override fun readFnKey(): Boolean = false
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean = false
     override fun onEmulatorSet() = Unit
-
-    // ── Logging ────────────────────────────────────────────────────────────
 
     override fun logError(tag: String, message: String) { AppLogger.e(tag, message) }
     override fun logWarn(tag: String, message: String) { AppLogger.w(tag, message) }

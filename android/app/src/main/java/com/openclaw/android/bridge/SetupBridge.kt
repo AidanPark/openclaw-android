@@ -53,24 +53,25 @@ class SetupBridge(
 
     @JavascriptInterface
     fun getSetupStatus(): String {
-        val isInstalled = installerManager.isInstalled()
-        // Usar ProotManager directamente — SetupManager eliminado (era shim sobre ProotManager)
-        val prootReady = ProotManager.isProotReady(activity)
-        val openclawReady = if (File(activity.filesDir, ".proot-installed").exists()) {
+        val status = installerManager.getDetailedStatus()
+        val isInstalled = status.isInstalled
+        
+        val openclawReady = if (status.source == "proot") {
             ProotManager.isRootfsReady(activity) &&
                 ProotManager.getPaths(activity).rootfsDir
                     .resolve("usr/local/lib/node_modules/openclaw/openclaw.mjs").exists()
         } else {
-            isInstalled
+            status.isOpenClawInstalled
         }
+
         return gson.toJson(mapOf(
             "bootstrapInstalled" to isInstalled,
             "runtimeInstalled" to isInstalled,
             "wwwInstalled" to isInstalled,
             "platformInstalled" to isInstalled,
-            "source" to if (File(activity.filesDir, ".proot-installed").exists()) "proot" else "payload",
-            "prootReady" to prootReady,
-            "rootfsReady" to ProotManager.isRootfsReady(activity),
+            "source" to status.source,
+            "prootReady" to status.prootReady,
+            "rootfsReady" to status.rootfsReady,
             "openclawReady" to openclawReady,
         ))
     }

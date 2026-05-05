@@ -10,10 +10,10 @@ import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 
 /**
- * Implementación de TerminalSessionClient para OpenClaw.
+ * TerminalSessionClientImpl — handles terminal session events for OpenClaw.
  *
- * Responsabilidad única: manejar eventos de sesión de terminal
- * (texto cambiado, título cambiado, sesión finalizada, copiar/pegar).
+ * Single responsibility: react to PTY session events
+ * (text changed, title changed, session finished, copy/paste).
  */
 internal class TerminalSessionClientImpl(
     private val activity: MainActivity,
@@ -21,7 +21,7 @@ internal class TerminalSessionClientImpl(
 ) : TerminalSessionClient {
 
     override fun onTextChanged(changedSession: TerminalSession) {
-        // Notificar a la vista que la pantalla ha cambiado
+        // binding is internal in MainActivity — accessible within the same module
         activity.binding.terminalView.onScreenUpdated()
     }
 
@@ -49,8 +49,6 @@ internal class TerminalSessionClientImpl(
     override fun onTerminalCursorStateChange(state: Boolean) = Unit
     override fun setTerminalShellPid(session: TerminalSession, pid: Int) = Unit
     override fun getTerminalCursorStyle(): Int = 0
-
-    // ── Logging ────────────────────────────────────────────────────────────
 
     override fun logError(tag: String, message: String) { AppLogger.e(tag, message) }
     override fun logWarn(tag: String, message: String) { AppLogger.w(tag, message) }

@@ -45,37 +45,32 @@ class InstallationOrchestrator(
      * Modos de instalación soportados.
      */
     sealed class InstallationMode {
-        /** Installación automática: intenta offline primero, luego online si es necesario */
-        object Auto : InstallationMode()
-        
-        /** Solo Termux Bootstrap */
+        /** Modo normal: Entorno nativo de Termux */
         object TermuxBootstrap : InstallationMode()
         
+        /** Modo avanzado: Ubuntu completo via proot (resistente a Phantom Process Killer) */
+        object ProotUbuntu : InstallationMode()
+        
         /** Offline: requiere payload en assets */
-        object Offline : InstallationMode()
+        object OfflinePayload : InstallationMode()
         
-        /** Online: abre terminal para instalación interactive */
-        object Online : InstallationMode()
-        
-        /** Proot: Ubuntu completo via proot (resistente a Phantom Process Killer) */
-        object Proot : InstallationMode()
-        
-        /** Rootfs: extrae rootfs pre-configurado desde assets */
-        object Rootfs : InstallationMode()
+        /** Online: abre terminal para instalación interactiva */
+        object OnlineOnly : InstallationMode()
         
         /** Fuerza reinstalación ignorando marcadores existentes */
         object Force : InstallationMode()
 
         companion object {
-            fun fromString(mode: String): InstallationMode = when (mode.lowercase()) {
-                "auto" -> Auto
+            fun fromString(mode: String, hasPayload: Boolean = false): InstallationMode = when (mode.toLowerCase()) {
                 "termux-bootstrap", "bootstrap" -> TermuxBootstrap
-                "offline" -> Offline
-                "online" -> Online
-                "proot" -> Proot
-                "rootfs" -> Rootfs
+                "proot", "ubuntu" -> ProotUbuntu
+                "offline" -> OfflinePayload
+                "online" -> OnlineOnly
                 "force" -> Force
-                else -> Auto
+                "auto" -> {
+                    if (hasPayload) OfflinePayload else TermuxBootstrap
+                }
+                else -> TermuxBootstrap
             }
         }
     }
@@ -93,7 +88,7 @@ class InstallationOrchestrator(
 
     /**
      * Ejecuta la instalación según el modo especificado.
-     * @param mode Modo de instalación (auto, termux-bootstrap, offline, online, proot, rootfs, force)
+     * @param mode Modo de instalación (auto, termux-bootstrap, offline, online, proot, force)
      * @param customUri URI personalizado para payload (opcional)
      * @param listener Listener para progreso y resultados
      */
@@ -102,25 +97,27 @@ class InstallationOrchestrator(
         customUri: Uri? = null,
         listener: ProgressListener,
     ) = withContext(Dispatchers.IO) {
-        val installationMode = InstallationMode.fromString(mode)
-        val forceMode = mode == "force"
+        val installationMode = InstallationMode.fromString(mode, assetResolver.hasPayloadAsset())
+        val isForce = mode == "force" || installationMode is InstallationMode.Force
 
         try {
             // Verificar si ya está instalado (excepto en modo force)
-            if (stateChecker.isInstalled() && !forceMode) {
+            if (stateChecker.isInstalled() && !isForce) {
                 AppLogger.i(TAG, "Already installed — skipping")
                 listener.onSuccess()
                 return@withContext
             }
 
+            if (isForce) {
+                cleanInstallation()
+            }
+
             when (installationMode) {
-                is InstallationMode.Auto -> installAuto(listener)
                 is InstallationMode.TermuxBootstrap -> installTermuxBootstrap(listener)
-                is InstallationMode.Offline -> installOffline(customUri, listener)
-                is InstallationMode.Online -> installOnline(listener)
-                is InstallationMode.Proot -> installProot(listener)
-                is InstallationMode.Rootfs -> installRootfs(listener)
-                is InstallationMode.Force -> installForce(listener)
+                is InstallationMode.ProotUbuntu -> installProot(listener)
+                is InstallationMode.OfflinePayload -> installOffline(customUri, listener)
+                is InstallationMode.OnlineOnly -> installOnline(listener)
+                is InstallationMode.Force -> installTermuxBootstrap(listener) // Default to bootstrap on force if not specified
             }
 
         } catch (e: Exception) {
@@ -145,7 +142,7 @@ class InstallationOrchestrator(
             File(context.filesDir, ".rootfs-extracted").delete()
 
             // Eliminar directorio de datos
-            context.filesDir.resolve("home/.openclaw-android").deleteRecursively()
+            File(context.filesDir, "home/.openclaw-android").deleteRecursively()
 
             AppLogger.i(TAG, "Installation cleaned")
             true
@@ -180,30 +177,6 @@ class InstallationOrchestrator(
     )
 
     // ── Flujos de instalación privados ───────────────────────────────────
-
-    private suspend fun installAuto(listener: ProgressListener) {
-        AppLogger.i(TAG, "Auto mode: starting")
-        
-        // Paso 1: Instalar Termux Bootstrap
-        listener.onProgress(0, "Instalando Termux Bootstrap...")
-        installTermuxBootstrap(listener)
-        
-        // Paso 2: Si hay payload en assets, instalar offline
-        if (assetResolver.hasPayloadAsset()) {
-            listener.onProgress(50, "Extrayendo entorno OpenClaw...")
-            payloadInstaller.installOffline(object : ProgressListener {
-                override fun onProgress(percent: Int, message: String) {
-                    listener.onProgress(50 + percent / 2, message)
-                }
-                override fun onSuccess() = listener.onSuccess()
-                override fun onError(message: String, cause: Throwable?) = listener.onError(message, cause)
-            })
-        } else {
-            // No hay payload - indicar que se necesita instalación online
-            listener.onProgress(100, "Bootstrap instalado. Ejecuta 'curl -sL myopenclawhub.com/install | bash' en el terminal.")
-            listener.onSuccess()
-        }
-    }
 
     private suspend fun installTermuxBootstrap(listener: ProgressListener) {
         val bootstrapManager = TermuxBootstrapManager(context)
@@ -247,11 +220,17 @@ class InstallationOrchestrator(
             installTermuxBootstrap(listener)
         }
 
+        val bridgeListener = object : com.openclaw.android.InstallerManager.ProgressListener {
+            override fun onProgress(percent: Int, message: String) = listener.onProgress(percent, message)
+            override fun onSuccess() = listener.onSuccess()
+            override fun onError(message: String, cause: Throwable?) = listener.onError(message, cause)
+        }
+
         // Luego instalar payload
         if (customUri != null) {
-            payloadInstaller.installFromCustomPayload(customUri, listener)
+            payloadInstaller.installFromCustomPayload(customUri, bridgeListener)
         } else if (assetResolver.hasPayloadAsset()) {
-            payloadInstaller.installOffline(listener)
+            payloadInstaller.installOffline(bridgeListener)
         } else {
             listener.onError("No hay payload disponible para instalación offline")
         }
@@ -308,40 +287,14 @@ class InstallationOrchestrator(
         // Write markers
         try {
             markerWriter.writeMarker()
-            File(context.filesDir, ".proot-installed").writeText("proot\n")
+            val prootMarker = File(context.filesDir, ".proot-installed")
+            prootMarker.writeText("proot\n")
         } catch (e: Exception) {
             AppLogger.w(TAG, "Could not write proot marker: ${e.message}")
         }
 
         listener.onProgress(100, "Proot + Ubuntu installed successfully")
         listener.onSuccess()
-    }
-
-    private suspend fun installRootfs(listener: ProgressListener) {
-        // Rootfs installation — extract pre-configured rootfs from assets
-        if (File(context.filesDir, ".rootfs-extracted").exists()) {
-            listener.onProgress(100, "Rootfs already installed")
-            listener.onSuccess()
-            return
-        }
-
-        // Delegate to PayloadInstaller for asset extraction
-        payloadInstaller.installOffline(object : ProgressListener {
-            override fun onProgress(percent: Int, message: String) = listener.onProgress(percent, message)
-            override fun onSuccess() {
-                File(context.filesDir, ".rootfs-extracted").writeText("extracted\n")
-                listener.onSuccess()
-            }
-            override fun onError(message: String, cause: Throwable?) = listener.onError(message, cause)
-        })
-    }
-
-    private suspend fun installForce(listener: ProgressListener) {
-        // Limpiar instalación existente
-        cleanInstallation()
-        
-        // Reinstalar en modo auto
-        installAuto(listener)
     }
 
     // ── Helpers privados ─────────────────────────────────────────────────

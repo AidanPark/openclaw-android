@@ -2,11 +2,11 @@ package com.openclaw.android.ui.activity
 
 import android.content.Intent
 import android.net.Uri
-import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.openclaw.android.AppLogger
 import com.openclaw.android.InstallerManager
+import com.openclaw.android.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

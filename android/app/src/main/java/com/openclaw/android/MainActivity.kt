@@ -52,9 +52,8 @@ class MainActivity : AppCompatActivity() {
         private const val MAX_TEXT_SIZE = 32
     }
 
-    private lateinit var binding: ActivityMainBinding
+    internal lateinit var binding: ActivityMainBinding
 
-    // Componentes internos
     private lateinit var initializer: ActivityInitializer
     private lateinit var permissionHandler: ActivityPermissionHandler
     private lateinit var permissionManager: ModernPermissionManager
@@ -85,12 +84,9 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Crear clientes de terminal
-        terminalSessionClient = TerminalSessionClientImpl(this, sessionManager)
-        terminalViewClient = TerminalViewClientImpl(this)
-
-        // Inicializar componentes
-        initializer = ActivityInitializer(this, binding, terminalSessionClient, terminalViewClient)
+        // Inicializar componentes — los clientes de terminal se crean DESPUÉS
+        // de que initializer haya creado sessionManager
+        initializer = ActivityInitializer(this, binding)
         initializer.onCreate(savedInstanceState)
 
         // Obtener referencias a managers
@@ -198,7 +194,7 @@ class MainActivity : AppCompatActivity() {
     // ── Setup helpers ──────────────────────────────────────────────────────
 
     private fun setupTerminalView() {
-        binding.terminalView.setTerminalViewClient(terminalViewClient)
+        binding.terminalView.setTerminalViewClient(initializer.terminalViewClient)
         binding.terminalView.setTextSize(DEFAULT_TEXT_SIZE)
     }
 

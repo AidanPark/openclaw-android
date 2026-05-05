@@ -42,6 +42,7 @@ class JsBridgeFacade(
     // Shared IO scope — one pool for all bridges
     private val supervisorJob = SupervisorJob()
     private val ioScope = CoroutineScope(Dispatchers.IO + supervisorJob)
+    private val eventBridge: EventBridge = eventBridge  // saved for batchQuery
 
     private val terminal = TerminalBridge(activity, sessionManager, installerManager, eventBridge)
     private val setup = SetupBridge(activity, sessionManager, installerManager, eventBridge, ioScope)
