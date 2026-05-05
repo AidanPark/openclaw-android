@@ -3,7 +3,7 @@
  * Displays rotating tips during installation or as standalone advice.
  */
 
-import { memo, useState, useEffect, useCallback } from 'react'
+import { memo, useState, useEffect } from 'react'
 
 interface TipCardProps {
     tips?: string[]

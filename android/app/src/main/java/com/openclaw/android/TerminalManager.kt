@@ -3,6 +3,7 @@ package com.openclaw.android
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import com.openclaw.android.core.env.EnvironmentResolver
 import com.termux.terminal.TerminalSession
 import java.io.File
 
@@ -55,88 +56,20 @@ class TerminalManager(
 
     /**
      * Builds the environment variable block as a shell-sourceable string.
-     *
-     * Critical variables:
-     * - PREFIX: apt/dpkg derive ALL their paths from this. With the correct
-     *   PREFIX, lock files are created at $PREFIX/var/lib/dpkg/lock-frontend
-     *   (accessible) instead of /data/data/com.termux/... (inaccessible).
-     * - DPKG_ADMINDIR / DPKG_ROOT: explicit overrides so dpkg never falls back
-     *   to its compiled-in Termux paths.
-     * - APT_CONFIG: points apt to our apt.conf with absolute Dir::State::status,
-     *   which prevents the duplicated-path bug.
+     * Delegates to EnvironmentResolver — single source of truth for env vars.
      */
     fun buildEnvBlock(): String {
-        // Usar filesDir directamente para asegurar rutas consistentes (/data/user/0/... o /data/data/...)
-        // No mezclar /data/data/ con /data/user/0/ en el mismo bloque.
-        val base = filesDir.absolutePath
-        val prefix = "$base/usr"
-        val home = "$base/home"
-        val tmpDir = "$base/tmp"
-        val ocaBin = "$home/.openclaw-android/bin"
-        val nodeDir = "$home/.openclaw-android/node"
-        val glibcLib = "$prefix/glibc/lib"
-        val certBundle = "$prefix/etc/tls/cert.pem"
-
-        File(home).mkdirs()
-        File(tmpDir).mkdirs()
+        val config = EnvironmentResolver.resolve(filesDir)
+        val envMap = EnvironmentResolver.buildEnvMap(config, context.packageName)
 
         return buildString {
             appendLine("# --- OpenClaw Environment Setup ---")
-            appendLine("export HOME=\"$home\"")
-            appendLine("export PREFIX=\"$prefix\"")
-            appendLine("export TMPDIR=\"$tmpDir\"")
-            appendLine("export APP_FILES_DIR=\"$base\"")
-            appendLine("export APP_PACKAGE=\"${context.packageName}\"")
-            appendLine("export PATH=\"$ocaBin:$nodeDir/bin:$prefix/bin:$prefix/bin/applets:/system/bin:/bin\"")
-            appendLine("export NPM_CONFIG_PREFIX=\"$prefix\"")
-            appendLine("export npm_config_prefix=\"$prefix\"")
-            // CRITICAL: Do NOT include glibc/lib in LD_LIBRARY_PATH.
-            // This env block is sourced inside Bionic shells (bash/sh from Termux bootstrap).
-            // If glibc/lib is in LD_LIBRARY_PATH, Android's Bionic linker finds glibc's
-            // libc.so there and fails with:
-            //   CANNOT LINK EXECUTABLE "sh": cannot find "libc.so" from verneed[0]
-            // The glibc path is added ONLY by the node wrapper when launching node.real.
-            appendLine("export LD_LIBRARY_PATH=\"$prefix/lib\"")
-
-            // dpkg/apt explicit overrides — prevent fallback to compiled-in Termux paths
-            appendLine("export DPKG_ADMINDIR=\"$prefix/var/lib/dpkg\"")
-            appendLine("export DPKG_ROOT=\"$prefix\"")
-            appendLine("export APT_CONFIG=\"$prefix/etc/apt/apt.conf\"")
+            for ((key, value) in envMap) {
+                appendLine("export $key=\"$value\"")
+            }
+            // Extra vars needed for dpkg/apt interactive suppression
             appendLine("export DEBIAN_FRONTEND=noninteractive")
-
-            // Git configuration
-            appendLine("export GIT_EXEC_PATH=\"$prefix/libexec/git-core\"")
-            appendLine("export GIT_TEMPLATE_DIR=\"$prefix/share/git-core/templates\"")
-            appendLine("export GIT_CONFIG_NOSYSTEM=1")
-
-            // SSL and Network
-            appendLine("export SSL_CERT_FILE=\"$certBundle\"")
-            appendLine("export CURL_CA_BUNDLE=\"$certBundle\"")
-            appendLine("export GIT_SSL_CAINFO=\"$certBundle\"")
-            appendLine("export RESOLV_CONF=\"$prefix/etc/resolv.conf\"")
-
-            // Locale and terminal
-            appendLine("export LANG=en_US.UTF-8")
-            appendLine("export TERM=xterm-256color")
-
-            // Android system
-            appendLine("export ANDROID_DATA=/data")
-            appendLine("export ANDROID_ROOT=/system")
-
-            // OpenClaw specific
-            appendLine("export OA_GLIBC=1")
-            appendLine("export CONTAINER=1")
-            appendLine("export CLAWDHUB_WORKDIR=\"$home/.openclaw/workspace\"")
-
-            // Termux compatibility (optional but kept for safety)
-            appendLine("export TERMUX__PREFIX=\"$prefix\"")
-            appendLine("export TERMUX_PREFIX=\"$prefix\"")
-            appendLine("export TERMUX__ROOTFS=\"$base\"")
-
-            // Bash startup suppression
-            appendLine("export BASH_ENV=/dev/null")
-            appendLine("export ENV=/dev/null")
-
+            appendLine("export DEBCONF_NONINTERACTIVE_SEEN=true")
             appendLine("unset LD_PRELOAD")
             appendLine("# --- End Environment Setup ---")
         }

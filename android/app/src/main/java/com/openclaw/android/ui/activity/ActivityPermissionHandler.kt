@@ -63,24 +63,27 @@ internal class ActivityPermissionHandler(
 
     /**
      * Solicita permisos de almacenamiento.
+     * @deprecated Usar ModernPermissionManager.requestStorage() en su lugar.
+     * Este método se mantiene solo para compatibilidad con ActivityInstallFlow.
      */
     fun requestStorage() {
         storagePermissionLauncher.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE))
     }
 
     /**
-     * Solicita permisos de notificaciones (si es necesario).
+     * Solicita permisos de notificaciones.
+     * @deprecated Usar ModernPermissionManager.requestNotifications() en su lugar.
      */
     fun requestNotifications() {
-        // Implementación específica de la app
-        // Por ahora solo es un placeholder
+        // No-op: delegado a ModernPermissionManager en ActivityInitializer
     }
 
     /**
      * Maneja el resultado de onRequestPermissionsResult.
+     * @deprecated ModernPermissionManager usa ActivityResultLaunchers internamente.
      */
     fun onRequestPermissionsResult(requestCode: Int, grantResults: IntArray) {
-        // Lógica específica de permisos si es necesaria
+        // No-op: ModernPermissionManager maneja esto via ActivityResultLaunchers
     }
 
     /**
