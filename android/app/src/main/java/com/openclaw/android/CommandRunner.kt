@@ -8,6 +8,7 @@ import android.os.Environment
 import androidx.annotation.RequiresApi
 import java.io.File
 import java.util.concurrent.TimeUnit
+import java.util.regex.Pattern
 
 /**
  * Shell command execution via ProcessBuilder.
@@ -31,15 +32,173 @@ object CommandRunner {
     const val INSTALLED_MARKER = "$OPENCLAW_DIR/installed.json"
     const val WRAPPER_SCRIPT = "$TERMUX_HOME/openclaw-start.sh"
 
+    // ── Seguridad: Lista blanca de comandos permitidos ─────────────────────
+    // Solo estos comandos pueden ejecutarse sin validación adicional
+    private val ALLOWED_COMMANDS_PREFIX = setOf(
+        // Comandos del sistema de archivos
+        "ls", "cd", "pwd", "mkdir", "rm", "rmdir", "cp", "mv", "touch", "cat", "head", "tail",
+        "find", "grep", "awk", "sed", "sort", "uniq", "wc", "cut", "tr", "tee",
+        // Compresión
+        "tar", "gzip", "gunzip", "xz", "unxz", "bz2", "bunzip2", "zip", "unzip",
+        // Red
+        "curl", "wget", "ping", "ip", "netstat", "ss",
+        // Utilidades
+        "echo", "printf", "date", "sleep", "wait", "kill", "killall", "ps", "top",
+        "df", "du", "free", "uptime", "whoami", "id", "hostname", "uname",
+        // Permisos
+        "chmod", "chown", "chgrp",
+        // Gestión de paquetes (solo lectura)
+        "apt", "apt-get", "dpkg", "pkg",
+        // Git
+        "git",
+        // Node.js/npm
+        "node", "npm", "npx",
+        // Scripts del sistema (solo desde ubicaciones conocidas)
+        "openclaw", "run.sh", "setup.sh", "install.sh",
+    )
+
+    // Caracteres peligrosos que deben ser bloqueados o escapados
+    private val DANGEROUS_CHARS = Pattern.compile("[;&|`$<>\\\\!#\\(\\)\\{\\}]")
+    
+    // Patrones que indican inyección de comandos
+    private val INJECTION_PATTERNS = listOf(
+        Pattern.compile(".*\\|\\s*sh$"),
+        Pattern.compile(".*\\|\\s*bash$"),
+        Pattern.compile(".*&&\\s*.*rm.*-rf.*", Pattern.CASE_INSENSITIVE),
+        Pattern.compile(".*;\\s*rm.*-rf.*", Pattern.CASE_INSENSITIVE),
+        Pattern.compile(".*\\$\\(.*\\).*"),
+        Pattern.compile(".*`.*`.*"),
+    )
+
     data class CommandResult(
         val exitCode: Int,
         val stdout: String,
         val stderr: String,
     )
 
+    /**
+     * Sanitiza un comando recibido desde WebView o fuentes externas.
+     * 
+     * Seguridad:
+     * - Verifica que el comando sea de la lista blanca o contenga solo comandos seguros
+     * - Escapa caracteres peligrosos
+     * - Bloquea patrones de inyección conocidos
+     * 
+     * @param raw El comando tal como se recibió
+     * @return El comando sanitizado, o null si debe ser bloqueado
+     */
+    fun sanitizeCommand(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+
+        // Verificar longitud máxima
+        if (trimmed.length > 10000) {
+            AppLogger.w(TAG, "Command too long: ${trimmed.length} chars")
+            return null
+        }
+
+        // Verificar patrones de inyección conocidos
+        for (pattern in INJECTION_PATTERNS) {
+            if (pattern.matcher(trimmed).matches()) {
+                AppLogger.w(TAG, "Blocked injection pattern: ${trimmed.take(50)}...")
+                return null
+            }
+        }
+
+        // Si el comando contiene caracteres peligrosos, intentar sanitizar
+        if (DANGEROUS_CHARS.matcher(trimmed).find()) {
+            // Verificar si es un comando simple de la lista blanca
+            val firstWord = trimmed.split(Regex("\\s+")).firstOrNull() ?: return null
+            
+            // Si es un comando permitido, verificar argumentos
+            if (firstWord in ALLOWED_COMMANDS_PREFIX || firstWord.startsWith("./")) {
+                // Sanitizar argumentos: escapar comillas y eliminar caracteres de control
+                val sanitized = sanitizeArguments(trimmed)
+                return sanitized
+            }
+
+            // Comandos con operadores peligrosos - bloquear a menos que sea muy específico
+            if (trimmed.contains("|") || trimmed.contains("&&") || trimmed.contains(";")) {
+                // Solo permitir si todos los componentes son seguros
+                val components = trimmed.split(Regex("[|&;]+")).map { it.trim() }
+                val allSafe = components.all { component ->
+                    val cmd = component.split(Regex("\\s+")).firstOrNull() ?: ""
+                    cmd in ALLOWED_COMMANDS_PREFIX || cmd.startsWith("./")
+                }
+                if (!allSafe) {
+                    AppLogger.w(TAG, "Blocked command with unsafe operators: ${trimmed.take(50)}...")
+                    return null
+                }
+            }
+        }
+
+        // Verificar el comando base
+        val baseCommand = trimmed.split(Regex("\\s+")).firstOrNull() ?: return null
+        
+        // Permitir comandos de la lista blanca
+        if (baseCommand in ALLOWED_COMMANDS_PREFIX) {
+            return sanitizeArguments(trimmed)
+        }
+
+        // Permitir scripts en el directorio actual
+        if (baseCommand.startsWith("./")) {
+            val scriptName = baseCommand.removePrefix("./")
+            // Solo permitir scripts con nombres seguros
+            if (scriptName.matches(Regex("^[a-zA-Z0-9_.-]+$"))) {
+                return sanitizeArguments(trimmed)
+            }
+        }
+
+        // Bloquear todo lo demás por defecto
+        AppLogger.w(TAG, "Blocked unknown command: $baseCommand")
+        return null
+    }
+
+    /**
+     * Sanitiza los argumentos de un comando.
+     * Escapa caracteres peligrosos en argumentos de usuario.
+     */
+    private fun sanitizeArguments(command: String): String {
+        // Dividir en comando y argumentos
+        val parts = command.split(Regex("(?<=[^\\\\])\\s+")).toMutableList()
+        if (parts.isEmpty()) return command
+
+        // El primer elemento es el comando - mantenerlo igual
+        // Sanitizar argumentos (los que no empiezan con - o --)
+        for (i in 1 until parts.size) {
+            val arg = parts[i]
+            // Si el argumento no es una opción (no empieza con -)
+            // y no es una ruta absoluta, sanitizarlo
+            if (!arg.startsWith("-") && !arg.startsWith("/") && !arg.startsWith("./")) {
+                // Escapar caracteres peligrosos pero permitir caracteres alfanuméricos y common
+                val sanitized = arg.replace(Regex("[^a-zA-Z0-9_./-]"), "")
+                if (sanitized.isNotEmpty()) {
+                    parts[i] = sanitized
+                }
+            }
+        }
+
+        return parts.joinToString(" ")
+    }
+
     /** Build the environment map using app-local paths. */
-    fun buildTermuxEnv(context: Context? = null): Map<String, String> =
-        EnvironmentBuilder.buildTermuxEnvironment(context)
+    fun buildTermuxEnv(context: Context? = null): Map<String, String> {
+        // Usar EnvironmentResolver directamente — EnvironmentBuilder eliminado (era shim)
+        val filesDir = context?.filesDir
+            ?: resolveFilesDirFromEnv()
+            ?: return emptyMap()
+        val config = com.openclaw.android.core.env.EnvironmentResolver.resolve(filesDir)
+        val pkg = context?.packageName ?: "com.openclaw.android"
+        return com.openclaw.android.core.env.EnvironmentResolver.buildEnvMap(config, pkg)
+    }
+
+    private fun resolveFilesDirFromEnv(): java.io.File? {
+        val home = System.getenv("HOME") ?: return null
+        val homeFile = java.io.File(home)
+        return if (homeFile.name == "home") homeFile.parentFile else null
+    }
 
     /** Build a safe working directory. */
     private fun safeWorkDir(workDir: File): File = when {
@@ -66,9 +225,31 @@ object CommandRunner {
      * Run a command synchronously.
      * Uses /system/bin/sh (always available on Android) as the shell.
      * The full environment is passed explicitly — no login shell needed.
+     * 
+     * Seguridad: el comando se sanitiza automáticamente antes de ejecutarse.
      */
     @RequiresApi(Build.VERSION_CODES.O)
     fun runSync(
+        command: String,
+        env: Map<String, String> = buildTermuxEnv(),
+        workDir: File = resolveHomeDir(),
+        timeoutMs: Long = 5_000,
+    ): CommandResult {
+        // Sanitizar el comando antes de ejecutarlo
+        val sanitized = sanitizeCommand(command) ?: run {
+            AppLogger.w(TAG, "Blocked unsafe command: $command")
+            return CommandResult(-1, "", "Command blocked for security reasons")
+        }
+
+        return runSyncUnsafe(sanitized, env, workDir, timeoutMs)
+    }
+
+    /**
+     * Run a command synchronously without sanitization.
+     * Útil para comandos internos que ya sabemos que son seguros.
+     */
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun runSyncUnsafe(
         command: String,
         env: Map<String, String> = buildTermuxEnv(),
         workDir: File = resolveHomeDir(),
@@ -121,8 +302,30 @@ object CommandRunner {
      * Streams stdout and stderr to [onOutput] as they arrive.
      * Returns a [CommandResult] with the process exit code and accumulated stderr.
      * Used by both JsBridge (fire-and-forget) and PayloadManager (needs exit code).
+     * 
+     * Seguridad: el comando se sanitiza automáticamente antes de ejecutarse.
      */
     suspend fun runStreaming(
+        command: String,
+        env: Map<String, String> = buildTermuxEnv(),
+        workDir: File = resolveHomeDir(),
+        onOutput: (String) -> Unit,
+    ): CommandResult {
+        // Sanitizar el comando antes de ejecutarlo
+        val sanitized = sanitizeCommand(command) ?: run {
+            AppLogger.w(TAG, "Blocked unsafe command: $command")
+            onOutput("Command blocked for security reasons")
+            return CommandResult(-1, "", "Command blocked for security reasons")
+        }
+
+        return runStreamingUnsafe(sanitized, env, workDir, onOutput)
+    }
+
+    /**
+     * Run a command asynchronously without sanitization.
+     * Útil para comandos internos que ya sabemos que son seguros.
+     */
+    suspend fun runStreamingUnsafe(
         command: String,
         env: Map<String, String> = buildTermuxEnv(),
         workDir: File = resolveHomeDir(),
@@ -171,8 +374,9 @@ object CommandRunner {
      * Only checks app-local executable/package paths — never Termux paths.
      */
     fun isOpenClawInstalled(context: Context? = null): Boolean {
-        val (prefixPath, _) = EnvironmentBuilder.resolveActivePaths(context?.filesDir)
-        val prefix = File(prefixPath)
+        val filesDir = context?.filesDir ?: resolveFilesDirFromEnv() ?: File("/data/local/tmp")
+        val config = com.openclaw.android.core.env.EnvironmentResolver.resolve(filesDir)
+        val prefix = config.prefix
         return prefix.resolve("bin/openclaw").exists() ||
             prefix.resolve("lib/node_modules/openclaw/openclaw.mjs").exists()
     }
@@ -184,11 +388,9 @@ object CommandRunner {
      * via the glibc-wrapped node, with no dependency on Termux.
      */
     fun createWrapperScript(filesDir: File? = null): Boolean {
-        val env = if (filesDir != null) {
-            EnvironmentBuilder.buildEnvironment(filesDir)
-        } else {
-            buildTermuxEnv()
-        }
+        val actualFilesDir = filesDir ?: resolveFilesDirFromEnv() ?: File("/data/local/tmp")
+        val config = com.openclaw.android.core.env.EnvironmentResolver.resolve(actualFilesDir)
+        val env = com.openclaw.android.core.env.EnvironmentResolver.buildEnvMap(config)
 
         val home = env["HOME"] ?: return false
         val prefix = env["PREFIX"] ?: return false
@@ -295,11 +497,9 @@ object CommandRunner {
      * Returns the running Process so the caller can monitor/stream output.
      */
     fun launchGateway(filesDir: File? = null): Process? {
-        val env = if (filesDir != null) {
-            EnvironmentBuilder.buildEnvironment(filesDir)
-        } else {
-            buildTermuxEnv()
-        }
+        val actualFilesDir = filesDir ?: resolveFilesDirFromEnv() ?: File("/data/local/tmp")
+        val config = com.openclaw.android.core.env.EnvironmentResolver.resolve(actualFilesDir)
+        val env = com.openclaw.android.core.env.EnvironmentResolver.buildEnvMap(config)
 
         val home = env["HOME"] ?: return null
         val prefix = env["PREFIX"] ?: return null

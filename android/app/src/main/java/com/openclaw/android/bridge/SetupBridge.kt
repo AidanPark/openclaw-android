@@ -6,10 +6,7 @@ import com.openclaw.android.AppLogger
 import com.openclaw.android.EventBridge
 import com.openclaw.android.InstallerManager
 import com.openclaw.android.MainActivity
-import com.openclaw.android.PayloadManager
 import com.openclaw.android.ProotManager
-import com.openclaw.android.RootfsManager
-import com.openclaw.android.SetupManager
 import com.openclaw.android.TerminalSessionManager
 import com.openclaw.android.core.env.EnvironmentResolver
 import com.openclaw.android.core.install.InstallProgress
@@ -57,16 +54,24 @@ class SetupBridge(
     @JavascriptInterface
     fun getSetupStatus(): String {
         val isInstalled = installerManager.isInstalled()
-        val setupManager = SetupManager(activity)
+        // Usar ProotManager directamente — SetupManager eliminado (era shim sobre ProotManager)
+        val prootReady = ProotManager.isProotReady(activity)
+        val openclawReady = if (File(activity.filesDir, ".proot-installed").exists()) {
+            ProotManager.isRootfsReady(activity) &&
+                ProotManager.getPaths(activity).rootfsDir
+                    .resolve("usr/local/lib/node_modules/openclaw/openclaw.mjs").exists()
+        } else {
+            isInstalled
+        }
         return gson.toJson(mapOf(
             "bootstrapInstalled" to isInstalled,
             "runtimeInstalled" to isInstalled,
             "wwwInstalled" to isInstalled,
             "platformInstalled" to isInstalled,
             "source" to if (File(activity.filesDir, ".proot-installed").exists()) "proot" else "payload",
-            "prootReady" to ProotManager.isProotReady(activity),
+            "prootReady" to prootReady,
             "rootfsReady" to ProotManager.isRootfsReady(activity),
-            "openclawReady" to setupManager.isOpenClawInstalledInRootfs(),
+            "openclawReady" to openclawReady,
         ))
     }
 
@@ -99,14 +104,23 @@ class SetupBridge(
 
     @JavascriptInterface
     fun getPayloadStatus(): String {
-        val payloadManager = PayloadManager(activity)
-        return gson.toJson(payloadManager.getStatus())
+        // Usar InstallerManager directamente — PayloadManager eliminado (era shim puro)
+        return gson.toJson(installerManager.getStatus())
     }
 
     @JavascriptInterface
     fun getRootfsStatus(): String {
-        val rootfsManager = RootfsManager(activity)
-        return gson.toJson(rootfsManager.getStatus())
+        // Usar InstallerManager directamente — RootfsManager eliminado (lógica integrada)
+        val isInstalled = installerManager.isInstalled()
+        val config = EnvironmentResolver.resolve(activity.filesDir)
+        return gson.toJson(mapOf(
+            "rootfsExtracted" to File(activity.filesDir, ".rootfs-extracted").exists(),
+            "rootfsInitialized" to isInstalled,
+            "openclawInstalled" to installerManager.isOpenClawInstalled(),
+            "wwwInstalled" to File(config.prefix, "share/openclaw-app/www/index.html").exists(),
+            "prefixPath" to config.prefix.absolutePath,
+            "homePath" to config.homeDir.absolutePath,
+        ))
     }
 
     // ── Install triggers ───────────────────────────────────────────────────
@@ -146,17 +160,24 @@ class SetupBridge(
 
     @JavascriptInterface
     fun startRootfsInstall() {
-        val rootfsManager = RootfsManager(activity)
+        // Delegar a InstallerManager con modo "rootfs" — RootfsManager eliminado
         launchIO(errorEvent = "setup_progress") {
-            rootfsManager.install { progress, message ->
-                eventBridge.emit("setup_progress", mapOf("progress" to progress, "message" to message))
-            }
-            activity.runOnUiThread { activity.showTerminal() }
-            val session = sessionManager.createSession()
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                val startScript = File(activity.filesDir, "home/openclaw-start.sh")
-                session.write("${startScript.absolutePath}\n")
-            }, SHELL_INIT_DELAY_MS)
+            installerManager.install("rootfs", null, object : InstallerManager.ProgressListener {
+                override fun onProgress(percent: Int, message: String) {
+                    eventBridge.emit("setup_progress", mapOf("progress" to percent / 100f, "message" to message))
+                }
+                override fun onSuccess() {
+                    activity.runOnUiThread { activity.showTerminal() }
+                    val session = sessionManager.createSession()
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        val startScript = File(activity.filesDir, "home/openclaw-start.sh")
+                        session.write("${startScript.absolutePath}\n")
+                    }, SHELL_INIT_DELAY_MS)
+                }
+                override fun onError(message: String, cause: Throwable?) {
+                    eventBridge.emit("setup_progress", mapOf("progress" to PROGRESS_START, "message" to message))
+                }
+            })
         }
     }
 

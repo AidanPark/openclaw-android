@@ -7,12 +7,14 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.openclaw.android.*
+import com.openclaw.android.bridge.JsBridgeFacade
 import com.openclaw.android.databinding.ActivityMainBinding
 import com.openclaw.android.ui.install.InstallOverlayController
-import com.openclaw.android.ui.permissions.PermissionsController
+import com.openclaw.android.ui.permissions.ModernPermissionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import android.Manifest
 
 /**
  * Inicializa todos los managers y controllers de la actividad.
@@ -33,11 +35,11 @@ internal class ActivityInitializer(
     lateinit var sessionManager: TerminalSessionManager
     lateinit var installerManager: InstallerManager
     lateinit var eventBridge: EventBridge
-    lateinit var jsBridge: JsBridge
+    lateinit var jsBridge: JsBridgeFacade
 
     // Controllers
     lateinit var installOverlay: InstallOverlayController
-    lateinit var permissionsController: PermissionsController
+    lateinit var permissionManager: ModernPermissionManager
 
     /**
      * Configura todos los componentes en onCreate().
@@ -79,7 +81,8 @@ internal class ActivityInitializer(
         installerManager = InstallerManager(activity)
         eventBridge = EventBridge(binding.webView)
         sessionManager = TerminalSessionManager(activity, terminalSessionClient, eventBridge)
-        jsBridge = JsBridge(activity as MainActivity, sessionManager, installerManager, eventBridge)
+        // Usar JsBridgeFacade directamente — JsBridge.kt era un shim puro
+        jsBridge = JsBridgeFacade(activity as MainActivity, sessionManager, installerManager, eventBridge)
     }
 
     private fun initializeControllers() {
@@ -93,9 +96,19 @@ internal class ActivityInitializer(
             session.write("echo 'Ejecuta comandos para corregir el error.'\n")
         }
 
-        permissionsController = PermissionsController(activity) {
-            // Callback cuando se conceden permisos de almacenamiento
-            (activity as? MainActivity)?.onStoragePermissionsGranted()
+        // Inicializar ModernPermissionManager
+        permissionManager = ModernPermissionManager(activity)
+        permissionManager.initialize()
+        
+        // Configurar callbacks de rationale
+        permissionManager.onStorageRationale = {
+            activity.runOnUiThread {
+                com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+                    .setTitle("Permiso Necesario")
+                    .setMessage("Se requiere acceso al almacenamiento para instalar el entorno de OpenClaw.")
+                    .setPositiveButton("Entendido") { dialog, _ -> dialog.dismiss() }
+                    .show()
+            }
         }
 
         installOverlay.setupErrorButton()
@@ -109,10 +122,17 @@ internal class ActivityInitializer(
     }
 
     /**
-     * Solicita permisos iniciales.
+     * Solicita permisos iniciales de forma segura.
+     * Usa ModernPermissionManager con corutinas.
      */
     fun requestInitialPermissions() {
-        permissionsController.requestStorage()
-        permissionsController.requestNotifications()
+        // Solicitar permisos de almacenamiento - ejecutar en contexto de corutina
+        CoroutineScope(Dispatchers.Main).launch {
+            permissionManager.requestStorage()
+            permissionManager.requestNotifications()
+            
+            // Notificar que los permisos están listos
+            (activity as? MainActivity)?.onStoragePermissionsGranted()
+        }
     }
 }

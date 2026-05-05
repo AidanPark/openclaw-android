@@ -3,7 +3,7 @@
  * All Kotlin @JavascriptInterface methods return JSON strings.
  */
 
-interface OpenClawBridge {
+export interface OpenClawBridge {
   // ── View ──────────────────────────────────────
   showTerminal(): void
   showWebView(): void
@@ -75,6 +75,10 @@ interface OpenClawBridge {
   getDetailedVersionInfo(): string
   /** Get version info (alias used by SetupBridge). */
   getVersionInfo(): string
+
+  // ── Batch queries ─────────────────────────────
+  /** Execute multiple queries in one call. Results emitted via native:batch_result event. */
+  batchQuery(callbackId: string, requests: string): void
 }
 
 declare global {
@@ -115,4 +119,62 @@ export function callJson<T>(
   }
 }
 
-export const bridge = { isAvailable, call, callJson }
+/**
+ * Execute multiple queries in a single bridge call.
+ * Much more efficient than making multiple individual calls.
+ * 
+ * @param methods Array of method names to execute
+ * @returns Promise with array of results in the same order
+ */
+export async function batchCall<T = unknown>(
+  methods: Array<keyof OpenClawBridge>
+): Promise<Array<{ method: string; data: T; success: boolean }>> {
+  return new Promise((resolve) => {
+    if (!isAvailable()) {
+      resolve(methods.map(m => ({
+        method: m,
+        data: null as T,
+        success: false
+      })))
+      return
+    }
+
+    const callbackId = `batch_${Date.now()}`
+
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as {
+        callbackId: string
+        results?: Array<{ method: string; result: string; success: boolean }>
+        error?: string
+      }
+
+      if (detail.callbackId !== callbackId) return
+
+      const results = (detail.results ?? []).map(r => ({
+        method: r.method,
+        data: r.success ? JSON.parse(r.result) : null,
+        success: r.success,
+      }))
+
+      resolve(results)
+      window.removeEventListener('native:batch_result', handler)
+    }
+
+    window.addEventListener('native:batch_result', handler)
+
+    // Call the batchQuery method on the bridge
+    call('batchQuery', callbackId, JSON.stringify(methods))
+
+    // Timeout after 10 seconds
+    setTimeout(() => {
+      window.removeEventListener('native:batch_result', handler)
+      resolve(methods.map(m => ({
+        method: m,
+        data: null as T,
+        success: false
+      })))
+    }, 10000)
+  })
+}
+
+export const bridge = { isAvailable, call, callJson, batchCall }

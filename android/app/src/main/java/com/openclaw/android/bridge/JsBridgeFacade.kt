@@ -9,6 +9,7 @@ import com.openclaw.android.TerminalSessionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * JsBridgeFacade — single @JavascriptInterface object registered with WebView.
@@ -66,6 +67,63 @@ class JsBridgeFacade(
     @JavascriptInterface fun getTerminalSessions(): String = terminal.getTerminalSessions()
     @JavascriptInterface fun writeToTerminal(id: String, data: String) = terminal.writeToTerminal(id, data)
     @JavascriptInterface fun runInNewSession(command: String) = terminal.runInNewSession(command)
+
+    // ═══════════════════════════════════════════
+    // Batch query — rendimiento optimizado
+    // ═══════════════════════════════════════════
+
+    /**
+     * Ejecuta múltiples consultas de estado en una sola llamada.
+     * 
+     * @param callbackId ID para identificar la respuesta
+     * @param requests Array JSON de métodos a ejecutar, ej: ["getBootstrapStatus", "getVersionInfo"]
+     * @return Los resultados se emiten via eventBridge.emit("batch_result", ...)
+     */
+    @JavascriptInterface
+    fun batchQuery(callbackId: String, requests: String) {
+        ioScope.launch {
+            try {
+                val gson = com.google.gson.Gson()
+                @Suppress("UNCHECKED_CAST")
+                val methodNames: List<String> = gson.fromJson(requests, List::class.java) as List<String>
+                
+                val results = methodNames.map { methodName ->
+                    try {
+                        val result = when (methodName) {
+                            "getSetupStatus" -> setup.getSetupStatus()
+                            "getBootstrapStatus" -> setup.getBootstrapStatus()
+                            "getPayloadStatus" -> setup.getPayloadStatus()
+                            "getRootfsStatus" -> setup.getRootfsStatus()
+                            "getGlibcStatus" -> setup.getGlibcStatus()
+                            "getVersionInfo" -> setup.getVersionInfo()
+                            "getDetailedVersionInfo" -> system.getDetailedVersionInfo()
+                            "getEnvironmentInfo" -> tools.getEnvironmentInfo()
+                            "getStorageInfo" -> system.getStorageInfo()
+                            "getBatteryInfo" -> system.getBatteryInfo()
+                            "getAppInfo" -> system.getAppInfo()
+                            "getPermissionsStatus" -> system.getPermissionsStatus()
+                            "getTerminalSessions" -> terminal.getTerminalSessions()
+                            else -> """{"error": "Unknown method: $methodName"}"""
+                        }
+                        mapOf("method" to methodName, "result" to result, "success" to true)
+                    } catch (e: Exception) {
+                        mapOf("method" to methodName, "error" to e.message, "success" to false)
+                    }
+                }
+
+                eventBridge.emit("batch_result", mapOf(
+                    "callbackId" to callbackId,
+                    "results" to results,
+                ))
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "batchQuery failed: ${e.message}", e)
+                eventBridge.emit("batch_result", mapOf(
+                    "callbackId" to callbackId,
+                    "error" to e.message,
+                ))
+            }
+        }
+    }
 
     // ═══════════════════════════════════════════
     // Setup domain

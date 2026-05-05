@@ -4,7 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.openclaw.android.AppLogger
 import com.openclaw.android.InstallerManager
-import com.openclaw.android.SetupManager
+import com.openclaw.android.ProotManager
 import com.openclaw.android.TermuxBootstrapManager
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -164,7 +164,8 @@ class InstallationOrchestrator(
         isOpenClawInstalled = stateChecker.isOpenClawInstalled(),
         hasPayloadAsset = assetResolver.hasPayloadAsset(),
         source = detectSource(),
-        prootReady = SetupManager(context).isInstalled(),
+        // Use ProotManager directly — SetupManager removed
+        prootReady = ProotManager.isProotReady(context) && ProotManager.isRootfsReady(context),
         rootfsReady = File(context.filesDir, ".rootfs-extracted").exists(),
     )
 
@@ -271,57 +272,68 @@ class InstallationOrchestrator(
     }
 
     private suspend fun installProot(listener: ProgressListener) {
-        val setupManager = SetupManager(context)
-        
-        if (setupManager.isInstalled()) {
-            listener.onProgress(100, "Proot + Ubuntu ya instalado")
+        // Use ProotManager directly — SetupManager removed
+        val prootReady = ProotManager.isProotReady(context) && ProotManager.isRootfsReady(context)
+
+        if (prootReady) {
+            listener.onProgress(100, "Proot + Ubuntu already installed")
             listener.onSuccess()
             return
         }
 
-        val deferred = CompletableDeferred<Boolean>()
-
-        setupManager.install(object : SetupManager.ProgressListener {
-            override fun onProgress(percent: Int, message: String) {
-                listener.onProgress(percent, message)
+        // Step 1: Download proot binary
+        if (!ProotManager.isProotReady(context)) {
+            listener.onProgress(5, "Downloading proot binary...")
+            val ok = ProotManager.downloadProot(context) { pct, msg ->
+                listener.onProgress(pct, msg)
             }
-
-            override fun onSuccess() {
-                try {
-                    markerWriter.writeMarker()
-                    File(context.filesDir, ".proot-installed").writeText("proot\n")
-                } catch (e: Exception) {
-                    AppLogger.w(TAG, "Could not write marker: ${e.message}")
-                }
-                deferred.complete(true)
+            if (!ok) {
+                listener.onError("Failed to download proot. Check internet connection.")
+                return
             }
-
-            override fun onError(message: String, cause: Throwable?) {
-                listener.onError(message, cause)
-                deferred.complete(false)
-            }
-        })
-
-        if (!deferred.await()) {
-            throw Exception("Proot installation failed")
         }
+
+        // Step 2: Download and extract Ubuntu rootfs
+        if (!ProotManager.isRootfsReady(context)) {
+            listener.onProgress(10, "Downloading Ubuntu rootfs (~80MB)...")
+            val ok = ProotManager.downloadAndExtractRootfs(context) { pct, msg ->
+                listener.onProgress(pct, msg)
+            }
+            if (!ok) {
+                listener.onError("Failed to download Ubuntu rootfs. Check internet connection.")
+                return
+            }
+        }
+
+        // Write markers
+        try {
+            markerWriter.writeMarker()
+            File(context.filesDir, ".proot-installed").writeText("proot\n")
+        } catch (e: Exception) {
+            AppLogger.w(TAG, "Could not write proot marker: ${e.message}")
+        }
+
+        listener.onProgress(100, "Proot + Ubuntu installed successfully")
+        listener.onSuccess()
     }
 
     private suspend fun installRootfs(listener: ProgressListener) {
-        // Rootfs installation - extrae rootfs pre-configurado
-        val rootfsManager = RootfsManager(context)
-        
-        if (rootfsManager.isInstalled()) {
-            listener.onProgress(100, "Rootfs ya instalado")
+        // Rootfs installation — extract pre-configured rootfs from assets
+        if (File(context.filesDir, ".rootfs-extracted").exists()) {
+            listener.onProgress(100, "Rootfs already installed")
             listener.onSuccess()
             return
         }
 
-        rootfsManager.install { progress, message ->
-            listener.onProgress((progress * 100).toInt(), message)
-        }
-        
-        listener.onSuccess()
+        // Delegate to PayloadInstaller for asset extraction
+        payloadInstaller.installOffline(object : ProgressListener {
+            override fun onProgress(percent: Int, message: String) = listener.onProgress(percent, message)
+            override fun onSuccess() {
+                File(context.filesDir, ".rootfs-extracted").writeText("extracted\n")
+                listener.onSuccess()
+            }
+            override fun onError(message: String, cause: Throwable?) = listener.onError(message, cause)
+        })
     }
 
     private suspend fun installForce(listener: ProgressListener) {

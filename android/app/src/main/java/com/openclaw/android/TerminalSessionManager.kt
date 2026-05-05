@@ -270,10 +270,11 @@ class TerminalSessionManager(
         }
 
         // ── Payload / legacy mode ────────────────────────────────────────────
-        val env = EnvironmentBuilder.buildEnvironment(
-            activity.filesDir,
-            activity.packageName,
-        ).toMutableMap()
+        // Usar EnvironmentResolver directamente — EnvironmentBuilder eliminado (era shim)
+        val config = com.openclaw.android.core.env.EnvironmentResolver.resolve(activity.filesDir)
+        val env = com.openclaw.android.core.env.EnvironmentResolver
+            .buildEnvMap(config, activity.packageName)
+            .toMutableMap()
 
         val prefixPath = env["PREFIX"] ?: "$base/usr"
         val prefix = File(prefixPath).also { if (!it.exists()) it.mkdirs() }
@@ -282,10 +283,11 @@ class TerminalSessionManager(
         env["PREFIX"] = prefix.absolutePath
         env["TMPDIR"] = tmpDir.absolutePath
 
-        val payloadManager = PayloadManager(activity)
+        // Usar InstallerManager directamente — PayloadManager eliminado (era shim puro)
+        val installerManager = com.openclaw.android.InstallerManager(activity)
 
         // ── SAFE MODE: Determine if we can use Termux environment or must fall back ──
-        val isEnvironmentReady = payloadManager.isReady()
+        val isEnvironmentReady = installerManager.isReady()
         val hasGlibcLinker = File(prefix, "glibc/lib/ld-linux-aarch64.so.1").exists()
         val hasTermuxExec = File(prefix, "lib/libtermux-exec.so").exists()
 

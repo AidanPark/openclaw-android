@@ -2,10 +2,10 @@ package com.openclaw.android.ui.install
 
 import android.view.View
 import com.openclaw.android.AppLogger
-import com.openclaw.android.EnvironmentBuilder
 import com.openclaw.android.InstallerManager
 import com.openclaw.android.R
 import com.openclaw.android.TerminalSessionManager
+import com.openclaw.android.core.env.EnvironmentResolver
 import com.openclaw.android.databinding.ActivityMainBinding
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
@@ -129,7 +129,9 @@ class InstallOverlayController(
         if (installTerminalSession == null) {
             val filesDir = activity.filesDir
             val homeDir = File(filesDir, "home").also { it.mkdirs() }
-            val envMap = EnvironmentBuilder.buildEnvironment(filesDir, activity.packageName)
+            // Usar EnvironmentResolver directamente — EnvironmentBuilder eliminado (era shim)
+            val config = EnvironmentResolver.resolve(filesDir)
+            val envMap = EnvironmentResolver.buildEnvMap(config, activity.packageName)
                 .toMutableMap()
 
             // CRITICAL: /system/bin/sh is a Bionic binary. If LD_LIBRARY_PATH

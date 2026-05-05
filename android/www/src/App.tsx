@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { Route, useRoute } from './lib/router'
 import { bridge } from './lib/bridge'
 import { useNativeEvent } from './lib/useNativeEvent'
@@ -29,12 +29,10 @@ export function App() {
   const [setupDone, setSetupDone] = useState<boolean | null>(null)
 
   useEffect(() => {
-    // Use getSetupStatus — same source as MainActivity.bootstrapManager.isInstalled()
     const status = bridge.callJson<SetupStatus>('getSetupStatus')
     if (status) {
       setSetupDone(!!status.bootstrapInstalled && !!status.platformInstalled)
     } else {
-      // Bridge not available (dev mode) — assume setup complete
       setSetupDone(true)
     }
 
@@ -45,7 +43,6 @@ export function App() {
   const onUpdateAvailable = useCallback(() => setHasUpdates(true), [])
   useNativeEvent('update_available', onUpdateAvailable)
 
-  // Determine active tab from route
   const activeTab: Tab = path.startsWith('/settings') || path.startsWith('/setup')
     ? 'settings'
     : 'dashboard'
@@ -59,7 +56,6 @@ export function App() {
     navigate(tab === 'dashboard' ? '/dashboard' : '/settings')
   }
 
-  // Remove auto-redirect to setup. The user will be prompted in the dashboard.
   useEffect(() => {
     if (path === '/') {
       navigate('/dashboard')
@@ -78,10 +74,8 @@ export function App() {
     )
   }
 
-
   return (
     <>
-      {/* Tab bar */}
       <nav className="tab-bar" role="navigation" aria-label="Main navigation">
         <button
           className="tab-bar-item"
@@ -112,7 +106,6 @@ export function App() {
         </button>
       </nav>
 
-      {/* Routes */}
       <Route path="/setup">
         <Setup onComplete={() => { setSetupDone(true); navigate('/dashboard') }} />
       </Route>

@@ -5,26 +5,21 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.openclaw.android.AppLogger
 import com.openclaw.android.BuildConfig
-import com.openclaw.android.JsBridge
+import com.openclaw.android.bridge.JsBridgeFacade
 
 /**
  * Configura el WebView con JavaScript habilitado, debugging (en DEBUG),
  * y los clientes apropiados.
  *
  * Responsabilidad única: configurar el WebView una sola vez.
+ * Usa JsBridgeFacade directamente — JsBridge.kt eliminado (era un shim puro).
  */
 internal class WebViewConfigurator {
 
     companion object {
         private const val TAG = "WebViewConfigurator"
 
-        /**
-         * Configura un WebView con la configuración estándar de OpenClaw.
-         *
-         * @param webView El WebView a configurar
-         * @param jsBridge El JsBridge a inyectar (puede ser null si se configura después)
-         */
-        fun configure(webView: WebView, jsBridge: JsBridge?) {
+        fun configure(webView: WebView, jsBridge: JsBridgeFacade?) {
             if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true)
             webView.apply {
                 setBackgroundColor(android.graphics.Color.parseColor("#0d1117"))

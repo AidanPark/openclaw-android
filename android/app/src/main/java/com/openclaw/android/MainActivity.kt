@@ -6,11 +6,14 @@ import android.view.MotionEvent
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.openclaw.android.ui.permissions.ModernPermissionManager
+import com.openclaw.android.bridge.JsBridgeFacade
 import com.openclaw.android.databinding.ActivityMainBinding
 import com.openclaw.android.ui.activity.ActivityInitializer
 import com.openclaw.android.ui.activity.ActivityPermissionHandler
 import com.openclaw.android.ui.activity.ActivityViewSwitcher
 import com.openclaw.android.ui.install.ActivityInstallFlow
+import com.openclaw.android.core.install.InstallationOrchestrator
 import com.openclaw.android.ui.terminal.TerminalSessionClientImpl
 import com.openclaw.android.ui.terminal.TerminalTabManager
 import com.openclaw.android.ui.terminal.TerminalViewClientImpl
@@ -54,22 +57,24 @@ class MainActivity : AppCompatActivity() {
     // Componentes internos
     private lateinit var initializer: ActivityInitializer
     private lateinit var permissionHandler: ActivityPermissionHandler
+    private lateinit var permissionManager: ModernPermissionManager
     private lateinit var viewSwitcher: ActivityViewSwitcher
     private lateinit var installFlow: ActivityInstallFlow
     private lateinit var tabManager: TerminalTabManager
     private lateinit var terminalSessionClient: TerminalSessionClientImpl
     private lateinit var terminalViewClient: TerminalViewClientImpl
+    private lateinit var installationOrchestrator: com.openclaw.android.core.install.InstallationOrchestrator
 
     // State para teclas modificadoras (compartido con TerminalViewClientImpl)
     var ctrlDown = false
     var altDown = false
 
-    // ── API pública (accesible desde JsBridge) ─────────────────────────────
+    // ── API pública (accesible desde JsBridgeFacade) ───────────────────────
 
     lateinit var sessionManager: TerminalSessionManager
     lateinit var installerManager: InstallerManager
     lateinit var eventBridge: EventBridge
-    lateinit var jsBridge: JsBridge
+    lateinit var jsBridge: JsBridgeFacade
 
     var selectedPayloadUri: android.net.Uri? = null
 
@@ -93,6 +98,10 @@ class MainActivity : AppCompatActivity() {
         installerManager = initializer.installerManager
         eventBridge = initializer.eventBridge
         jsBridge = initializer.jsBridge
+
+        // Inicializar ModernPermissionManager y InstallationOrchestrator
+        permissionManager = initializer.permissionManager
+        installationOrchestrator = InstallationOrchestrator(this)
 
         // Configurar resto de componentes
         permissionHandler = ActivityPermissionHandler(this) {
@@ -122,6 +131,10 @@ class MainActivity : AppCompatActivity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // Delegar al permissionManager
+        if (::permissionManager.isInitialized) {
+            // ModernPermissionManager maneja esto internamente via ActivityResultLaunchers
+        }
         permissionHandler.onRequestPermissionsResult(requestCode, grantResults)
     }
 
