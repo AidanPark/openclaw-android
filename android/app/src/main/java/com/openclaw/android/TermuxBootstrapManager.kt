@@ -43,18 +43,12 @@ class TermuxBootstrapManager(private val context: Context) {
     private val cacheDir: File = context.cacheDir
     private val homeDir = File(filesDir, "home")
 
-    // PREFIX donde se instala el bootstrap — se resuelve dinámicamente
-    private val prefix: File
-        get() {
-            val candidates = listOf(
-                File(homeDir, "payload"),
-                File(homeDir, "openclaw-payload"),
-                File(filesDir, "payload"),
-                File(filesDir, "openclaw-payload"),
-                File(filesDir, "usr"),
-            )
-            return candidates.firstOrNull { it.isDirectory } ?: File(filesDir, "usr")
-        }
+    // PREFIX donde se instala el bootstrap — SIEMPRE filesDir/usr.
+    // El bootstrap de Termux es un entorno nativo que debe vivir en usr/,
+    // separado del payload de OpenClaw (que va en homeDir/payload/).
+    // No usar candidatos dinámicos: si homeDir/payload/ existe, el getter
+    // anterior lo elegía como prefix y el bootstrap se instalaba encima del payload.
+    private val prefix: File = File(filesDir, "usr")
 
     // Instanciar componentes
     private val architectureDetector = TermuxArchitectureDetector

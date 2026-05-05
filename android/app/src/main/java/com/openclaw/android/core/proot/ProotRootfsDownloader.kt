@@ -113,7 +113,7 @@ internal class ProotRootfsDownloader(
 
                 decompressed.use { decomp ->
                     org.apache.commons.compress.archivers.tar.TarArchiveInputStream(decomp).use { tar ->
-                        var entry = tar.nextTarEntry
+                        var entry = tar.nextEntry as? org.apache.commons.compress.archivers.tar.TarArchiveEntry
                         while (entry != null) {
                             val destFile = File(destDir, entry.name)
                             try {
@@ -139,7 +139,7 @@ internal class ProotRootfsDownloader(
                             } catch (e: Exception) {
                                 AppLogger.w(TAG, "Skip entry ${entry.name}: ${e.message}")
                             }
-                            entry = tar.nextTarEntry
+                            entry = tar.nextEntry as? org.apache.commons.compress.archivers.tar.TarArchiveEntry
                         }
                     }
                 }

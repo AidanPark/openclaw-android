@@ -15,7 +15,7 @@ import java.io.FileOutputStream
  */
 internal class TermuxBootstrapExtractor {
 
-    private val TAG = "TermuxBootstrapExtractor"
+    private val tag = "TermuxBootstrapExtractor"
 
     /**
      * Extrae el ZIP del bootstrap al directorio de destino.
@@ -33,7 +33,7 @@ internal class TermuxBootstrapExtractor {
         targetDir.mkdirs()
         var count = 0
 
-        ZipFile(zipFile).use { zip ->
+        ZipFile.builder().setFile(zipFile).get().use { zip ->
             val entries = zip.entries
             while (entries.hasMoreElements()) {
                 val entry = entries.nextElement()
@@ -51,7 +51,7 @@ internal class TermuxBootstrapExtractor {
                             try {
                                 android.system.Os.symlink(target, dest.absolutePath)
                             } catch (e: Exception) {
-                                AppLogger.w(TAG, "Symlink failed: ${entry.name} -> $target: ${e.message}")
+                                AppLogger.w(tag, "Symlink failed: ${entry.name} -> $target: ${e.message}")
                             }
                         }
 
@@ -84,12 +84,12 @@ internal class TermuxBootstrapExtractor {
                     count++
                     onProgress(count)
                 } catch (e: Exception) {
-                    AppLogger.e(TAG, "Extract failed: ${entry.name}: ${e.message}")
+                    AppLogger.e(tag, "Extract failed: ${entry.name}: ${e.message}")
                 }
             }
         }
 
-        AppLogger.i(TAG, "Extracted $count entries to ${targetDir.absolutePath}")
+        AppLogger.i(tag, "Extracted $count entries to ${targetDir.absolutePath}")
         return count
     }
 
@@ -111,14 +111,14 @@ internal class TermuxBootstrapExtractor {
                     linkFile.delete()
                     try {
                         android.system.Os.symlink(target, linkFile.absolutePath)
-                        AppLogger.d(TAG, "Symlink from SYMLINKS.txt: $linkPath -> $target")
+                        AppLogger.d(tag, "Symlink from SYMLINKS.txt: $linkPath -> $target")
                     } catch (e: Exception) {
-                        AppLogger.w(TAG, "SYMLINKS.txt symlink failed: $linkPath -> $target: ${e.message}")
+                        AppLogger.w(tag, "SYMLINKS.txt symlink failed: $linkPath -> $target: ${e.message}")
                     }
                 }
             }
         } catch (e: Exception) {
-            AppLogger.w(TAG, "Failed to process SYMLINKS.txt: ${e.message}")
+            AppLogger.w(tag, "Failed to process SYMLINKS.txt: ${e.message}")
         }
     }
 }

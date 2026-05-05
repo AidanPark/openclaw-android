@@ -161,9 +161,9 @@ class SetupBridge(
 
     @JavascriptInterface
     fun startRootfsInstall() {
-        // Delegar a InstallerManager con modo "rootfs" — RootfsManager eliminado
+        // Delegar a InstallerManager con modo "proot" — instalación avanzada Ubuntu via proot
         launchIO(errorEvent = "setup_progress") {
-            installerManager.install("rootfs", null, object : InstallerManager.ProgressListener {
+            installerManager.install("proot", null, object : InstallerManager.ProgressListener {
                 override fun onProgress(percent: Int, message: String) {
                     eventBridge.emit("setup_progress", mapOf("progress" to percent / 100f, "message" to message))
                 }

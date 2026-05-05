@@ -42,7 +42,14 @@ internal class TermuxBootstrapDownloader(
         }
 
         AppLogger.i(TAG, "Downloading bootstrap from $url")
-        val conn = URL(url).openConnection() as HttpURLConnection
+
+        // GitHub releases redirect from github.com to objects.githubusercontent.com.
+        // HttpURLConnection does not follow cross-domain HTTPS redirects automatically,
+        // so we resolve the final URL manually before downloading.
+        val finalUrl = resolveRedirects(url)
+        AppLogger.i(TAG, "Final download URL: $finalUrl")
+
+        val conn = URL(finalUrl).openConnection() as HttpURLConnection
         conn.connectTimeout = 30_000
         conn.readTimeout = 120_000
         conn.instanceFollowRedirects = true
@@ -80,5 +87,40 @@ internal class TermuxBootstrapDownloader(
      */
     fun getBootstrapCacheFile(arch: String): File {
         return File(cacheDir, "termux-bootstrap-$arch.zip")
+    }
+
+    /**
+     * Resuelve redirects HTTP/HTTPS manualmente hasta llegar a la URL final.
+     *
+     * HttpURLConnection en Android no sigue redirects cross-domain automáticamente
+     * (e.g. github.com → objects.githubusercontent.com). Este método los resuelve
+     * manualmente con un máximo de 10 saltos para evitar bucles infinitos.
+     */
+    private fun resolveRedirects(startUrl: String, maxHops: Int = 10): String {
+        var currentUrl = startUrl
+        repeat(maxHops) {
+            val conn = URL(currentUrl).openConnection() as HttpURLConnection
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 10_000
+            conn.instanceFollowRedirects = false
+            conn.setRequestProperty("User-Agent", "OpenClaw-Android/1.0")
+            try {
+                val code = conn.responseCode
+                if (code in 300..399) {
+                    val location = conn.getHeaderField("Location")
+                    if (!location.isNullOrBlank()) {
+                        AppLogger.i(TAG, "Redirect $code: $currentUrl → $location")
+                        currentUrl = location
+                        return@repeat
+                    }
+                }
+                // Not a redirect — this is the final URL
+                return currentUrl
+            } finally {
+                conn.disconnect()
+            }
+        }
+        AppLogger.w(TAG, "Max redirect hops reached, using: $currentUrl")
+        return currentUrl
     }
 }

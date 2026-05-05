@@ -61,9 +61,9 @@ class InstallationOrchestrator(
         object Force : InstallationMode()
 
         companion object {
-            fun fromString(mode: String, hasPayload: Boolean = false): InstallationMode = when (mode.toLowerCase()) {
+            fun fromString(mode: String, hasPayload: Boolean = false): InstallationMode = when (mode.lowercase()) {
                 "termux-bootstrap", "bootstrap" -> TermuxBootstrap
-                "proot", "ubuntu" -> ProotUbuntu
+                "proot", "ubuntu", "rootfs" -> ProotUbuntu  // "rootfs" kept as alias for backward compat
                 "offline" -> OfflinePayload
                 "online" -> OnlineOnly
                 "force" -> Force
@@ -215,9 +215,15 @@ class InstallationOrchestrator(
     }
 
     private suspend fun installOffline(customUri: Uri?, listener: ProgressListener) {
-        // Primero instalar bootstrap si no está
+        // Paso 1: Instalar Termux Bootstrap si no está.
+        // El bootstrap provee bash, sh, apt, dpkg — necesarios para ejecutar
+        // scripts .sh del payload de OpenClaw.
         if (!TermuxBootstrapManager(context).isInstalled()) {
             installTermuxBootstrap(listener)
+            // Verificar que realmente se instaló
+            if (!TermuxBootstrapManager(context).isInstalled()) {
+                throw Exception("Falló la instalación de Termux Bootstrap — sin bash no se puede continuar")
+            }
         }
 
         val bridgeListener = object : com.openclaw.android.InstallerManager.ProgressListener {
@@ -226,7 +232,7 @@ class InstallationOrchestrator(
             override fun onError(message: String, cause: Throwable?) = listener.onError(message, cause)
         }
 
-        // Luego instalar payload
+        // Paso 2: Instalar payload de OpenClaw (node + glibc + openclaw)
         if (customUri != null) {
             payloadInstaller.installFromCustomPayload(customUri, bridgeListener)
         } else if (assetResolver.hasPayloadAsset()) {

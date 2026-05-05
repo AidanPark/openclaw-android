@@ -90,5 +90,4 @@ internal class InstallPathResolver(private val context: Context) {
 
     fun getWwwDir(): File = File(prefix, "share/openclaw-app/www")
     fun getPrefixDir(): File = prefix
-    fun getHomeDir(): File = homeDir
 }

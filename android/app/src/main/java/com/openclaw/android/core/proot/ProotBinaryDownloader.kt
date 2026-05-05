@@ -134,7 +134,7 @@ internal class ProotBinaryDownloader(
             BufferedInputStream(raw).use { buf ->
                 org.apache.commons.compress.compressors.xz.XZCompressorInputStream(buf).use { xz ->
                     org.apache.commons.compress.archivers.tar.TarArchiveInputStream(xz).use { tar ->
-                        var entry = tar.nextTarEntry
+                        var entry = tar.nextEntry
                         while (entry != null) {
                             val entryName = entry.name.trimStart('/')
                             AppLogger.d(TAG, "tar entry: $entryName")
@@ -146,7 +146,7 @@ internal class ProotBinaryDownloader(
                                 AppLogger.i(TAG, "Extracted proot binary: $entryName → ${prootDest.absolutePath}")
                                 break
                             }
-                            entry = tar.nextTarEntry
+                            entry = tar.nextEntry
                         }
                     }
                 }

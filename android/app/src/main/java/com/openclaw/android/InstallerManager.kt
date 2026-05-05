@@ -10,6 +10,7 @@ import com.openclaw.android.core.install.InstallStateChecker
 import com.openclaw.android.core.install.PayloadAssetResolver
 import com.openclaw.android.core.install.PayloadInstaller
 import java.io.File
+import java.io.FileOutputStream
 
 /**
  * InstallerManager — punto de entrada único para todos los flujos de instalación.
@@ -55,7 +56,7 @@ class InstallerManager(private val context: Context) {
     fun getRunScriptPath(): File = paths.getRunScriptPath()
     fun getWwwDir(): File = paths.getWwwDir()
     fun getPrefixDir(): File = paths.getPrefixDir()
-    fun getHomeDir(): File = paths.getHomeDir()
+    fun getHomeDir(): File = paths.homeDir
 
     fun applyScriptUpdate() = configurator.applyScriptUpdate()
 
@@ -72,10 +73,12 @@ class InstallerManager(private val context: Context) {
     ) {
         try {
             val assets = assetManager.list(assetPath)
-            if (assets.isNullOrEmpty()) {
+            if (assets == null || assets.size == 0) {
                 val destFile = File(destPath)
                 assetManager.open(assetPath).use { input ->
-                    destFile.outputStream().use { output -> input.copyTo(output) }
+                    FileOutputStream(destFile).use { output ->
+                        input.copyTo(output)
+                    }
                 }
             } else {
                 val destDir = File(destPath)

@@ -9,11 +9,14 @@ import java.io.File
  * One TerminalView, many sessions — switch via attachSession().
  *
  * Shell selection priority:
- *   1. proot mode: openclaw-shell.sh (bash inside Ubuntu rootfs via proot)
- *   2. termux-bootstrap: bash from Termux Bootstrap installation
+ *   1. termux-bootstrap: bash from Termux Bootstrap installation (default mode)
+ *   2. proot mode: openclaw-shell.sh (bash inside Ubuntu rootfs via proot) — advanced/optional
  *   3. online install: bash from prefix/bin/bash with full glibc env
  *   4. payload mode: glibc-wrapped bash from payload
  *   5. fallback: /system/bin/sh (limited, no glibc tools)
+ *
+ * Termux Bootstrap is checked first because it is the default installation mode.
+ * Proot is only used when the user explicitly chose the advanced proot installation.
  */
 class TerminalSessionManager(
     private val activity: MainActivity,
@@ -48,11 +51,65 @@ class TerminalSessionManager(
 
     /**
      * Selects the best available shell and builds a TerminalSession.
-     * Returns early with the first matching mode.
+     *
+     * Priority order (default first, advanced optional):
+     *   1. Termux Bootstrap — default mode, native Termux environment
+     *   2. Proot Ubuntu — advanced/optional mode, only if explicitly activated
+     *   3. Online install — curl | bash layout
+     *   4. Payload / legacy mode
+     *   5. Fallback — /system/bin/sh (no environment installed)
+     *
+     * Proot is checked AFTER Termux Bootstrap because it is an optional advanced
+     * mode that the user must explicitly choose. Termux Bootstrap is the default.
      */
     private fun buildSession(base: String, homeDir: File, tmpDir: File): TerminalSession {
 
-        // ── 1. Proot mode ────────────────────────────────────────────────────
+        // ── 1. Termux Bootstrap mode (default) ──────────────────────────────
+        val termuxPrefix = File(base, "usr")
+        val termuxBash = File(termuxPrefix, "bin/bash")
+        if (File(base, ".termux-bootstrap-installed").exists() &&
+            termuxBash.exists() && termuxBash.canExecute() &&
+            File(termuxPrefix, "bin/dpkg").exists() &&
+            File(termuxPrefix, "bin/apt").exists()
+        ) {
+            AppLogger.i(TAG, "Termux Bootstrap mode: using ${termuxBash.absolutePath}")
+            // Include ~/.openclaw-android/bin in PATH so node/openclaw wrappers
+            // installed by the payload are accessible from the terminal.
+            val ocaBin = File(homeDir, ".openclaw-android/bin").absolutePath
+            // Resolve payload glibc lib dir for LD_LIBRARY_PATH (needed by node)
+            val payloadGlibcLib = listOf(
+                File(homeDir, "payload/glibc/lib"),
+                File(homeDir, "openclaw-payload/glibc/lib"),
+            ).firstOrNull { it.isDirectory }?.absolutePath
+            val ldLibPath = buildString {
+                append("${termuxPrefix.absolutePath}/lib")
+                if (payloadGlibcLib != null) append(":$payloadGlibcLib")
+            }
+            return TerminalSession(
+                termuxBash.absolutePath,
+                homeDir.absolutePath,
+                arrayOf("bash", "-i"),
+                arrayOf(
+                    "HOME=${homeDir.absolutePath}",
+                    "PREFIX=${termuxPrefix.absolutePath}",
+                    "TMPDIR=${tmpDir.absolutePath}",
+                    "TERM=xterm-256color",
+                    "LANG=en_US.UTF-8",
+                    "PATH=$ocaBin:${termuxPrefix.absolutePath}/bin:${termuxPrefix.absolutePath}/bin/applets:/system/bin:/bin",
+                    "LD_LIBRARY_PATH=$ldLibPath",
+                    "PACKAGE_MANAGER=apt",
+                    "TERMUX_VERSION=1.0",
+                    "TERMUX_APP_PID=${android.os.Process.myPid()}",
+                    "DEBIAN_FRONTEND=noninteractive",
+                    "DEBCONF_NONINTERACTIVE_SEEN=true",
+                ),
+                TRANSCRIPT_ROWS,
+                sessionClient,
+            )
+        }
+
+        // ── 2. Proot Ubuntu mode (advanced/optional) ─────────────────────────
+        // Only activated when the user explicitly chose proot installation.
         val prootShellScript = File(homeDir, "openclaw-shell.sh")
         if (File(activity.filesDir, ".proot-installed").exists() &&
             prootShellScript.exists() && prootShellScript.canExecute()
@@ -69,38 +126,6 @@ class TerminalSessionManager(
                     "LANG=en_US.UTF-8",
                     "PROOT_NO_SECCOMP=1",
                     "PROOT_TMP_DIR=${activity.cacheDir.absolutePath}",
-                ),
-                TRANSCRIPT_ROWS,
-                sessionClient,
-            )
-        }
-
-        // ── 2. Termux Bootstrap mode ─────────────────────────────────────────
-        val termuxPrefix = File(base, "usr")
-        val termuxBash = File(termuxPrefix, "bin/bash")
-        if (File(base, ".termux-bootstrap-installed").exists() &&
-            termuxBash.exists() && termuxBash.canExecute() &&
-            File(termuxPrefix, "bin/dpkg").exists() &&
-            File(termuxPrefix, "bin/apt").exists()
-        ) {
-            AppLogger.i(TAG, "Termux Bootstrap mode: using ${termuxBash.absolutePath}")
-            return TerminalSession(
-                termuxBash.absolutePath,
-                homeDir.absolutePath,
-                arrayOf("bash", "-i"),
-                arrayOf(
-                    "HOME=${homeDir.absolutePath}",
-                    "PREFIX=${termuxPrefix.absolutePath}",
-                    "TMPDIR=${tmpDir.absolutePath}",
-                    "TERM=xterm-256color",
-                    "LANG=en_US.UTF-8",
-                    "PATH=${termuxPrefix.absolutePath}/bin:${termuxPrefix.absolutePath}/bin/applets:/system/bin:/bin",
-                    "LD_LIBRARY_PATH=${termuxPrefix.absolutePath}/lib",
-                    "PACKAGE_MANAGER=apt",
-                    "TERMUX_VERSION=1.0",
-                    "TERMUX_APP_PID=${android.os.Process.myPid()}",
-                    "DEBIAN_FRONTEND=noninteractive",
-                    "DEBCONF_NONINTERACTIVE_SEEN=true",
                 ),
                 TRANSCRIPT_ROWS,
                 sessionClient,
@@ -227,15 +252,18 @@ class TerminalSessionManager(
 
         // ── 5. Fallback — no environment installed ───────────────────────────
         AppLogger.w(TAG, "Fallback: no environment installed, using /system/bin/sh")
-        val helpMessage = buildString {
-            appendLine("╔══════════════════════════════════════════════════════════════╗")
-            appendLine("║              OpenClaw Android - Terminal                     ║")
-            appendLine("╠══════════════════════════════════════════════════════════════╣")
-            appendLine("║  No environment installed.                                   ║")
-            appendLine("║  Go to Dashboard → Setup to install the runtime.             ║")
-            appendLine("║  Limited shell: ls, cd, echo, cat available.                 ║")
-            appendLine("╚══════════════════════════════════════════════════════════════╝")
-        }
+
+        // Build the banner as a single echo command so the shell prints it
+        // instead of trying to execute each line as a command (which causes
+        // "inaccessible or not found" errors for box-drawing characters).
+        val bannerLines = listOf(
+            "OpenClaw Android - Terminal",
+            "No environment installed.",
+            "Go to Dashboard -> Setup to install the runtime.",
+            "Limited shell: ls, cd, echo, cat available.",
+        )
+        val bannerCmd = bannerLines.joinToString("\\n") { "  $it" }
+            .let { "printf '\\n$it\\n\\n'" }
 
         val fallbackSession = TerminalSession(
             "/system/bin/sh",
@@ -252,8 +280,10 @@ class TerminalSessionManager(
 
         activity.runOnUiThread {
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                fallbackSession.write(helpMessage)
-            }, 100)
+                // Write as a shell command so the shell executes printf and
+                // outputs the text — no box-drawing chars that confuse sh.
+                fallbackSession.write("$bannerCmd\n")
+            }, 300)
         }
 
         return fallbackSession
