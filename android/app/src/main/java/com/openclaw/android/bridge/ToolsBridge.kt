@@ -50,7 +50,7 @@ class ToolsBridge(
         val seen = mutableSetOf<String>()
 
         // Check prefix bin dirs
-        val prefixesToCheck = linkedSetOf(config.prefix.absolutePath, CommandRunner.TERMUX_PREFIX)
+        val prefixesToCheck = linkedSetOf(config.prefix.absolutePath)
         for (prefix in prefixesToCheck) {
             val binContents = java.io.File("$prefix/bin").list()?.toSet() ?: emptySet()
             val pkgChecks = mapOf(
@@ -251,7 +251,7 @@ class ToolsBridge(
     @JavascriptInterface
     fun isToolInstalled(id: String): String {
         val config = EnvironmentResolver.resolve(activity.filesDir)
-        val prefixesToCheck = linkedSetOf(config.prefix.absolutePath, CommandRunner.TERMUX_PREFIX)
+        val prefixesToCheck = linkedSetOf(config.prefix.absolutePath)
         
         // System tools
         val pkgChecks: Map<String, String> = mapOf(

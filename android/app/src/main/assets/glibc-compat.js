@@ -30,7 +30,7 @@ const path = require('path');
 // Fix: point process.execPath to the wrapper script.
 
 const _wrapperPath = process.env._OA_WRAPPER_PATH || path.join(
-  process.env.HOME || '/data/data/com.termux/files/home',
+  process.env.HOME || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/home' : '/data/data/com.openclaw.android/files/home'),
   '.openclaw-android', 'bin', 'node'
 );
 try {
@@ -141,7 +141,7 @@ os.networkInterfaces = function networkInterfaces() {
 
 {
   const child_process = require('child_process');
-  const termuxSh = (process.env.PREFIX || '/data/data/com.termux/files/usr') + '/bin/sh';
+  const termuxSh = (process.env.PREFIX || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/usr' : '/data/data/com.openclaw.android/files/usr')) + '/bin/sh';
 
   if (fs.existsSync(termuxSh)) {
     const _originalExec = child_process.exec;
@@ -170,9 +170,9 @@ os.networkInterfaces = function networkInterfaces() {
 }
 
 // ─── DNS resolver fix ────────────────────────────────────────
-// glibc's getaddrinfo() reads /data/data/com.termux/files/usr/glibc/etc/resolv.conf
+// glibc's getaddrinfo() may read paths hardcoded at compile time.
 // for DNS servers. This file may be missing or inaccessible:
-// - Standalone APK: runs under com.openclaw.android, can't access com.termux paths
+// - Standalone APK: runs under com.openclaw.android
 // - Termux: resolv-conf package may not be installed
 // Without a valid resolv.conf, dns.lookup() fails with EAI_AGAIN errors.
 //
@@ -187,7 +187,7 @@ try {
   let dnsServers = ['8.8.8.8', '8.8.4.4'];
   try {
     const resolvConf = fs.readFileSync(
-      (process.env.PREFIX || '/data/data/com.termux/files/usr') + '/etc/resolv.conf',
+      (process.env.PREFIX || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/usr' : '/data/data/com.openclaw.android/files/usr')) + '/etc/resolv.conf',
       'utf8'
     );
     const parsed = resolvConf.match(/^nameserver\s+(.+)$/gm);
@@ -300,9 +300,9 @@ try {
 // Intercept child_process spawn APIs to detect ELF binaries and automatically
 // route them through the glibc dynamic linker (ld.so).
 
-const _glibcLdso = (process.env.PREFIX || '/data/data/com.termux/files/usr')
+const _glibcLdso = (process.env.PREFIX || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/usr' : '/data/data/com.openclaw.android/files/usr'))
   + '/glibc/lib/ld-linux-aarch64.so.1';
-const _glibcLibPath = (process.env.PREFIX || '/data/data/com.termux/files/usr')
+const _glibcLibPath = (process.env.PREFIX || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/usr' : '/data/data/com.openclaw.android/files/usr'))
   + '/glibc/lib';
 
 function _needsGlibcWrap(filePath) {

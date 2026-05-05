@@ -24,13 +24,7 @@ import java.util.regex.Pattern
 object CommandRunner {
     private const val TAG = "CommandRunner"
 
-    // Legacy Termux paths — used only for detection/fallback, never written to.
-    const val TERMUX_HOME = "/data/data/com.termux/files/home"
-    const val TERMUX_PREFIX = "/data/data/com.termux/files/usr"
-    const val OPENCLAW_DIR = "$TERMUX_HOME/.openclaw-android"
-    const val OPENCLAW_BIN = "$OPENCLAW_DIR/bin"
-    const val INSTALLED_MARKER = "$OPENCLAW_DIR/installed.json"
-    const val WRAPPER_SCRIPT = "$TERMUX_HOME/openclaw-start.sh"
+    // Application specific paths — dynamically resolved via environment where possible
 
     // ── Seguridad: Lista blanca de comandos permitidos ─────────────────────
     // Solo estos comandos pueden ejecutarse sin validación adicional
@@ -475,7 +469,7 @@ object CommandRunner {
         val home = if (filesDir != null) {
             filesDir.resolve("home").absolutePath
         } else {
-            System.getenv("HOME") ?: TERMUX_HOME
+            System.getenv("HOME") ?: return false
         }
         val ocaDir = File("$home/.openclaw-android")
         val marker = File(ocaDir, "installed.json")
@@ -584,20 +578,27 @@ object CommandRunner {
     // ── Legacy Termux helpers (kept for backward compatibility) ───────────────
 
     /** Check if termux-setup-storage has been run. */
-    fun isStorageSetupDone(): Boolean = File("$TERMUX_HOME/storage").exists()
+    fun isStorageSetupDone(context: Context? = null): Boolean {
+        val env = buildTermuxEnv(context)
+        val home = env["HOME"] ?: return false
+        return File(home, "storage").exists()
+    }
 
     /**
      * Run termux-setup-storage only if Termux is actually installed and accessible.
      * This is a legacy helper — the app does not depend on it for normal operation.
      * No-op if Termux is not installed.
      */
-    fun runTermuxSetupStorage(onOutput: (String) -> Unit = {}) {
-        if (!File(TERMUX_HOME).exists() || !File(TERMUX_HOME).canRead()) {
-            AppLogger.i(TAG, "Termux not accessible, skipping termux-setup-storage")
-            onOutput("Termux not installed, skipping storage setup.")
+    fun runTermuxSetupStorage(context: Context? = null, onOutput: (String) -> Unit = {}) {
+        val env = buildTermuxEnv(context)
+        val home = env["HOME"] ?: return
+
+        if (!File(home).exists() || !File(home).canRead()) {
+            AppLogger.i(TAG, "Home not accessible, skipping termux-setup-storage")
+            onOutput("Home not setup, skipping storage setup.")
             return
         }
-        if (isStorageSetupDone()) {
+        if (isStorageSetupDone(context)) {
             AppLogger.i(TAG, "termux-setup-storage already done")
             onOutput("Storage already configured.")
             return
@@ -606,8 +607,8 @@ object CommandRunner {
         try {
             val pb = ProcessBuilder("/system/bin/sh", "-c", "yes | termux-setup-storage")
             pb.environment().clear()
-            pb.environment().putAll(safeEnv(buildTermuxEnv()))
-            pb.directory(File(TERMUX_HOME))
+            pb.environment().putAll(safeEnv(env))
+            pb.directory(File(home))
             pb.redirectErrorStream(true)
             val process = pb.start()
             process.inputStream.bufferedReader().forEachLine { line ->
