@@ -119,7 +119,7 @@ class InstallationOrchestrator(
                 }
                 is InstallationMode.ProotUbuntu -> installProot(listener)
                 is InstallationMode.OfflinePayload -> {
-                    if (!isForce && stateChecker.isInstalled()) {
+                    if (!isForce && isPayloadInstalled()) {
                         AppLogger.i(TAG, "Payload already installed — skipping")
                         listener.onSuccess()
                         return@withContext
@@ -150,6 +150,7 @@ class InstallationOrchestrator(
             File(context.filesDir, ".proot-installed").delete()
             File(context.filesDir, ".termux-bootstrap-installed").delete()
             File(context.filesDir, ".rootfs-extracted").delete()
+            File(context.filesDir, ".payload-installed").delete()
 
             // Eliminar directorio de datos
             File(context.filesDir, "home/.openclaw-android").deleteRecursively()
@@ -231,7 +232,18 @@ class InstallationOrchestrator(
         // Do NOT call installTermuxBootstrap() here.
         val bridgeListener = object : com.openclaw.android.InstallerManager.ProgressListener {
             override fun onProgress(percent: Int, message: String) = listener.onProgress(percent, message)
-            override fun onSuccess() = listener.onSuccess()
+            override fun onSuccess() {
+                // Write the payload-specific marker so isPayloadInstalled() works correctly.
+                // This is separate from .installed (written by bootstrap) to avoid false positives.
+                try {
+                    File(context.filesDir, ".payload-installed")
+                        .writeText("${System.currentTimeMillis()}\n")
+                    AppLogger.i(TAG, "Payload marker written: .payload-installed")
+                } catch (e: Exception) {
+                    AppLogger.w(TAG, "Could not write payload marker: ${e.message}")
+                }
+                listener.onSuccess()
+            }
             override fun onError(message: String, cause: Throwable?) = listener.onError(message, cause)
         }
 
@@ -307,6 +319,28 @@ class InstallationOrchestrator(
     }
 
     // ── Helpers privados ─────────────────────────────────────────────────
+
+    /**
+     * Verifica si el payload offline está realmente instalado.
+     * NO usa el marcador .installed (que también escribe el bootstrap).
+     * Comprueba que el directorio del payload exista con archivos reales.
+     */
+    private fun isPayloadInstalled(): Boolean {
+        // Marker específico del payload offline
+        val payloadMarker = File(context.filesDir, ".payload-installed")
+        if (!payloadMarker.exists()) return false
+
+        // Verificar que el directorio del payload realmente existe con contenido
+        val payloadDir = paths.resolvePayloadDir()
+        if (!payloadDir.isDirectory) return false
+
+        // Debe tener al menos el linker de glibc o el binario de node
+        val hasGlibc = File(payloadDir, "glibc/lib/ld-linux-aarch64.so.1").exists()
+        val hasNode = File(payloadDir, "lib/node/bin/node.real").exists() ||
+                      File(payloadDir, "glibc/bin/node").exists()
+
+        return hasGlibc || hasNode
+    }
 
     private fun detectSource(): String {
         return when {

@@ -206,6 +206,29 @@ export const en = {
   // Setup - online mode hint
   setup_mode_online_hint: 'Requires internet. Installs Node.js + OpenClaw via the official script.',
 
+  // Setup - environment selector
+  setup_choose_env: 'Choose your environment',
+  setup_choose_env_desc: 'Select how you want to run OpenClaw on your device.',
+  setup_env_termux_label: 'Termux Bootstrap',
+  setup_env_termux_desc: 'Native Termux environment. Lighter and faster to install.',
+  setup_env_proot_label: 'Proot + Ubuntu Linux',
+  setup_env_proot_desc: 'Full Ubuntu via proot. More compatible and resistant to the Phantom Process Killer.',
+  setup_env_recommended: 'Recommended',
+  setup_back: 'Back',
+
+  // Setup - proot step
+  setup_proot_title: 'Install Proot + Ubuntu',
+  setup_proot_desc: 'Downloads and installs a full Ubuntu environment using proot. Only requires internet.',
+  setup_proot_feat_1: 'Full Ubuntu 22.04 with apt, bash, python, git',
+  setup_proot_feat_2: 'Resistant to Android 12+ Phantom Process Killer',
+  setup_proot_feat_3: 'Online install via curl | bash',
+  setup_proot_size: 'Requires ~80 MB download and ~200 MB disk space.',
+  setup_proot_btn: 'Install Ubuntu (Proot)',
+  setup_proot_installing: 'Installing Ubuntu...',
+  setup_proot_done: '✓ Ubuntu + Proot installed',
+  setup_proot_success_title: 'Ubuntu installed!',
+  setup_proot_success_desc: 'The Ubuntu environment is ready. Open the terminal to get started.',
+
   // Setup - bootstrap step
   setup_bootstrap_title: 'Step 1: Base Environment',
   setup_bootstrap_desc: 'Installs the Termux environment (bash, apt, tools). Required before installing OpenClaw.',
@@ -213,15 +236,23 @@ export const en = {
   setup_bootstrap_done: '✓ Base environment installed',
   setup_bootstrap_btn: 'Install base environment',
   setup_bootstrap_size: '~30 MB · Requires internet',
+  setup_bootstrap_optional: 'Optional for offline mode',
+  setup_bootstrap_skip: 'Skip and continue',
+  setup_bootstrap_skipped: 'Step 1 skipped - offline mode active',
 
   // Setup - openclaw step
   setup_openclaw_title: 'Step 2: Install OpenClaw',
   setup_openclaw_desc: 'Choose how to install OpenClaw (Node.js + runtime).',
   setup_openclaw_locked: 'Complete Step 1 first.',
+  setup_openclaw_locked_or_skip: 'Complete Step 1 or skip it to unlock OpenClaw installation.',
+  setup_online_needs_bootstrap: 'Online installation requires the Termux environment (Step 1) to be installed.',
+  setup_go_install_bootstrap: 'Go back to install base environment',
 
   // Setup - success
   setup_success_title: 'Installation complete!',
   setup_success_desc: 'OpenClaw is ready. Open the terminal to get started.',
+  setup_redirecting: 'Redirecting to dashboard in {seconds}s...',
+  setup_go_dashboard: 'Go to Dashboard',
 
   // Advanced screen
   advanced_title: 'Advanced',
@@ -239,4 +270,17 @@ export const en = {
   advanced_diagnostics: 'Diagnostics',
   advanced_source: 'Source',
   advanced_installed_at: 'Installed at',
+
+  // Advanced - Proot Linux
+  advanced_proot_title: 'Full Linux (Proot)',
+  advanced_proot_label: 'Ubuntu via Proot',
+  advanced_proot_desc: 'Install a full Ubuntu environment using proot. More compatible with native Linux tools and resistant to the Android 12+ Phantom Process Killer.',
+  advanced_proot_feat_1: 'Full Ubuntu 22.04 (~80 MB)',
+  advanced_proot_feat_2: 'apt, bash, python, git included',
+  advanced_proot_feat_3: 'Resistant to Phantom Process Killer',
+  advanced_proot_feat_4: 'Compatible with more Linux tools',
+  advanced_proot_warning: 'Requires ~80 MB download and ~200 MB disk space.',
+  advanced_proot_install_btn: 'Install Ubuntu (Proot)',
+  advanced_proot_installing: 'Installing Ubuntu...',
+  advanced_proot_success: 'Ubuntu installed successfully. Open the terminal to use it.',
 }

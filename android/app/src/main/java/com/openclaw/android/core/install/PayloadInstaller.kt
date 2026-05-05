@@ -87,11 +87,19 @@ internal class PayloadInstaller(
     fun installFromCustomPayload(uri: Uri, listener: InstallerManager.ProgressListener) {
         listener.onProgress(0, "Preparando instalación desde archivo externo...")
         try {
+            paths.homeDir.mkdirs()
+            File(paths.filesDir, "tmp").mkdirs()
+
             listener.onProgress(5, "Abriendo archivo seleccionado...")
             context.contentResolver.openInputStream(uri)?.use { input ->
                 listener.onProgress(10, "Extrayendo contenido (streaming)...")
-                val count = PayloadExtractor.extractTarGzStream(input, paths.filesDir)
-                AppLogger.i(TAG, "Custom payload extracted: $count entries")
+                // Extract to homeDir (same as installOffline) so the payload
+                // lands in the expected location for EnvironmentConfigurator.
+                val count = PayloadExtractor.extractTarGzStream(input, paths.homeDir)
+                AppLogger.i(TAG, "Custom payload extracted: $count entries to ${paths.homeDir.absolutePath}")
+            } ?: run {
+                listener.onError("No se pudo abrir el archivo seleccionado. Verifica los permisos.")
+                return
             }
             configurator.completeInstallation(listener)
         } catch (e: Exception) {

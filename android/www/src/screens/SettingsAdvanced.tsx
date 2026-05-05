@@ -60,6 +60,8 @@ export function SettingsAdvanced() {
     const [permResult, setPermResult] = useState<PermResult | null>(null)
     const [runningInstall, setRunningInstall] = useState(false)
     const [installLog, setInstallLog] = useState<string[]>([])
+    const [prootInstalling, setProotInstalling] = useState(false)
+    const [prootResult, setProotResult] = useState<{ success: boolean; error?: string } | null>(null)
 
     function loadVersions() {
         setLoading(true)
@@ -111,6 +113,29 @@ export function SettingsAdvanced() {
         if (id) {
             setTimeout(() => bridge.call('writeToTerminal', id, cmd + '\n'), 200)
         }
+    }
+
+    function handleInstallProot() {
+        setProotInstalling(true)
+        setProotResult(null)
+        // startSetup('proot') emits setup_progress events and runs in background
+        bridge.call('startSetup', 'proot')
+        // Show terminal so user can follow progress
+        bridge.call('showTerminal')
+        // Poll for completion via bridge status after a short delay
+        setTimeout(() => {
+            try {
+                const status = bridge.callJson<{ prootReady: boolean }>('getSetupStatus')
+                if (status?.prootReady) {
+                    setProotResult({ success: true })
+                } else {
+                    setProotResult({ success: false, error: 'Instalación en progreso — revisa el terminal' })
+                }
+            } catch {
+                setProotResult({ success: false, error: 'Revisa el terminal para ver el progreso' })
+            }
+            setProotInstalling(false)
+        }, 3000)
     }
 
     const installDate = versions?.installedAt
@@ -285,6 +310,78 @@ export function SettingsAdvanced() {
                         ? <><span className="spinner" style={{ width: 16, height: 16, marginRight: 8 }} />Ejecutando...</>
                         : `▶ ${t('advanced_run_install')}`}
                 </button>
+            </div>
+
+            {/* ── Proot Linux ───────────────────────────────────────────── */}
+            <div className="section-title">{t('advanced_proot_title')}</div>
+            <div className="card">
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
+                    <span style={{ fontSize: 28, lineHeight: 1 }}>🐧</span>
+                    <div>
+                        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                            {t('advanced_proot_label')}
+                        </div>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                            {t('advanced_proot_desc')}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Características */}
+                <div style={{
+                    background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                    borderRadius: 8, padding: '10px 14px', marginBottom: 12,
+                }}>
+                    {[
+                        t('advanced_proot_feat_1'),
+                        t('advanced_proot_feat_2'),
+                        t('advanced_proot_feat_3'),
+                        t('advanced_proot_feat_4'),
+                    ].map((feat, i) => (
+                        <div key={i} style={{
+                            fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7,
+                            borderTop: i > 0 ? '1px solid var(--border-subtle)' : 'none',
+                            paddingTop: i > 0 ? 6 : 0, marginTop: i > 0 ? 6 : 0,
+                        }}>
+                            ✓ {feat}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Advertencia de tamaño */}
+                <div style={{
+                    background: 'var(--warning-dim, rgba(255,180,0,0.1))',
+                    border: '1px solid var(--warning, #ffb400)',
+                    borderRadius: 8, padding: '8px 12px', marginBottom: 12,
+                    fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6,
+                }}>
+                    ⚠️ {t('advanced_proot_warning')}
+                </div>
+
+                <button
+                    className="btn btn-primary"
+                    style={{ width: '100%' }}
+                    onClick={handleInstallProot}
+                    disabled={prootInstalling}
+                >
+                    {prootInstalling
+                        ? <><span className="spinner" style={{ width: 16, height: 16, marginRight: 8 }} />{t('advanced_proot_installing')}</>
+                        : `🐧 ${t('advanced_proot_install_btn')}`}
+                </button>
+
+                {prootResult && (
+                    <div style={{
+                        marginTop: 10,
+                        background: prootResult.success ? 'var(--success-dim)' : 'var(--error-dim)',
+                        border: `1px solid ${prootResult.success ? 'var(--success)' : 'var(--error)'}`,
+                        borderRadius: 8, padding: '10px 14px', fontSize: 13,
+                    }}>
+                        {prootResult.success
+                            ? <span style={{ color: 'var(--success)' }}>✓ {t('advanced_proot_success')}</span>
+                            : <span style={{ color: 'var(--error)' }}>✗ {prootResult.error}</span>
+                        }
+                    </div>
+                )}
             </div>
 
             {/* ── Comandos de diagnóstico ───────────────────────────────── */}

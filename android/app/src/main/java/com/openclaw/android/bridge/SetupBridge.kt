@@ -129,10 +129,49 @@ class SetupBridge(
 
     @JavascriptInterface
     fun startSetup(mode: String = "auto") {
-        activity.runOnUiThread {
-            activity.startInstallFromUi(mode) { success ->
-                AppLogger.i(TAG, "Setup finished: success=$success")
-            }
+        // Route through the installer directly so we can emit setup_progress
+        // events back to the JS UI. Using activity.startInstallFromUi() would
+        // show the native overlay instead of updating the WebView progress ring.
+        launchIO(errorEvent = "setup_progress") {
+            installerManager.install(mode, activity.selectedPayloadUri, object : InstallerManager.ProgressListener {
+                override fun onProgress(percent: Int, message: String) {
+                    // Normalize to 0.0–1.0 for the JS side
+                    eventBridge.emit("setup_progress", mapOf(
+                        "progress" to percent / 100f,
+                        "message" to message,
+                    ))
+                }
+
+                override fun onSuccess() {
+                    AppLogger.i(TAG, "startSetup($mode) completed successfully")
+                    eventBridge.emit("setup_progress", mapOf(
+                        "progress" to PROGRESS_DONE,
+                        "message" to "Instalación completada",
+                    ))
+
+                    // For online mode: open the terminal so the user can run
+                    // the curl | bash install interactively.
+                    if (mode == "online") {
+                        activity.runOnUiThread {
+                            (activity as? MainActivity)?.showTerminal()
+                            val session = sessionManager.activeSession
+                                ?: sessionManager.createSession()
+                            val terminalManager = com.openclaw.android.TerminalManager(activity, activity.filesDir)
+                            terminalManager.runOnlineInstall(session)
+                        }
+                    }
+                }
+
+                override fun onError(message: String, cause: Throwable?) {
+                    if (cause != null) AppLogger.e(TAG, "startSetup($mode) error: $message", cause)
+                    else AppLogger.e(TAG, "startSetup($mode) error: $message")
+                    eventBridge.emit("setup_progress", mapOf(
+                        "progress" to PROGRESS_START,
+                        "message" to message,
+                        "error" to message,
+                    ))
+                }
+            })
         }
     }
 
