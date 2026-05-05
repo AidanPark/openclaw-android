@@ -1,44 +1,60 @@
-import { useState, useEffect, useCallback } from 'react'
+import { lazy, Suspense, useState, useCallback } from 'react'
 import { Route, useRoute } from './lib/router'
 import { bridge } from './lib/bridge'
 import { useNativeEvent } from './lib/useNativeEvent'
 import { t } from './i18n'
+import { AppProvider, useAppContext } from './contexts/AppContext'
 import { Setup } from './screens/Setup'
 import { Dashboard } from './screens/Dashboard'
 import { Settings } from './screens/Settings'
-import { SettingsKeepAlive } from './screens/SettingsKeepAlive'
-import { SettingsStorage } from './screens/SettingsStorage'
-import { SettingsAbout } from './screens/SettingsAbout'
-import { SettingsUpdates } from './screens/SettingsUpdates'
-import { SettingsPlatforms } from './screens/SettingsPlatforms'
-import { SettingsTools } from './screens/SettingsTools'
-import { SettingsAdvanced } from './screens/SettingsAdvanced'
+
+// Lazy-load settings sub-screens — they are rarely visited and add weight
+const SettingsKeepAlive = lazy(() =>
+  import('./screens/SettingsKeepAlive').then(m => ({ default: m.SettingsKeepAlive }))
+)
+const SettingsStorage = lazy(() =>
+  import('./screens/SettingsStorage').then(m => ({ default: m.SettingsStorage }))
+)
+const SettingsAbout = lazy(() =>
+  import('./screens/SettingsAbout').then(m => ({ default: m.SettingsAbout }))
+)
+const SettingsUpdates = lazy(() =>
+  import('./screens/SettingsUpdates').then(m => ({ default: m.SettingsUpdates }))
+)
+const SettingsPlatforms = lazy(() =>
+  import('./screens/SettingsPlatforms').then(m => ({ default: m.SettingsPlatforms }))
+)
+const SettingsTools = lazy(() =>
+  import('./screens/SettingsTools').then(m => ({ default: m.SettingsTools }))
+)
+const SettingsAdvanced = lazy(() =>
+  import('./screens/SettingsAdvanced').then(m => ({ default: m.SettingsAdvanced }))
+)
 
 type Tab = 'terminal' | 'dashboard' | 'settings'
 
-interface SetupStatus {
-  bootstrapInstalled: boolean
-  runtimeInstalled: boolean
-  wwwInstalled: boolean
-  platformInstalled: boolean
+// ── Spinner shown while lazy chunks load ──────────────────────────────────
+function ScreenFallback() {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      height: 'calc(100dvh - 56px)',
+    }}>
+      <div className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
+    </div>
+  )
 }
 
-export function App() {
+// ── Inner app — consumes AppContext ───────────────────────────────────────
+function AppInner() {
   const { path, navigate } = useRoute()
+  const { isInstalled, setupStatus } = useAppContext()
   const [hasUpdates, setHasUpdates] = useState(false)
-  const [setupDone, setSetupDone] = useState<boolean | null>(null)
 
-  useEffect(() => {
-    const status = bridge.callJson<SetupStatus>('getSetupStatus')
-    if (status) {
-      setSetupDone(!!status.bootstrapInstalled && !!status.platformInstalled)
-    } else {
-      setSetupDone(true)
-    }
-
-    const updates = bridge.callJson<{ updateAvailable?: boolean }>('checkForUpdates')
-    if (updates?.updateAvailable) setHasUpdates(true)
-  }, [])
+  // Derive setupDone from context instead of a separate bridge call
+  const setupDone = setupStatus
+    ? !!(setupStatus.bootstrapInstalled && setupStatus.platformInstalled)
+    : null
 
   const onUpdateAvailable = useCallback(() => setHasUpdates(true), [])
   useNativeEvent('update_available', onUpdateAvailable)
@@ -56,12 +72,13 @@ export function App() {
     navigate(tab === 'dashboard' ? '/dashboard' : '/settings')
   }
 
-  useEffect(() => {
-    if (path === '/') {
-      navigate('/dashboard')
-    }
-  }, [path, navigate])
+  // Redirect root to dashboard
+  if (path === '/') {
+    navigate('/dashboard')
+    return null
+  }
 
+  // Initial loading — context not yet resolved
   if (setupDone === null) {
     return (
       <div style={{
@@ -107,18 +124,21 @@ export function App() {
       </nav>
 
       <Route path="/setup">
-        <Setup onComplete={() => { setSetupDone(true); navigate('/dashboard') }} />
+        <Setup onComplete={() => navigate('/dashboard')} />
       </Route>
       <Route path="/dashboard">
         <Dashboard />
       </Route>
       <Route path="/settings">
-        <SettingsRouter />
+        <Suspense fallback={<ScreenFallback />}>
+          <SettingsRouter />
+        </Suspense>
       </Route>
     </>
   )
 }
 
+// ── Settings sub-router ───────────────────────────────────────────────────
 function SettingsRouter() {
   const { path } = useRoute()
   if (path === '/settings/keep-alive') return <SettingsKeepAlive />
@@ -129,4 +149,13 @@ function SettingsRouter() {
   if (path === '/settings/tools') return <SettingsTools />
   if (path === '/settings/advanced') return <SettingsAdvanced />
   return <Settings />
+}
+
+// ── Root export — wraps everything in AppProvider ─────────────────────────
+export function App() {
+  return (
+    <AppProvider>
+      <AppInner />
+    </AppProvider>
+  )
 }
