@@ -108,9 +108,14 @@ class InstallOverlayController(
                 override fun onSuccess() {
                     AppLogger.i(TAG, "Installation completed successfully")
                     activity.runOnUiThread {
+                        // Show 100% success message for 3 seconds before navigating
+                        updateProgress(100, "✓ ¡Instalación completada!")
+                    }
+                    // Delay on background thread so we don't block the UI
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                         hide()
                         onComplete?.invoke(true)
-                    }
+                    }, 3000L)
                 }
 
                 override fun onError(message: String, cause: Throwable?) {

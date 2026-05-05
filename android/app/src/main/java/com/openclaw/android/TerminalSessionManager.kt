@@ -232,10 +232,27 @@ class TerminalSessionManager(
             val nodeDir = File(ocaDir, "node/bin").absolutePath
             val glibcLib = File(onlinePrefix, "glibc/lib").absolutePath
             val certPem = File(onlinePrefix, "etc/tls/cert.pem").absolutePath
+            // Create .bashrc for --init-file so bash never reads the hardcoded
+            // /data/data/com.termux/... path → Permission denied / signal 1
+            val onlineBashRc = File(homeDir, ".bashrc")
+            if (!onlineBashRc.exists()) {
+                onlineBashRc.parentFile?.mkdirs()
+                onlineBashRc.writeText(buildString {
+                    appendLine("export HOME=\"${homeDir.absolutePath}\"")
+                    appendLine("export PREFIX=\"${onlinePrefix.absolutePath}\"")
+                    appendLine("export TMPDIR=\"${tmpDir.absolutePath}\"")
+                    appendLine("export PATH=\"$ocaBin:$nodeDir:${onlinePrefix.absolutePath}/bin:${onlinePrefix.absolutePath}/bin/applets:/system/bin:/bin\"")
+                    appendLine("export LD_LIBRARY_PATH=\"${onlinePrefix.absolutePath}/lib:$glibcLib\"")
+                    appendLine("export LANG=en_US.UTF-8")
+                    appendLine("export TERM=xterm-256color")
+                    appendLine("export PS1='\\$ '")
+                    appendLine("cd \"${homeDir.absolutePath}\"")
+                })
+            }
             return TerminalSession(
                 bashBin.absolutePath,
                 homeDir.absolutePath,
-                arrayOf("bash", "-i"),
+                arrayOf("bash", "--norc", "--noprofile", "--init-file", onlineBashRc.absolutePath, "-i"),
                 arrayOf(
                     "HOME=${homeDir.absolutePath}",
                     "PREFIX=${onlinePrefix.absolutePath}",
@@ -315,7 +332,24 @@ class TerminalSessionManager(
         }
 
         val shellArgs = if (shellBin.endsWith("/bash")) {
-            arrayOf("bash", "-i", "--norc", "--noprofile")
+            // --norc / --noprofile: skip hardcoded /data/data/com.termux/... paths → Permission denied
+            // --init-file: source our .bashrc from the real homeDir instead
+            val homeBashRcLegacy = File(homeDir, ".bashrc")
+            if (!homeBashRcLegacy.exists()) {
+                homeBashRcLegacy.parentFile?.mkdirs()
+                homeBashRcLegacy.writeText(buildString {
+                    appendLine("export HOME=\"${homeDir.absolutePath}\"")
+                    appendLine("export PREFIX=\"${prefix.absolutePath}\"")
+                    appendLine("export TMPDIR=\"${tmpDir.absolutePath}\"")
+                    appendLine("export PATH=\"${prefix.absolutePath}/bin:${prefix.absolutePath}/bin/applets:/system/bin:/bin\"")
+                    appendLine("export LD_LIBRARY_PATH=\"${prefix.absolutePath}/lib\"")
+                    appendLine("export LANG=en_US.UTF-8")
+                    appendLine("export TERM=xterm-256color")
+                    appendLine("export PS1='\\$ '")
+                    appendLine("cd \"${homeDir.absolutePath}\"")
+                })
+            }
+            arrayOf("bash", "--norc", "--noprofile", "--init-file", homeBashRcLegacy.absolutePath, "-i")
         } else {
             arrayOf("sh", "-i")
         }

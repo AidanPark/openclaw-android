@@ -79,7 +79,8 @@ internal class ActivityInstallFlow(
                     if (mode == "online") {
                         runOnlineInstallInTerminal()
                     } else {
-                        (activity as? MainActivity)?.reloadWebView()
+                        // Navigate to dashboard after successful installation
+                        (activity as? MainActivity)?.showWebView()
                     }
                 } else {
                     Toast.makeText(activity, "Installation failed", Toast.LENGTH_LONG).show()
