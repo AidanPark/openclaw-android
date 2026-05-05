@@ -7,6 +7,13 @@ import java.io.File
 /**
  * Manages multiple terminal sessions.
  * One TerminalView, many sessions — switch via attachSession().
+ *
+ * Shell selection priority:
+ *   1. proot mode: openclaw-shell.sh (bash inside Ubuntu rootfs via proot)
+ *   2. termux-bootstrap: bash from Termux Bootstrap installation
+ *   3. online install: bash from prefix/bin/bash with full glibc env
+ *   4. payload mode: glibc-wrapped bash from payload
+ *   5. fallback: /system/bin/sh (limited, no glibc tools)
  */
 class TerminalSessionManager(
     private val activity: MainActivity,
@@ -26,251 +33,124 @@ class TerminalSessionManager(
     val activeSession: TerminalSession?
         get() = sessions.getOrNull(activeSessionIndex)
 
-    /**
-     * Creates a new terminal session using the app-local sandbox exclusively.
-     *
-     * Shell selection priority:
-     *   1. proot mode: openclaw-shell.sh (bash inside Ubuntu rootfs via proot)
-     *   2. termux-bootstrap: bash from Termux Bootstrap installation
-     *   3. online install: bash from prefix/bin/bash with full glibc env
-     *   4. payload mode: glibc-wrapped bash from payload
-     *   5. fallback: /system/bin/sh (limited, no glibc tools)
-     *
-     * NOTE: /system/bin/sh is ONLY used as last resort. It cannot run glibc
-     * binaries (node, git, openclaw) and will fail with "CANNOT LINK EXECUTABLE"
-     * if those are invoked.
-     */
     fun createSession(): TerminalSession {
         val base = activity.filesDir.absolutePath
         val homeDir = File(base, "home").also { it.mkdirs() }
         val tmpDir = File(base, "tmp").also { it.mkdirs() }
 
-        // ── Proot mode: use openclaw-shell.sh (bash inside Ubuntu rootfs) ──
-        val prootShellScript = File(homeDir, "openclaw-shell.sh")
-        val isProotInstalled = File(activity.filesDir, ".proot-installed").exists() &&
-            prootShellScript.exists() && prootShellScript.canExecute()
-
-        if (isProotInstalled) {
-            AppLogger.i(TAG, "Proot mode: using openclaw-shell.sh as terminal shell")
-            val prootEnv = arrayOf(
-                "HOME=${homeDir.absolutePath}",
-                "TMPDIR=${tmpDir.absolutePath}",
-                "TERM=xterm-256color",
-                "LANG=en_US.UTF-8",
-                "PROOT_NO_SECCOMP=1",
-                "PROOT_TMP_DIR=${activity.cacheDir.absolutePath}",
-            )
-            val session = TerminalSession(
-                prootShellScript.absolutePath,
-                homeDir.absolutePath,
-                arrayOf("openclaw-shell.sh"),
-                prootEnv,
-                TRANSCRIPT_ROWS,
-                sessionClient,
-            )
-            sessions.add(session)
-            switchSession(sessions.size - 1)
-            eventBridge.emit("session_changed", mapOf("id" to session.mHandle, "action" to "created"))
-            activity.runOnUiThread { onSessionsChanged?.invoke() }
-            return session
-        }
-
-        // ── Termux Bootstrap mode: bash from Termux Bootstrap installation ──
-        // Detected when: .termux-bootstrap-installed marker exists
-        val termuxBootstrapMarker = File(base, ".termux-bootstrap-installed")
-        val termuxPrefix = File(base, "usr") // Siempre usar files/usr
-        val termuxBash = File(termuxPrefix, "bin/bash")
-        val termuxDpkg = File(termuxPrefix, "bin/dpkg")
-        val termuxApt = File(termuxPrefix, "bin/apt")
-        
-        val isTermuxBootstrapInstalled = termuxBootstrapMarker.exists() &&
-            termuxBash.exists() && termuxBash.canExecute() &&
-            termuxDpkg.exists() && termuxApt.exists()
-
-        if (isTermuxBootstrapInstalled) {
-            AppLogger.i(TAG, "Termux Bootstrap mode: using ${termuxBash.absolutePath}")
-            
-            // Configurar entorno para Termux Bootstrap
-            val termuxEnv = arrayOf(
-                "HOME=${homeDir.absolutePath}",
-                "PREFIX=${termuxPrefix.absolutePath}",
-                "TMPDIR=${tmpDir.absolutePath}",
-                "TERM=xterm-256color",
-                "LANG=en_US.UTF-8",
-                "PATH=${termuxPrefix.absolutePath}/bin:${termuxPrefix.absolutePath}/bin/applets:/system/bin:/bin",
-                "LD_LIBRARY_PATH=${termuxPrefix.absolutePath}/lib",
-                // Variables de entorno específicas de Termux
-                "PACKAGE_MANAGER=apt",
-                "TERMUX_VERSION=1.0",
-                "TERMUX_APP_PID=${android.os.Process.myPid()}",
-                // Configuración para evitar problemas de permisos con dpkg/apt
-                "DEBIAN_FRONTEND=noninteractive",
-                "DEBCONF_NONINTERACTIVE_SEEN=true",
-            )
-            
-            val session = TerminalSession(
-                termuxBash.absolutePath,
-                homeDir.absolutePath,
-                arrayOf("bash", "-i"),
-                termuxEnv,
-                TRANSCRIPT_ROWS,
-                sessionClient,
-            )
-            sessions.add(session)
-            switchSession(sessions.size - 1)
-            eventBridge.emit("session_changed", mapOf("id" to session.mHandle, "action" to "created"))
-            activity.runOnUiThread { onSessionsChanged?.invoke() }
-            return session
-        }
-
-        // ── Ningún entorno instalado: usar system shell con mensaje útil ──
-        AppLogger.w(TAG, "No environment installed, using system shell with help message")
-        
-        // Escribir un mensaje de ayuda en el terminal
-        val helpMessage = """
-            ╔══════════════════════════════════════════════════════════════╗
-            ║                 OpenClaw Android - Terminal                  ║
-            ╠══════════════════════════════════════════════════════════════╣
-            ║                                                              ║
-            ║  ❗ Entorno de terminal no instalado                         ║
-            ║                                                              ║
-            ║  Para usar este terminal, necesitas instalar un entorno:    ║
-            ║                                                              ║
-            ║  1. Ve al Dashboard (botón superior izquierdo)              ║
-            ║  2. Haz clic en "Instalar Termux Bootstrap"                 ║
-            ║  3. Espera 2-3 minutos mientras se descarga (~50MB)         ║
-            ║  4. ¡Listo! Podrás usar bash, apt, dpkg, git, curl, etc.    ║
-            ║                                                              ║
-            ║  Alternativa avanzada:                                      ║
-            ║  • Proot + Ubuntu (sistema completo, ~250MB)                ║
-            ║    - Resistente a Phantom Process Killer                    ║
-            ║    - Ideal para procesos largos                             ║
-            ║                                                              ║
-            ╚══════════════════════════════════════════════════════════════╝
-            
-            Mientras tanto, solo tienes acceso limitado a /system/bin/sh
-            Comandos disponibles: ls, cd, echo, cat, etc.
-            
-            Para instalar ahora, escribe: install-termux
-            Para ver diagnóstico: diagnostic
-            
-        """.trimIndent()
-        
-        // Crear sesión con system shell
-        val systemEnv = arrayOf(
-            "HOME=${homeDir.absolutePath}",
-            "TERM=xterm-256color",
-            "PATH=/system/bin:/bin",
-        )
-        
-        val session = TerminalSession(
-            "/system/bin/sh",
-            homeDir.absolutePath,
-            arrayOf("sh", "-i"),
-            systemEnv,
-            TRANSCRIPT_ROWS,
-            object : TerminalSessionClient by sessionClient {
-                override fun onTextChanged(session: TerminalSession) {
-                    sessionClient.onTextChanged(session)
-                }
-                
-                override fun onSessionFinished(session: TerminalSession) {
-                    sessionClient.onSessionFinished(session)
-                }
-                
-                override fun onTitleChanged(session: TerminalSession) {
-                    sessionClient.onTitleChanged(session)
-                }
-                
-                override fun onCopyTextToClipboard(session: TerminalSession, text: String) {
-                    sessionClient.onCopyTextToClipboard(session, text)
-                }
-                
-                override fun onPasteTextFromClipboard(session: TerminalSession) {
-                    sessionClient.onPasteTextFromClipboard(session)
-                }
-                
-                override fun onBell(session: TerminalSession) {
-                    sessionClient.onBell(session)
-                }
-                
-                override fun onColorsChanged(session: TerminalSession) {
-                    sessionClient.onColorsChanged(session)
-                }
-                
-                override fun setTerminalShellPid(session: TerminalSession, pid: Int) {
-                    sessionClient.setTerminalShellPid(session, pid)
-                }
-            },
-        )
-        
-        // Escribir mensaje de ayuda después de que la sesión se inicialice
-        activity.runOnUiThread {
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                session.write(helpMessage.toByteArray())
-            }, 100)
-        }
-        
+        val session = buildSession(base, homeDir, tmpDir)
         sessions.add(session)
         switchSession(sessions.size - 1)
         eventBridge.emit("session_changed", mapOf("id" to session.mHandle, "action" to "created"))
         activity.runOnUiThread { onSessionsChanged?.invoke() }
         return session
+    }
 
-        // ── Online install mode: bash from Termux bootstrap with glibc env ──
-        // Detected when: prefix/bin/bash exists + .openclaw-android/installed.json
-        // This is the layout left by: curl -sL myopenclawhub.com/install | bash
+    /**
+     * Selects the best available shell and builds a TerminalSession.
+     * Returns early with the first matching mode.
+     */
+    private fun buildSession(base: String, homeDir: File, tmpDir: File): TerminalSession {
+
+        // ── 1. Proot mode ────────────────────────────────────────────────────
+        val prootShellScript = File(homeDir, "openclaw-shell.sh")
+        if (File(activity.filesDir, ".proot-installed").exists() &&
+            prootShellScript.exists() && prootShellScript.canExecute()
+        ) {
+            AppLogger.i(TAG, "Proot mode: using openclaw-shell.sh")
+            return TerminalSession(
+                prootShellScript.absolutePath,
+                homeDir.absolutePath,
+                arrayOf("openclaw-shell.sh"),
+                arrayOf(
+                    "HOME=${homeDir.absolutePath}",
+                    "TMPDIR=${tmpDir.absolutePath}",
+                    "TERM=xterm-256color",
+                    "LANG=en_US.UTF-8",
+                    "PROOT_NO_SECCOMP=1",
+                    "PROOT_TMP_DIR=${activity.cacheDir.absolutePath}",
+                ),
+                TRANSCRIPT_ROWS,
+                sessionClient,
+            )
+        }
+
+        // ── 2. Termux Bootstrap mode ─────────────────────────────────────────
+        val termuxPrefix = File(base, "usr")
+        val termuxBash = File(termuxPrefix, "bin/bash")
+        if (File(base, ".termux-bootstrap-installed").exists() &&
+            termuxBash.exists() && termuxBash.canExecute() &&
+            File(termuxPrefix, "bin/dpkg").exists() &&
+            File(termuxPrefix, "bin/apt").exists()
+        ) {
+            AppLogger.i(TAG, "Termux Bootstrap mode: using ${termuxBash.absolutePath}")
+            return TerminalSession(
+                termuxBash.absolutePath,
+                homeDir.absolutePath,
+                arrayOf("bash", "-i"),
+                arrayOf(
+                    "HOME=${homeDir.absolutePath}",
+                    "PREFIX=${termuxPrefix.absolutePath}",
+                    "TMPDIR=${tmpDir.absolutePath}",
+                    "TERM=xterm-256color",
+                    "LANG=en_US.UTF-8",
+                    "PATH=${termuxPrefix.absolutePath}/bin:${termuxPrefix.absolutePath}/bin/applets:/system/bin:/bin",
+                    "LD_LIBRARY_PATH=${termuxPrefix.absolutePath}/lib",
+                    "PACKAGE_MANAGER=apt",
+                    "TERMUX_VERSION=1.0",
+                    "TERMUX_APP_PID=${android.os.Process.myPid()}",
+                    "DEBIAN_FRONTEND=noninteractive",
+                    "DEBCONF_NONINTERACTIVE_SEEN=true",
+                ),
+                TRANSCRIPT_ROWS,
+                sessionClient,
+            )
+        }
+
+        // ── 3. Online install mode ───────────────────────────────────────────
+        // Layout left by: curl -sL myopenclawhub.com/install | bash
         val onlinePrefix = File(base, "usr")
         val ocaDir = File(homeDir, ".openclaw-android")
         val bashBin = File(onlinePrefix, "bin/bash")
-        val installedJson = File(ocaDir, "installed.json")
         val nodeReal = File(ocaDir, "node/bin/node.real")
         val glibcLdso = File(onlinePrefix, "glibc/lib/ld-linux-aarch64.so.1")
         val ocaMjs = File(onlinePrefix, "lib/node_modules/openclaw/openclaw.mjs")
 
-        val isOnlineInstall = bashBin.exists() && bashBin.canExecute() &&
-            installedJson.exists() && nodeReal.exists() && glibcLdso.exists() && ocaMjs.exists()
-
-        if (isOnlineInstall) {
+        if (bashBin.exists() && bashBin.canExecute() &&
+            File(ocaDir, "installed.json").exists() &&
+            nodeReal.exists() && glibcLdso.exists() && ocaMjs.exists()
+        ) {
             AppLogger.i(TAG, "Online install mode: using ${bashBin.absolutePath}")
             val ocaBin = File(ocaDir, "bin").absolutePath
             val nodeDir = File(ocaDir, "node/bin").absolutePath
             val glibcLib = File(onlinePrefix, "glibc/lib").absolutePath
             val certPem = File(onlinePrefix, "etc/tls/cert.pem").absolutePath
-
-            val onlineEnv = arrayOf(
-                "HOME=${homeDir.absolutePath}",
-                "PREFIX=${onlinePrefix.absolutePath}",
-                "TMPDIR=${tmpDir.absolutePath}",
-                "PATH=$ocaBin:$nodeDir:${onlinePrefix.absolutePath}/bin:${onlinePrefix.absolutePath}/bin/applets:/system/bin:/bin",
-                "LD_LIBRARY_PATH=${onlinePrefix.absolutePath}/lib:$glibcLib",
-                "SSL_CERT_FILE=$certPem",
-                "CURL_CA_BUNDLE=$certPem",
-                "GIT_SSL_CAINFO=$certPem",
-                "OA_GLIBC=1",
-                "CONTAINER=1",
-                "TERM=xterm-256color",
-                "LANG=en_US.UTF-8",
-                "GIT_CONFIG_NOSYSTEM=1",
-                "CLAWDHUB_WORKDIR=${homeDir.absolutePath}/.openclaw/workspace",
-            )
-            val session = TerminalSession(
+            return TerminalSession(
                 bashBin.absolutePath,
                 homeDir.absolutePath,
                 arrayOf("bash", "-i"),
-                onlineEnv,
+                arrayOf(
+                    "HOME=${homeDir.absolutePath}",
+                    "PREFIX=${onlinePrefix.absolutePath}",
+                    "TMPDIR=${tmpDir.absolutePath}",
+                    "PATH=$ocaBin:$nodeDir:${onlinePrefix.absolutePath}/bin:${onlinePrefix.absolutePath}/bin/applets:/system/bin:/bin",
+                    "LD_LIBRARY_PATH=${onlinePrefix.absolutePath}/lib:$glibcLib",
+                    "SSL_CERT_FILE=$certPem",
+                    "CURL_CA_BUNDLE=$certPem",
+                    "GIT_SSL_CAINFO=$certPem",
+                    "OA_GLIBC=1",
+                    "CONTAINER=1",
+                    "TERM=xterm-256color",
+                    "LANG=en_US.UTF-8",
+                    "GIT_CONFIG_NOSYSTEM=1",
+                    "CLAWDHUB_WORKDIR=${homeDir.absolutePath}/.openclaw/workspace",
+                ),
                 TRANSCRIPT_ROWS,
                 sessionClient,
             )
-            sessions.add(session)
-            switchSession(sessions.size - 1)
-            eventBridge.emit("session_changed", mapOf("id" to session.mHandle, "action" to "created"))
-            activity.runOnUiThread { onSessionsChanged?.invoke() }
-            return session
         }
 
-        // ── Payload / legacy mode ────────────────────────────────────────────
-        // Usar EnvironmentResolver directamente — EnvironmentBuilder eliminado (era shim)
+        // ── 4. Payload / legacy mode ─────────────────────────────────────────
         val config = com.openclaw.android.core.env.EnvironmentResolver.resolve(activity.filesDir)
         val env = com.openclaw.android.core.env.EnvironmentResolver
             .buildEnvMap(config, activity.packageName)
@@ -278,58 +158,39 @@ class TerminalSessionManager(
 
         val prefixPath = env["PREFIX"] ?: "$base/usr"
         val prefix = File(prefixPath).also { if (!it.exists()) it.mkdirs() }
-
         env["HOME"] = homeDir.absolutePath
         env["PREFIX"] = prefix.absolutePath
         env["TMPDIR"] = tmpDir.absolutePath
 
-        // Usar InstallerManager directamente — PayloadManager eliminado (era shim puro)
-        val installerManager = com.openclaw.android.InstallerManager(activity)
-
-        // ── SAFE MODE: Determine if we can use Termux environment or must fall back ──
+        val installerManager = InstallerManager(activity)
         val isEnvironmentReady = installerManager.isReady()
         val hasGlibcLinker = File(prefix, "glibc/lib/ld-linux-aarch64.so.1").exists()
         val hasTermuxExec = File(prefix, "lib/libtermux-exec.so").exists()
 
-        // Check if bash/sh are real binaries or emergency wrappers
-        val bashFile = File(prefix, "bin/bash")
-        val shFile = File(prefix, "bin/sh")
-
         val isBashWrapper = try {
-            bashFile.exists() &&
-            bashFile.length() < 200 &&
-            bashFile.readText().contains("# Emergency bash wrapper")
-        } catch (e: Exception) {
-            false
-        }
+            val f = File(prefix, "bin/bash")
+            f.exists() && f.length() < 200 && f.readText().contains("# Emergency bash wrapper")
+        } catch (_: Exception) { false }
 
         val isShWrapper = try {
-            shFile.exists() &&
-            shFile.length() < 200 &&
-            shFile.readText().contains("# Emergency")
-        } catch (e: Exception) {
-            false
-        }
+            val f = File(prefix, "bin/sh")
+            f.exists() && f.length() < 200 && f.readText().contains("# Emergency")
+        } catch (_: Exception) { false }
 
-        // Determine if we MUST use safe mode (system shell only)
         val mustUseSafeMode = !isEnvironmentReady ||
-                              (!hasGlibcLinker && !hasTermuxExec) ||
-                              (bashFile.exists() && isBashWrapper) ||
-                              (shFile.exists() && isShWrapper)
+            (!hasGlibcLinker && !hasTermuxExec) ||
+            isBashWrapper || isShWrapper
 
         if (mustUseSafeMode) {
-            AppLogger.w(TAG, "Safe Mode required: envReady=$isEnvironmentReady, glibc=$hasGlibcLinker, termuxExec=$hasTermuxExec")
+            AppLogger.w(TAG, "Safe mode: envReady=$isEnvironmentReady glibc=$hasGlibcLinker termuxExec=$hasTermuxExec")
             env.remove("LD_PRELOAD")
             env.remove("LD_LIBRARY_PATH")
         }
 
-        // Final safety: if LD_PRELOAD file doesn't exist, remove it
         val ldPreload = env["LD_PRELOAD"]
-        if (ldPreload != null && !File(ldPreload).exists()) {
-            env.remove("LD_PRELOAD")
-        }
+        if (ldPreload != null && !File(ldPreload).exists()) env.remove("LD_PRELOAD")
 
-        var shellBin = if (mustUseSafeMode) {
+        val shellBin = if (mustUseSafeMode) {
             "/system/bin/sh"
         } else {
             listOf(
@@ -341,36 +202,61 @@ class TerminalSessionManager(
 
         if (shellBin == "/system/bin/sh") {
             env.remove("LD_PRELOAD")
-            // CRITICAL: Remove LD_LIBRARY_PATH when using /system/bin/sh (Bionic).
-            // If glibc/lib is in LD_LIBRARY_PATH, Android's linker finds glibc's
-            // libc.so and fails: "cannot find libc.so from verneed[0]"
+            // CRITICAL: never put glibc/lib in LD_LIBRARY_PATH for Bionic shells.
+            // It causes: "CANNOT LINK EXECUTABLE: cannot find libc.so from verneed[0]"
             env.remove("LD_LIBRARY_PATH")
         }
 
-        val shellArgs: Array<String> = if (shellBin.endsWith("/bash")) {
+        val shellArgs = if (shellBin.endsWith("/bash")) {
             arrayOf("bash", "-i", "--norc", "--noprofile")
         } else {
             arrayOf("sh", "-i")
         }
 
-        AppLogger.i(TAG, "Creating session: shell=$shellBin home=${homeDir.absolutePath}")
+        AppLogger.i(TAG, "Payload/legacy mode: shell=$shellBin")
+        if (isEnvironmentReady) {
+            return TerminalSession(
+                shellBin,
+                homeDir.absolutePath,
+                shellArgs,
+                env.entries.map { "${it.key}=${it.value}" }.toTypedArray(),
+                TRANSCRIPT_ROWS,
+                sessionClient,
+            )
+        }
 
-        val session = TerminalSession(
-            shellBin,
+        // ── 5. Fallback — no environment installed ───────────────────────────
+        AppLogger.w(TAG, "Fallback: no environment installed, using /system/bin/sh")
+        val helpMessage = buildString {
+            appendLine("╔══════════════════════════════════════════════════════════════╗")
+            appendLine("║              OpenClaw Android - Terminal                     ║")
+            appendLine("╠══════════════════════════════════════════════════════════════╣")
+            appendLine("║  No environment installed.                                   ║")
+            appendLine("║  Go to Dashboard → Setup to install the runtime.             ║")
+            appendLine("║  Limited shell: ls, cd, echo, cat available.                 ║")
+            appendLine("╚══════════════════════════════════════════════════════════════╝")
+        }
+
+        val fallbackSession = TerminalSession(
+            "/system/bin/sh",
             homeDir.absolutePath,
-            shellArgs,
-            env.entries.map { "${it.key}=${it.value}" }.toTypedArray(),
+            arrayOf("sh", "-i"),
+            arrayOf(
+                "HOME=${homeDir.absolutePath}",
+                "TERM=xterm-256color",
+                "PATH=/system/bin:/bin",
+            ),
             TRANSCRIPT_ROWS,
             sessionClient,
         )
 
-        sessions.add(session)
-        switchSession(sessions.size - 1)
+        activity.runOnUiThread {
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                fallbackSession.write(helpMessage)
+            }, 100)
+        }
 
-        eventBridge.emit("session_changed", mapOf("id" to session.mHandle, "action" to "created"))
-        activity.runOnUiThread { onSessionsChanged?.invoke() }
-
-        return session
+        return fallbackSession
     }
 
     fun switchSession(index: Int) {
@@ -399,8 +285,8 @@ class TerminalSessionManager(
         if (index < 0) return
 
         finishedSessionIds.remove(handleId)
-        val session = sessions.removeAt(index)
-        session.finishIfRunning()
+        val removedSession = sessions.removeAt(index)
+        removedSession.finishIfRunning()
 
         eventBridge.emit("session_changed", mapOf("id" to handleId, "action" to "closed"))
 
