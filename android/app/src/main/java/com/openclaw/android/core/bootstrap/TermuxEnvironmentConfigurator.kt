@@ -70,6 +70,21 @@ internal class TermuxEnvironmentConfigurator(
             AppLogger.i(TAG, "Created .bashrc at ${homeBashRc.absolutePath}")
         }
 
+        // CRITICAL: Clear etc/ld.so.preload unconditionally.
+        // The Termux bootstrap ships with etc/ld.so.preload pointing to
+        // libtermux-exec-ld-preload.so compiled for com.termux.
+        // When loaded in com.openclaw.android it crashes all processes
+        // with signal 1. Clear it — the terminal works without it.
+        val ldSoPreload = File(etcDir, "ld.so.preload")
+        if (ldSoPreload.exists()) {
+            try {
+                ldSoPreload.writeText("")
+                AppLogger.i(TAG, "Cleared ld.so.preload")
+            } catch (e: Exception) {
+                AppLogger.w(TAG, "Could not clear ld.so.preload: ${e.message}")
+            }
+        }
+
         // Permisos en bin/
         File(prefix, "bin").listFiles()?.forEach { f ->
             if (f.isFile) f.setExecutable(true, false)

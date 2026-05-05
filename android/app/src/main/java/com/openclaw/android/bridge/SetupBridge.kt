@@ -8,6 +8,7 @@ import com.openclaw.android.InstallerManager
 import com.openclaw.android.MainActivity
 import com.openclaw.android.ProotManager
 import com.openclaw.android.TerminalSessionManager
+import com.openclaw.android.TermuxBootstrapManager
 import com.openclaw.android.core.env.EnvironmentResolver
 import com.openclaw.android.core.install.InstallProgress
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -78,11 +79,11 @@ class SetupBridge(
 
     @JavascriptInterface
     fun getBootstrapStatus(): String {
-        val installed = installerManager.isInstalled()
+        val bootstrapInstalled = TermuxBootstrapManager(activity).isInstalled()
         val config = EnvironmentResolver.resolve(activity.filesDir)
         return gson.toJson(mapOf(
-            "installed" to installed,
-            "openclawInstalled" to installed,
+            "installed" to bootstrapInstalled,
+            "openclawInstalled" to installerManager.isInstalled(),
             "prefixPath" to config.prefix.absolutePath,
             "homePath" to config.homeDir.absolutePath,
             "source" to "payload",

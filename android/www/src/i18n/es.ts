@@ -205,6 +205,23 @@ export const es = {
   // Setup - modo online hint
   setup_mode_online_hint: 'Requiere conexión a internet. Instala Node.js + OpenClaw via script oficial.',
 
+  // Setup - bootstrap step
+  setup_bootstrap_title: 'Paso 1: Entorno base',
+  setup_bootstrap_desc: 'Instala el entorno Termux (bash, apt, herramientas). Obligatorio antes de instalar OpenClaw.',
+  setup_bootstrap_installing: 'Instalando Termux Bootstrap...',
+  setup_bootstrap_done: '✓ Entorno base instalado',
+  setup_bootstrap_btn: 'Instalar entorno base',
+  setup_bootstrap_size: '~30 MB · Requiere internet',
+
+  // Setup - openclaw step
+  setup_openclaw_title: 'Paso 2: Instalar OpenClaw',
+  setup_openclaw_desc: 'Elige cómo instalar OpenClaw (Node.js + runtime).',
+  setup_openclaw_locked: 'Completa el Paso 1 primero.',
+
+  // Setup - success
+  setup_success_title: '¡Instalación completada!',
+  setup_success_desc: 'OpenClaw está listo. Abre el terminal para empezar.',
+
   // Pantalla Avanzado
   advanced_title: 'Avanzado',
   advanced_versions: 'Versiones instaladas',
