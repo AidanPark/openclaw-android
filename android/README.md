@@ -1,6 +1,6 @@
 # OpenClaw Android
 
-> Ejecuta OpenClaw directamente en tu dispositivo Android con terminal nativa PTY, interfaz WebView React y actualizaciones OTA. Versión actual: **0.4.180-DEBUG**.
+> Ejecuta OpenClaw directamente en tu dispositivo Android con terminal nativa PTY, interfaz WebView React y actualizaciones OTA.
 
 ---
 
@@ -9,10 +9,11 @@
 APK autónoma que instala y ejecuta OpenClaw en Android sin necesidad de root. Incluye:
 
 - **Terminal PTY nativa** — sesiones múltiples con emulador completo
-- **Interfaz WebView React** — setup, dashboard y configuración
+- **Interfaz WebView React** — setup, dashboard y configuración con code splitting
 - **Tres modos de instalación** — payload offline, proot+Ubuntu, online curl
-- **GlibcRunner** — ejecutor obligatorio para Node.js en Android (via ld-linux-aarch64.so.1)
+- **GlibcRunner** — ejecutor obligatorio para Node.js en Android (via `ld-linux-aarch64.so.1`)
 - **OTA** — actualizaciones de UI sin reinstalar el APK
+- **Bridge batch** — múltiples consultas al bridge en una sola llamada
 
 ---
 
@@ -23,21 +24,21 @@ APK autónoma que instala y ejecuta OpenClaw en Android sin necesidad de root. I
 | Android | 7.0 (API 24) |
 | Arquitectura | arm64-v8a |
 | JDK (build) | 21 |
-| Android SDK (build) | API 36 |
-| NDK (build) | 28+ |
-| Node.js (build UI) | 22+ |
+| Android SDK (build) | API 35 |
+| NDK (build) | 27+ |
+| Node.js (build UI) | 18+ |
 
 ---
 
 ## Modos de instalación
 
-### Modo 1 — Payload offline (payload-final.tar.gz, 113MB)
-Asset principal bundleado en el APK. Contiene glibc, Node.js y OpenClaw listos para usar.
+### Modo 1 — Payload offline (`payload.tar.gz`, bundleado en APK)
+Asset principal incluido en el APK. Contiene glibc, Node.js y OpenClaw listos para usar.
 
 ```
 payload/
 ├── glibc/lib/              ← ld-linux-aarch64.so.1 + .so files
-├── lib/node/bin/node.real  ← Node.js ELF (120MB)
+├── lib/node/bin/node.real  ← Node.js ELF
 ├── lib/openclaw/           ← openclaw.mjs + node_modules/
 ├── certs/cert.pem          ← CA certs
 └── patches/glibc-compat.js
@@ -68,9 +69,9 @@ filesDir/
 │       ├── installed.json          ← marcador de instalación completa
 │       └── node/bin/node.real      ← (modo online install)
 └── usr/                            ← PREFIX (modo online install)
-    ├── bin/bash                    ← bash del online install
-    ├── glibc/lib/                  ← glibc del online install
-    └── lib/node_modules/openclaw/  ← openclaw del online install
+    ├── bin/bash
+    ├── glibc/lib/
+    └── lib/node_modules/openclaw/
 ```
 
 ---
@@ -79,11 +80,25 @@ filesDir/
 
 ```
 APK
-├── Native:     TerminalView  — PTY via libtermux.so
-├── WebView:    React SPA     — setup, dashboard, settings
-├── JsBridge:   34 métodos    — WebView ↔ Kotlin (8 dominios)
-├── EventBridge:              — Kotlin → WebView (CustomEvent)
-└── OTA:        www.zip       — actualización atómica de UI
+├── Native:      TerminalView  — PTY via libtermux.so
+├── WebView:     React SPA     — setup, dashboard, settings (lazy chunks)
+├── JsBridge:    50+ métodos   — WebView ↔ Kotlin (5 dominios + batch)
+├── EventBridge:               — Kotlin → WebView (CustomEvent)
+└── OTA:         www.zip       — actualización atómica de UI
+```
+
+### Patrón Facade — MainActivity
+
+```
+MainActivity (fachada delgada)
+├── ActivityInitializer      → onCreate(), onDestroy()
+├── ActivityPermissionHandler → file pickers (payload/glibc)
+├── ActivityViewSwitcher     → showTerminal(), showWebView()
+├── ActivityInstallFlow      → flujo de instalación
+├── TerminalTabManager       → pestañas de sesiones
+├── TerminalSessionClientImpl → callbacks de sesión
+├── TerminalViewClientImpl   → callbacks de vista
+└── WebViewConfigurator      → setupWebView()
 ```
 
 ### Tres modos de terminal (TerminalSessionManager)
@@ -100,9 +115,9 @@ APK
 
 ```
 App inicia
-  └─► requestStoragePermissions()
-        └─► InstallerManager.install()
-              ├─► hasPayloadAsset()? → installOffline() (payload-final.tar.gz)
+  └─► ModernPermissionManager.requestStorage()
+        └─► InstallerManager → InstallationOrchestrator
+              ├─► hasPayloadAsset()? → installOffline() (payload.tar.gz)
               ├─► isOnlineInstallPresent()? → configureOnlineInstall()
               └─► installViaProot() → proot + Ubuntu rootfs
                     └─► installed.json ✓
@@ -118,66 +133,105 @@ App inicia
 android/
 ├── app/src/main/
 │   ├── java/com/openclaw/android/
-│   │   ├── MainActivity.kt               # Contenedor WebView + TerminalView + permisos
+│   │   ├── MainActivity.kt               # Fachada — delega a componentes especializados
 │   │   ├── OpenClawService.kt            # Foreground Service (START_STICKY)
-│   │   ├── InstallerManager.kt           # Orquestador: offline/online/proot, isOnlineInstallPresent()
+│   │   ├── InstallerManager.kt           # Orquestador de alto nivel
 │   │   ├── PayloadExtractor.kt           # Extracción streaming tar.gz (sin saturar RAM)
-│   │   ├── PayloadManager.kt             # Fachada de compatibilidad sobre InstallerManager
-│   │   ├── InstallValidator.kt           # Verifica lib/node/bin/node.real, lib/openclaw/, certs/cert.pem
-│   │   ├── JsBridge.kt                   # 34 métodos @JavascriptInterface
+│   │   ├── InstallValidator.kt           # Verifica node.real, openclaw/, certs/cert.pem
 │   │   ├── EventBridge.kt                # Eventos Kotlin → WebView
-│   │   ├── CommandRunner.kt              # bash -l -c + rutas + wrapper
-│   │   ├── EnvironmentBuilder.kt         # Variables de entorno (shim sobre EnvironmentResolver)
+│   │   ├── CommandRunner.kt              # Ejecución de comandos con sanitización (whitelist)
 │   │   ├── UrlResolver.kt                # URLs BuildConfig + config.json remoto
-│   │   ├── TerminalManager.kt            # Gestión PTY (LD_LIBRARY_PATH solo prefix/lib)
+│   │   ├── TerminalManager.kt            # Gestión PTY
 │   │   ├── TerminalSessionManager.kt     # 3 modos: proot / online install / payload-legacy
 │   │   ├── BootReceiver.kt               # Auto-arranque al iniciar el dispositivo
 │   │   ├── AppLogger.kt                  # Logging centralizado
 │   │   ├── core/
 │   │   │   ├── env/
 │   │   │   │   ├── EnvironmentConfig.kt      # Snapshot inmutable de rutas
-│   │   │   │   └── EnvironmentResolver.kt    # Resuelve rutas + detecta online install + resolveGlibcLib()
+│   │   │   │   └── EnvironmentResolver.kt    # Única fuente de verdad para rutas y env vars
 │   │   │   ├── process/
 │   │   │   │   └── GlibcRunner.kt            # Ejecuta ELF via ld-linux-aarch64.so.1
-│   │   │   └── install/
-│   │   │       ├── InstallProgress.kt        # Interfaz de progreso
-│   │   │       ├── ScriptWriter.kt           # Genera scripts de lanzamiento
-│   │   │       ├── DnsAndSslSetup.kt         # Configura DNS y SSL (certs/cert.pem primero)
-│   │   │       └── VersionReader.kt          # Lee versiones sin shell (evita CANNOT LINK EXECUTABLE)
+│   │   │   ├── install/
+│   │   │   │   ├── InstallationOrchestrator.kt # Orquestador unificado (offline/online/proot)
+│   │   │   │   ├── InstallProgress.kt        # Interfaz de progreso
+│   │   │   │   ├── PayloadInstaller.kt       # Extracción y validación del payload
+│   │   │   │   ├── ScriptWriter.kt           # Genera scripts de lanzamiento
+│   │   │   │   ├── InstallStateChecker.kt    # Verifica estado de instalación
+│   │   │   │   ├── InstallMarkerWriter.kt    # Escribe installed.json
+│   │   │   │   ├── EnvironmentConfigurator.kt # Configura DNS y SSL
+│   │   │   │   └── VersionReader.kt          # Lee versiones sin shell
+│   │   │   ├── bootstrap/
+│   │   │   │   ├── TermuxBootstrapOrchestrator.kt # Instalación Termux Bootstrap
+│   │   │   │   ├── TermuxBootstrapDownloader.kt
+│   │   │   │   ├── TermuxBootstrapExtractor.kt
+│   │   │   │   ├── TermuxBootstrapMarker.kt
+│   │   │   │   ├── TermuxArchitectureDetector.kt
+│   │   │   │   ├── TermuxDpkgManager.kt
+│   │   │   │   ├── TermuxEnvironmentConfigurator.kt
+│   │   │   │   ├── TermuxPackageInstaller.kt
+│   │   │   │   └── TermuxPkgManager.kt
+│   │   │   └── proot/
+│   │   │       ├── ProotBinaryDownloader.kt
+│   │   │       ├── ProotCommandBuilder.kt
+│   │   │       ├── ProotCommandExecutor.kt
+│   │   │       ├── ProotConstants.kt
+│   │   │       ├── ProotFileDownloader.kt
+│   │   │       ├── ProotPathResolver.kt
+│   │   │       ├── ProotRootfsConfigurator.kt
+│   │   │       └── ProotRootfsDownloader.kt
 │   │   ├── bridge/
+│   │   │   ├── JsBridgeFacade.kt             # Compone todos los bridges + batchQuery
 │   │   │   ├── TerminalBridge.kt             # show/hide, sesiones, write
 │   │   │   ├── SetupBridge.kt                # estado instalación, triggers
 │   │   │   ├── PlatformBridge.kt             # plataformas
-│   │   │   ├── ToolsBridge.kt                # herramientas (usa VersionReader)
-│   │   │   ├── SystemBridge.kt               # info app, batería, almacenamiento, OTA
-│   │   │   └── JsBridgeFacade.kt             # compone todos los bridges
+│   │   │   ├── ToolsBridge.kt                # herramientas CLI
+│   │   │   └── SystemBridge.kt               # info app, batería, almacenamiento, OTA
 │   │   └── ui/
+│   │       ├── activity/
+│   │       │   ├── ActivityInitializer.kt    # onCreate/onDestroy, inicializa managers
+│   │       │   ├── ActivityPermissionHandler.kt # File pickers (payload/glibc)
+│   │       │   └── ActivityViewSwitcher.kt   # Terminal ↔ WebView
 │   │       ├── install/
-│   │       │   └── InstallOverlayController.kt  # Elimina LD_LIBRARY_PATH/LD_PRELOAD para /system/bin/sh
-│   │       └── permissions/
-│   │           └── PermissionsController.kt
+│   │       │   ├── ActivityInstallFlow.kt    # Flujo de instalación desde UI
+│   │       │   └── InstallOverlayController.kt # Overlay de progreso
+│   │       ├── permissions/
+│   │       │   └── ModernPermissionManager.kt # Permisos con suspend + ActivityResultLaunchers
+│   │       ├── terminal/
+│   │       │   ├── TerminalSessionClientImpl.kt
+│   │       │   ├── TerminalTabManager.kt
+│   │       │   └── TerminalViewClientImpl.kt
+│   │       └── webview/
+│   │           └── WebViewConfigurator.kt
 │   ├── assets/
 │   │   ├── www/                          # UI React compilada (fallback)
-│   │   ├── payload-final.tar.gz          # Asset principal (113MB) — payload offline
-│   │   ├── oa-backup.tar.gz              # Asset de respaldo (145MB)
+│   │   ├── payload.tar.gz                # Asset principal — payload offline
 │   │   ├── run-openclaw.sh               # Lanzador del gateway OpenClaw
 │   │   ├── env-init.sh                   # Inicialización de variables de entorno
 │   │   └── glibc-compat.js               # Shim Node.js para compatibilidad glibc
 │   └── res/                              # Recursos Android
-├── app/src/test/java/com/openclaw/android/
-│   ├── AppLoggerTest.kt                  # 7 tests — delegación de Log
-│   ├── CommandRunnerTest.kt              # 22 tests — runSync, constantes, env
-│   ├── EnvironmentBuilderTest.kt         # 27 tests — variables de entorno
-│   ├── BootstrapManagerTest.kt           # 14 tests — detección, wrapper, ELF
-│   └── VersionCompareTest.kt             # 8 tests — lógica semver OTA
 ├── www/                                  # React SPA (UI producción)
 │   └── src/
-│       ├── lib/bridge.ts                 # Wrapper tipado JsBridge (34 métodos)
-│       ├── lib/useNativeEvent.ts         # Hook EventBridge para React
-│       ├── lib/router.tsx                # Router hash-based (file:// compatible)
-│       ├── components/                   # Componentes reutilizables
-│       ├── i18n/                         # Internacionalización (EN, ES) — incluye git_not_available, storage_payload, etc.
-│       └── screens/                      # Dashboard (versiones reales via getEnvironmentInfo), Settings, Setup
+│       ├── App.tsx                       # Root — AppProvider + lazy routes
+│       ├── contexts/
+│       │   └── AppContext.tsx            # Estado centralizado (setup, env, storage, tools)
+│       ├── lib/
+│       │   ├── bridge.ts                 # Wrapper tipado JsBridge + batchCall()
+│       │   ├── useNativeEvent.ts         # Hook EventBridge para React
+│       │   └── router.tsx                # Router hash-based (file:// compatible)
+│       ├── hooks/
+│       │   └── useAppState.ts            # Hook derivado de AppContext
+│       ├── i18n/                         # Internacionalización (EN, ES)
+│       └── screens/
+│           ├── Dashboard.tsx             # Usa AppContext, componentes memoizados, skeleton
+│           ├── Setup.tsx                 # TipCard y Stepper memoizados, useCallback
+│           ├── Settings.tsx
+│           ├── SettingsTools.tsx         # Diálogo de confirmación modal, ToolCard memoizado
+│           ├── SettingsPlatforms.tsx     # Lazy loaded
+│           ├── SettingsKeepAlive.tsx     # Lazy loaded
+│           ├── SettingsStorage.tsx       # Lazy loaded
+│           ├── SettingsAbout.tsx         # Lazy loaded
+│           ├── SettingsUpdates.tsx       # Lazy loaded
+│           └── SettingsAdvanced.tsx      # Lazy loaded
 ├── terminal-emulator/                    # Emulador PTY (fork ReTerminal)
 └── terminal-view/                        # Renderizado terminal (fork ReTerminal)
 ```
@@ -214,40 +268,53 @@ cd android
 ```bash
 cd android/www
 npm install
-npm run build        # Salida: dist/
-npm run build:zip    # Salida: www.zip (para OTA)
+npm run build        # Salida: dist/ (con code splitting automático)
+npm run test         # Tests con Vitest
 ```
 
 ---
 
 ## JsBridge API
 
-| Dominio | Métodos | Descripción |
+| Dominio | Métodos clave | Descripción |
 |---|---|---|
 | Terminal | 8 | show/hide, crear/cambiar/cerrar sesiones, escribir |
-| Setup | 3 | estado bootstrap + openclaw, iniciar setup |
+| Setup | 12 | estado bootstrap/payload/rootfs, iniciar setup, rutas |
 | Platform | 6 | instalar/desinstalar/cambiar plataformas |
-| Tools | 5 | instalar/desinstalar herramientas CLI |
-| Commands | 4 | sync/async, testGrunNode, launchGateway |
-| Updates | 3 | check/apply OTA, info APK |
-| System | 7 | info app, batería, permisos, almacenamiento |
-| Storage | 1 | termux-setup-storage |
+| Tools | 4 | instalar/desinstalar herramientas CLI, estado |
+| System | 15+ | info app, batería, permisos, almacenamiento, OTA, comandos |
+| **Batch** | 1 | `batchQuery(callbackId, methods[])` — múltiples consultas en una llamada |
+
+### batchQuery
+
+```typescript
+// Frontend — una sola llamada para múltiples estados
+const results = await bridge.batchCall([
+  'getSetupStatus',
+  'getEnvironmentInfo',
+  'getStorageInfo',
+  'getInstalledTools',
+])
+```
+
+```kotlin
+// Kotlin — emite native:batch_result con todos los resultados
+@JavascriptInterface
+fun batchQuery(callbackId: String, requests: String)
+```
 
 ---
 
-## Decisiones de diseño
+## Seguridad — CommandRunner
 
-| Decisión | Motivo |
-|---|---|
-| `targetSdk 28` | Bypass W^X — permite exec en `/data/data/` |
-| `minSdk 24` | Requisito bootstrap apt-android-7 |
-| `bash -l -c` siempre | Carga entorno login completo de Termux |
-| `grun` obligatorio | Node.js en Android necesita glibc-runner |
-| `installed.json` | Detección fiable de instalación completa |
-| Scope IO compartido | Un solo `CoroutineScope(Dispatchers.IO)` en JsBridge — evita crear thread pools por operación |
-| Hash routing | `file://` no soporta History API |
-| Sin CSS framework | Bundle mínimo para entrega OTA |
-| Rutas Termux reales | `/data/data/com.termux/files/` — independiente del paquete app |
+`CommandRunner.sanitizeCommand()` aplica tres capas de validación antes de ejecutar cualquier comando recibido desde WebView:
+
+1. **Longitud máxima** — rechaza comandos > 10.000 caracteres
+2. **Patrones de inyección** — bloquea `| sh`, `| bash`, `&& rm -rf`, `` `...` ``, `$(...)`, etc.
+3. **Whitelist de comandos** — solo ejecuta comandos de la lista permitida:
+   `openclaw`, `node`, `npm`, `npx`, `git`, `apt`, `pkg`, `curl`, `wget`, `ls`, `cat`, `tar`, etc.
+
+Los comandos internos del sistema usan `runSyncUnsafe` / `runStreamingUnsafe` para saltarse la sanitización.
 
 ---
 
@@ -260,7 +327,55 @@ npm run build:zip    # Salida: www.zip (para OTA)
 | `WAKE_LOCK` | Evitar suspensión durante instalación |
 | `RECEIVE_BOOT_COMPLETED` | Auto-inicio del gateway al arrancar |
 | `READ/WRITE_EXTERNAL_STORAGE` | Android 6–10 |
-| `MANAGE_EXTERNAL_STORAGE` | Android 11+ (termux-setup-storage) |
+| `MANAGE_EXTERNAL_STORAGE` | Android 11+ |
+| `POST_NOTIFICATIONS` | Android 13+ — notificaciones del servicio |
+
+### ModernPermissionManager
+
+Maneja todos los permisos con API `suspend` y `ActivityResultLaunchers` (sin `onRequestPermissionsResult` deprecado):
+
+```kotlin
+// Solicitar almacenamiento — muestra diálogo de rationale si es necesario
+val granted = permissionManager.requestStorage()
+
+// Solicitar notificaciones (Android 13+)
+val granted = permissionManager.requestNotifications()
+
+// Verificar sin solicitar
+val hasStorage = permissionManager.hasStoragePermission()
+```
+
+---
+
+## Estado centralizado — AppContext (React)
+
+`AppContext` es la única fuente de verdad del frontend. Todos los componentes consumen estado desde aquí en lugar de llamar directamente al bridge:
+
+```typescript
+const { setupStatus, envInfo, storageInfo, installedTools, refresh } = useAppContext()
+```
+
+Se refresca automáticamente al recibir eventos nativos: `session_changed`, `setup_progress`, `install_progress`.
+
+---
+
+## Decisiones de diseño
+
+| Decisión | Motivo |
+|---|---|
+| `targetSdk 28` | Bypass W^X — permite exec en `/data/data/` |
+| `minSdk 24` | Requisito bootstrap apt-android-7 |
+| `EnvironmentResolver` como única fuente de rutas | Elimina rutas hardcodeadas y duplicación |
+| `InstallationOrchestrator` unificado | Reemplaza SetupManager + RootfsManager eliminados |
+| `ModernPermissionManager` con suspend | API limpia, sin callbacks anidados |
+| `batchQuery` en JsBridge | Reduce llamadas WebView↔Kotlin de N a 1 |
+| `AppContext` centralizado | Evita prop drilling y llamadas duplicadas al bridge |
+| `lazy + Suspense` en settings | Code splitting — chunks de 2–8 KB cargados bajo demanda |
+| Componentes `memo` en Dashboard | Evita re-renders innecesarios en actualizaciones de estado |
+| `sanitizeCommand` con whitelist | Seguridad: bloquea inyección de comandos desde WebView |
+| Hash routing | `file://` no soporta History API |
+| Sin CSS framework | Bundle mínimo para entrega OTA |
+| Scope IO compartido | Un solo `CoroutineScope(Dispatchers.IO + SupervisorJob)` en JsBridge |
 
 ---
 
@@ -271,8 +386,11 @@ npm run build:zip    # Salida: www.zip (para OTA)
 | AGP | 9.1.0 | Build system Android |
 | Kotlin | 2.2.21 | Lenguaje principal |
 | kotlinx-coroutines | 1.10.2 | Operaciones async |
-| gson | 2.13.2 | Serialización JSON |
-| JUnit5 | 6.0.3 | Tests unitarios |
+| gson | 2.13.2 | Serialización JSON en batchQuery |
+| React | 19 | UI WebView |
+| Vite | 7 | Build + code splitting |
+| Vitest | latest | Tests frontend |
+| JUnit5 | 6.0.3 | Tests unitarios Kotlin |
 | MockK | 1.14.9 | Mocking en tests |
 | detekt | 1.23.8 | Análisis estático |
 | ktlint | 14.2.0 | Formato de código |

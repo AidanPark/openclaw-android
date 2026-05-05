@@ -6,15 +6,17 @@ La instalación de OpenClaw Android tiene tres capas independientes que se ejecu
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  CAPA 1 — Termux Bootstrap                                          │
+│  CAPA 1 — Termux Bootstrap (modo online)                            │
 │  Instala: bash, dpkg, apt, pkg, curl, wget                          │
 │  Fuente:  packages.termux.dev/bootstrap/bootstrap-<arch>.zip        │
 │  Tamaño:  ~50MB descarga / ~150MB instalado                         │
+│  Orquestado por: TermuxBootstrapOrchestrator                        │
 ├─────────────────────────────────────────────────────────────────────┤
-│  CAPA 2 — OpenClaw (payload.tar.gz)                                 │
+│  CAPA 2 — OpenClaw (payload.tar.gz, modo offline)                   │
 │  Instala: Node.js, glibc, openclaw.mjs                              │
 │  Fuente:  assets/payload.tar.gz (bundled en APK, NO en Git)         │
 │  Tamaño:  ~118MB en APK / ~400MB instalado                          │
+│  Orquestado por: PayloadInstaller                                   │
 ├─────────────────────────────────────────────────────────────────────┤
 │  CAPA 3 — Instalación Online                                        │
 │  Instala/actualiza: OpenClaw desde internet                         │
@@ -23,7 +25,9 @@ La instalación de OpenClaw Android tiene tres capas independientes que se ejecu
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Regla fundamental**: La Capa 1 siempre va primero. Sin bash y curl del bootstrap, la instalación online no puede ejecutarse.
+**Punto de entrada único**: `InstallationOrchestrator` reemplaza los antiguos `SetupManager` y `RootfsManager`. Recibe el modo y delega al instalador correcto.
+
+**Regla fundamental**: La Capa 1 siempre va primero en modo online. Sin bash y curl del bootstrap, la instalación online no puede ejecutarse.
 
 ---
 

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, Fragment } from 'react'
+import { memo, useState, useCallback, useEffect, Fragment } from 'react'
 import { bridge } from '../lib/bridge'
 import { useNativeEvent } from '../lib/useNativeEvent'
 import { t } from '../i18n'
@@ -25,6 +25,30 @@ function getTips() {
   return [t('tip_1'), t('tip_2'), t('tip_3'), t('tip_4')]
 }
 
+// ── Memoized tip card ─────────────────────────────────────────────────────
+const TipCard = memo(function TipCard({ tip }: { tip: string }) {
+  return <div className="tip-card">💡 {tip}</div>
+})
+
+// ── Stepper ───────────────────────────────────────────────────────────────
+const Stepper = memo(function Stepper({ currentStep }: { currentStep: number }) {
+  const steps = [t('step_platform'), t('step_path'), t('step_tools'), t('step_setup')]
+  return (
+    <div className="stepper">
+      {steps.map((label, i) => (
+        <Fragment key={label}>
+          {i > 0 && <div className={`step-line${i <= currentStep ? ' done' : ''}`} />}
+          <div className={`step${i < currentStep ? ' done' : i === currentStep ? ' active' : ''}`}>
+            <span className="step-icon">{i < currentStep ? '✓' : i === currentStep ? '●' : '○'}</span>
+            <span className="step-label-text">{label}</span>
+          </div>
+        </Fragment>
+      ))}
+    </div>
+  )
+})
+
+// ── Main component ────────────────────────────────────────────────────────
 export function Setup({ onComplete }: Props) {
   const [phase, setPhase] = useState<SetupPhase>('welcome')
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
@@ -50,9 +74,9 @@ export function Setup({ onComplete }: Props) {
     const d = data as { name: string }
     if (d.name) setSelectedFileName(d.name)
   }, [])
-
   useNativeEvent('payload_file_selected', onPayloadSelected)
 
+  // Rotate tips during installation
   useEffect(() => {
     if (phase !== 'installing') return
     const id = setInterval(() => setTipIndex(i => (i + 1) % getTips().length), 4000)
@@ -71,19 +95,18 @@ export function Setup({ onComplete }: Props) {
       setPhase('done')
     }
   }, [])
-
   useNativeEvent('setup_progress', onProgress)
 
-  function toggleTool(id: string) {
+  const toggleTool = useCallback((id: string) => {
     setSelectedTools(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-  }
+  }, [])
 
-  function handleStartSetup() {
+  const handleStartSetup = useCallback(() => {
     const selections: Record<string, boolean> = {}
     getOptionalTools().forEach(tool => {
       selections[tool.id] = selectedTools.has(tool.id)
@@ -98,9 +121,9 @@ export function Setup({ onComplete }: Props) {
     setConnResult(null)
 
     bridge.call('startSetup', installMode)
-  }
+  }, [selectedTools, installMode])
 
-  function handleCheckConnection() {
+  const handleCheckConnection = useCallback(() => {
     setCheckingConn(true)
     setConnResult(null)
 
@@ -114,61 +137,43 @@ export function Setup({ onComplete }: Props) {
     }
     window.addEventListener('native:command_result', handler)
 
-    bridge.call('runCommandAsync', 'conn_test', 'curl -sfI --connect-timeout 5 https://registry.npmjs.org/ >/dev/null 2>&1 && echo OK || echo FAIL')
-
-    setTimeout(() => {
-      if (checkingConn) {
-        setCheckingConn(false)
-        setConnResult('fail')
-        window.removeEventListener('native:command_result', handler)
-      }
-    }, 12000)
-  }
-
-  const steps = [t('step_platform'), t('step_path'), t('step_tools'), t('step_setup')]
-  const currentStep = phase === 'welcome' ? 0 : phase === 'mode-select' ? 1 : phase === 'tool-select' ? 2 : 3
-
-  function renderStepper() {
-    return (
-      <div className="stepper">
-        {steps.map((label, i) => (
-          <Fragment key={label}>
-            {i > 0 && <div className={`step-line${i <= currentStep ? ' done' : ''}`} />}
-            <div className={`step${i < currentStep ? ' done' : i === currentStep ? ' active' : ''}`}>
-              <span className="step-icon">{i < currentStep ? '✓' : i === currentStep ? '●' : '○'}</span>
-              <span className="step-label-text">{label}</span>
-            </div>
-          </Fragment>
-        ))}
-      </div>
+    bridge.call(
+      'runCommandAsync',
+      'conn_test',
+      'curl -sfI --connect-timeout 5 https://registry.npmjs.org/ >/dev/null 2>&1 && echo OK || echo FAIL'
     )
-  }
 
+    // Timeout after 12 s
+    const timeout = setTimeout(() => {
+      setCheckingConn(false)
+      setConnResult('fail')
+      window.removeEventListener('native:command_result', handler)
+    }, 12000)
+
+    // Clean up timeout if handler fires first
+    window.addEventListener('native:command_result', () => clearTimeout(timeout), { once: true })
+  }, [])
+
+  const currentStep = phase === 'welcome' ? 0
+    : phase === 'mode-select' ? 1
+      : phase === 'tool-select' ? 2
+        : 3
+
+  // ── Welcome ───────────────────────────────────────────────────────────
   if (phase === 'welcome') {
     return (
       <div className="setup-container">
-        {renderStepper()}
+        <Stepper currentStep={currentStep} />
         <div className="setup-logo">
           <img src="./openclaw.svg" alt="OpenClaw" style={{ width: 80, height: 80 }} />
         </div>
         <div className="setup-title">OpenClaw</div>
         <div className="setup-subtitle">{t('setup_choose_platform')}</div>
-
         <div className="setup-feature-list">
-          <div className="setup-feature-item">
-            <span className="setup-feature-icon">⚡</span>
-            <span>{t('tip_3')}</span>
-          </div>
-          <div className="setup-feature-item">
-            <span className="setup-feature-icon">🔒</span>
-            <span>{t('tip_4')}</span>
-          </div>
-          <div className="setup-feature-item">
-            <span className="setup-feature-icon">🔄</span>
-            <span>{t('tip_2')}</span>
-          </div>
+          <div className="setup-feature-item"><span className="setup-feature-icon">⚡</span><span>{t('tip_3')}</span></div>
+          <div className="setup-feature-item"><span className="setup-feature-icon">🔒</span><span>{t('tip_4')}</span></div>
+          <div className="setup-feature-item"><span className="setup-feature-icon">🔄</span><span>{t('tip_2')}</span></div>
         </div>
-
         <button className="btn btn-primary btn-full" onClick={() => setPhase('mode-select')}>
           {t('setup_next')} →
         </button>
@@ -176,10 +181,11 @@ export function Setup({ onComplete }: Props) {
     )
   }
 
+  // ── Mode select ───────────────────────────────────────────────────────
   if (phase === 'mode-select') {
     return (
       <div className="setup-container">
-        {renderStepper()}
+        <Stepper currentStep={currentStep} />
         <div className="setup-title">{t('setup_mode_title')}</div>
 
         <div className="card-group" style={{ width: '100%', maxWidth: 400 }}>
@@ -224,27 +230,21 @@ export function Setup({ onComplete }: Props) {
                 <div className="card-desc">{t('setup_mode_offline_desc')}</div>
               </div>
             </div>
-
             {installMode === 'offline' && (
               <div style={{ marginTop: 12, padding: '0 8px' }}>
-                {!hasAsset && !selectedFileName ? (
+                {!hasAsset && !selectedFileName && (
                   <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 8 }}>
                     ⚠️ {t('setup_offline_not_found')}
                   </div>
-                ) : null}
-
-                {selectedFileName ? (
+                )}
+                {selectedFileName && (
                   <div style={{ fontSize: 12, color: 'var(--success)', marginBottom: 8 }}>
                     ✓ {t('setup_offline_selected', { name: selectedFileName })}
                   </div>
-                ) : null}
-
+                )}
                 <button
                   className="btn btn-secondary btn-sm btn-full"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    bridge.call('pickPayloadFile')
-                  }}
+                  onClick={(e) => { e.stopPropagation(); bridge.call('pickPayloadFile') }}
                 >
                   {t('setup_offline_select')}
                 </button>
@@ -269,14 +269,13 @@ export function Setup({ onComplete }: Props) {
     )
   }
 
+  // ── Tool select ───────────────────────────────────────────────────────
   if (phase === 'tool-select') {
     return (
       <div className="setup-container setup-container--scroll">
-        {renderStepper()}
+        <Stepper currentStep={currentStep} />
         <div className="setup-title" style={{ fontSize: 22 }}>{t('setup_optional_tools')}</div>
-        <div className="setup-subtitle">
-          {t('setup_tools_desc', { platform: 'OpenClaw' })}
-        </div>
+        <div className="setup-subtitle">{t('setup_tools_desc', { platform: 'OpenClaw' })}</div>
 
         <div className="setup-tools-grid">
           {getOptionalTools().map(tool => {
@@ -294,9 +293,7 @@ export function Setup({ onComplete }: Props) {
                 <div className="setup-tool-icon">{tool.icon}</div>
                 <div className="setup-tool-name">{tool.name}</div>
                 <div className="setup-tool-desc">{tool.desc}</div>
-                <div className={`setup-tool-check${isSelected ? ' on' : ''}`}>
-                  {isSelected ? '✓' : ''}
-                </div>
+                <div className={`setup-tool-check${isSelected ? ' on' : ''}`}>{isSelected ? '✓' : ''}</div>
               </div>
             )
           })}
@@ -314,18 +311,17 @@ export function Setup({ onComplete }: Props) {
     )
   }
 
+  // ── Installing ────────────────────────────────────────────────────────
   if (phase === 'installing') {
     const pct = Math.round(progress * 100)
     return (
       <div className="setup-container">
-        {renderStepper()}
+        <Stepper currentStep={currentStep} />
         <div className="setup-title">{t('setup_setting_up')}</div>
-
         <div className="setup-progress-wrap">
           <div className="setup-progress-ring">
             <svg viewBox="0 0 80 80" width="80" height="80">
-              <circle cx="40" cy="40" r="34" fill="none"
-                stroke="var(--bg-tertiary)" strokeWidth="6" />
+              <circle cx="40" cy="40" r="34" fill="none" stroke="var(--bg-tertiary)" strokeWidth="6" />
               <circle
                 cx="40" cy="40" r="34" fill="none"
                 stroke="var(--accent)" strokeWidth="6"
@@ -338,20 +334,18 @@ export function Setup({ onComplete }: Props) {
             </svg>
             <div className="setup-progress-pct">{pct}%</div>
           </div>
-
           <div className="setup-progress-msg">{message}</div>
         </div>
-
-        <div className="tip-card">💡 {getTips()[tipIndex]}</div>
+        <TipCard tip={getTips()[tipIndex]} />
       </div>
     )
   }
 
-  // ── Failed state ────────────────────────────────────────────────────
+  // ── Failed ────────────────────────────────────────────────────────────
   if (phase === 'failed') {
     return (
       <div className="setup-container setup-container--scroll">
-        {renderStepper()}
+        <Stepper currentStep={currentStep} />
         <div className="setup-failed-icon">✗</div>
         <div className="setup-title" style={{ color: 'var(--error)' }}>{t('setup_install_failed')}</div>
         <div className="setup-subtitle">{t('setup_failed_hint')}</div>
@@ -362,11 +356,8 @@ export function Setup({ onComplete }: Props) {
             <div className="setup-error-text">{error}</div>
           </div>
         )}
-
         {message && (
-          <div className="setup-last-action">
-            Last step: {message}
-          </div>
+          <div className="setup-last-action">Last step: {message}</div>
         )}
 
         {/* Connection check */}
@@ -376,11 +367,10 @@ export function Setup({ onComplete }: Props) {
             onClick={handleCheckConnection}
             disabled={checkingConn}
           >
-            {checkingConn ? (
-              <><span className="spinner" style={{ width: 14, height: 14, marginRight: 6 }} />{t('setup_checking_connection')}</>
-            ) : (
-              t('setup_check_connection')
-            )}
+            {checkingConn
+              ? <><span className="spinner" style={{ width: 14, height: 14, marginRight: 6 }} />{t('setup_checking_connection')}</>
+              : t('setup_check_connection')
+            }
           </button>
           {connResult === 'ok' && (
             <span className="pill pill-success" style={{ marginLeft: 8 }}>{t('setup_connection_ok')}</span>
@@ -390,7 +380,6 @@ export function Setup({ onComplete }: Props) {
           )}
         </div>
 
-        {/* Action buttons */}
         <div className="setup-failed-actions">
           <button className="btn btn-secondary" onClick={() => bridge.call('showTerminal')}>
             {t('setup_open_log')}
@@ -399,7 +388,6 @@ export function Setup({ onComplete }: Props) {
             {t('setup_retry')}
           </button>
         </div>
-
         <button className="btn btn-ghost btn-sm" onClick={() => setPhase('tool-select')}>
           {t('setup_back_to_tools')}
         </button>
@@ -410,11 +398,10 @@ export function Setup({ onComplete }: Props) {
   // ── Done ──────────────────────────────────────────────────────────────
   return (
     <div className="setup-container">
-      {renderStepper()}
+      <Stepper currentStep={currentStep} />
       <div className="setup-logo setup-done-icon">✓</div>
       <div className="setup-title">{t('setup_done_title')}</div>
       <div className="setup-subtitle">{t('setup_done_desc')}</div>
-
       <button className="btn btn-primary btn-full" onClick={() => {
         bridge.call('showTerminal')
         onComplete()

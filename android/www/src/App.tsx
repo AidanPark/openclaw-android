@@ -48,7 +48,7 @@ function ScreenFallback() {
 // ── Inner app — consumes AppContext ───────────────────────────────────────
 function AppInner() {
   const { path, navigate } = useRoute()
-  const { isInstalled, setupStatus } = useAppContext()
+  const { setupStatus } = useAppContext()
   const [hasUpdates, setHasUpdates] = useState(false)
 
   // Derive setupDone from context instead of a separate bridge call

@@ -9,16 +9,16 @@
 | [ENVIRONMENT_VARS.md](ENVIRONMENT_VARS.md) | Variables de entorno críticas y por qué son necesarias |
 | [PAYLOAD_ASSET.md](PAYLOAD_ASSET.md) | Qué es payload.tar.gz, cómo se gestiona y extrae |
 
-## Resumen Rápido
+## Resumen rápido
 
 ### Flujo de instalación
 
 ```
-Termux Bootstrap (~50MB)     ← siempre primero
-        +
-payload.tar.gz (OpenClaw)    ← si está en el APK (modo auto/offline)
-        o
-curl -sL myopenclawhub.com/install | bash  ← en el terminal (modo online)
+InstallationOrchestrator
+    │
+    ├── Modo offline  → PayloadInstaller (payload.tar.gz bundleado en APK)
+    ├── Modo online   → TermuxBootstrapOrchestrator + curl | bash en terminal
+    └── Modo proot    → ProotRootfsDownloader + ProotCommandExecutor
 ```
 
 ### Modos disponibles
@@ -27,7 +27,6 @@ curl -sL myopenclawhub.com/install | bash  ← en el terminal (modo online)
 |------|-------------|
 | `auto` | APK con payload bundled — instalación sin internet |
 | `online` | APK sin payload — instala OpenClaw desde internet |
-| `termux-bootstrap` | Solo preparar el entorno base |
 | `proot` | Usuarios avanzados, resistencia a Phantom Process Killer |
 
 ### Archivos de marcador
@@ -47,3 +46,29 @@ Solución rápida:
 ```bash
 yes N | dpkg --configure -a --force-confold
 ```
+
+### Arquitectura de permisos
+
+`ModernPermissionManager` gestiona todos los permisos con API `suspend`:
+
+```kotlin
+// Solicitar almacenamiento (Android 11+: MANAGE_EXTERNAL_STORAGE)
+val granted = permissionManager.requestStorage()
+
+// Solicitar notificaciones (Android 13+)
+val granted = permissionManager.requestNotifications()
+```
+
+### Bridge batch
+
+Para obtener múltiples estados en una sola llamada:
+
+```typescript
+const results = await bridge.batchCall([
+  'getSetupStatus',
+  'getEnvironmentInfo',
+  'getStorageInfo',
+])
+```
+
+Equivale a llamar `window.OpenClaw.batchQuery(callbackId, JSON.stringify([...]))` y esperar el evento `native:batch_result`.
