@@ -95,28 +95,38 @@ internal class TermuxBootstrapExtractor {
 
     /**
      * Procesa SYMLINKS.txt del bootstrap de Termux.
-     * Formato: "target←←←linkpath" (separador ←←←)
-     * Ejemplo: "bash←←←bin/sh"
+     * Formato: "target←linkpath" (separador: ← U+2190, una sola flecha)
+     * Ejemplo: "libreadline.so.8.3←./lib/libreadline.so.8"
+     *
+     * El linkpath puede tener prefijo "./" que se elimina al construir la ruta.
      */
     private fun processSymlinksFile(symlinksFile: File, targetDir: File) {
         if (!symlinksFile.exists()) return
+        var created = 0
+        var failed = 0
         try {
             symlinksFile.readLines().forEach { line ->
-                val parts = line.split("←←←")
-                if (parts.size == 2) {
-                    val target   = parts[0].trim()
-                    val linkPath = parts[1].trim()
-                    val linkFile = File(targetDir, linkPath)
-                    linkFile.parentFile?.mkdirs()
-                    linkFile.delete()
-                    try {
-                        android.system.Os.symlink(target, linkFile.absolutePath)
-                        AppLogger.d(tag, "Symlink from SYMLINKS.txt: $linkPath -> $target")
-                    } catch (e: Exception) {
-                        AppLogger.w(tag, "SYMLINKS.txt symlink failed: $linkPath -> $target: ${e.message}")
-                    }
+                if (line.isBlank()) return@forEach
+                // Separator is a single LEFT ARROW ← (U+2190)
+                val sepIdx = line.indexOf('\u2190')
+                if (sepIdx < 0) return@forEach
+
+                val target   = line.substring(0, sepIdx).trim()
+                val linkPath = line.substring(sepIdx + 1).trim()
+                    .removePrefix("./")   // strip leading "./" if present
+
+                val linkFile = File(targetDir, linkPath)
+                linkFile.parentFile?.mkdirs()
+                linkFile.delete()
+                try {
+                    android.system.Os.symlink(target, linkFile.absolutePath)
+                    created++
+                } catch (e: Exception) {
+                    AppLogger.w(tag, "Symlink failed: $linkPath -> $target: ${e.message}")
+                    failed++
                 }
             }
+            AppLogger.i(tag, "SYMLINKS.txt: $created created, $failed failed")
         } catch (e: Exception) {
             AppLogger.w(tag, "Failed to process SYMLINKS.txt: ${e.message}")
         }

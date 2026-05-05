@@ -19,12 +19,22 @@ internal class TermuxBootstrapMarker(
 
     /**
      * Verifica si el bootstrap está instalado correctamente.
+     * Comprueba el marcador, los binarios esenciales Y los symlinks críticos
+     * de librerías (libreadline.so.8, libtinfo.so.6). Si los symlinks faltan,
+     * retorna false para forzar una reinstalación limpia.
      */
     fun isInstalled(): Boolean {
         if (!markerFile.exists()) return false
-        return File(prefix, "bin/dpkg").exists() &&
-               File(prefix, "bin/apt").exists() &&
-               File(prefix, "bin/bash").exists()
+        if (!File(prefix, "bin/dpkg").exists()) return false
+        if (!File(prefix, "bin/apt").exists()) return false
+        if (!File(prefix, "bin/bash").exists()) return false
+        // Verify critical library symlinks created from SYMLINKS.txt.
+        // If these are missing the bootstrap was extracted without symlinks
+        // (old bug: wrong separator "←←←" instead of "←") and bash will
+        // fail with "library not found" errors.
+        if (!File(prefix, "lib/libreadline.so.8").exists()) return false
+        if (!File(prefix, "lib/libtinfo.so.6").exists()) return false
+        return true
     }
 
     /**
