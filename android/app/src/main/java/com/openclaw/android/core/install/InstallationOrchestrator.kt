@@ -63,14 +63,15 @@ class InstallationOrchestrator(
         companion object {
             fun fromString(mode: String, hasPayload: Boolean = false): InstallationMode = when (mode.lowercase()) {
                 "termux-bootstrap", "bootstrap" -> TermuxBootstrap
-                "proot", "ubuntu", "rootfs" -> ProotUbuntu  // "rootfs" kept as alias for backward compat
-                "offline" -> OfflinePayload
-                "online" -> OnlineOnly
-                "force" -> Force
-                "auto" -> {
-                    if (hasPayload) OfflinePayload else TermuxBootstrap
-                }
-                else -> TermuxBootstrap
+                "proot", "ubuntu", "rootfs"     -> ProotUbuntu
+                "offline"                       -> OfflinePayload
+                "online"                        -> OnlineOnly
+                "force"                         -> Force
+                // "auto" always starts with Termux Bootstrap — it is the
+                // mandatory first step. The UI then triggers payload/online
+                // separately as a second independent step.
+                "auto"                          -> TermuxBootstrap
+                else                            -> TermuxBootstrap
             }
         }
     }
@@ -101,29 +102,38 @@ class InstallationOrchestrator(
         val isForce = mode == "force" || installationMode is InstallationMode.Force
 
         try {
-            // Verificar si ya está instalado (excepto en modo force)
-            if (stateChecker.isInstalled() && !isForce) {
-                AppLogger.i(TAG, "Already installed — skipping")
-                listener.onSuccess()
-                return@withContext
-            }
-
             if (isForce) {
                 cleanInstallation()
             }
 
+            // Each mode checks its OWN marker — they are independent.
+            // Do NOT use a shared isInstalled() check that mixes all markers.
             when (installationMode) {
-                is InstallationMode.TermuxBootstrap -> installTermuxBootstrap(listener)
+                is InstallationMode.TermuxBootstrap -> {
+                    if (!isForce && TermuxBootstrapManager(context).isInstalled()) {
+                        AppLogger.i(TAG, "Termux Bootstrap already installed — skipping")
+                        listener.onSuccess()
+                        return@withContext
+                    }
+                    installTermuxBootstrap(listener)
+                }
                 is InstallationMode.ProotUbuntu -> installProot(listener)
-                is InstallationMode.OfflinePayload -> installOffline(customUri, listener)
+                is InstallationMode.OfflinePayload -> {
+                    if (!isForce && stateChecker.isInstalled()) {
+                        AppLogger.i(TAG, "Payload already installed — skipping")
+                        listener.onSuccess()
+                        return@withContext
+                    }
+                    installOffline(customUri, listener)
+                }
                 is InstallationMode.OnlineOnly -> installOnline(listener)
-                is InstallationMode.Force -> installTermuxBootstrap(listener) // Default to bootstrap on force if not specified
+                is InstallationMode.Force -> installTermuxBootstrap(listener)
             }
 
         } catch (e: Exception) {
             AppLogger.e(TAG, "Installation failed: ${e.message}", e)
             listener.onError(
-                "Instalación falló: ${e.message ?: "error desconocido"}",
+                "Installation failed: ${e.message ?: "unknown error"}",
                 e,
             )
         }
@@ -215,44 +225,37 @@ class InstallationOrchestrator(
     }
 
     private suspend fun installOffline(customUri: Uri?, listener: ProgressListener) {
-        // Paso 1: Instalar Termux Bootstrap si no está.
-        // El bootstrap provee bash, sh, apt, dpkg — necesarios para ejecutar
-        // scripts .sh del payload de OpenClaw.
-        if (!TermuxBootstrapManager(context).isInstalled()) {
-            installTermuxBootstrap(listener)
-            // Verificar que realmente se instaló
-            if (!TermuxBootstrapManager(context).isInstalled()) {
-                throw Exception("Falló la instalación de Termux Bootstrap — sin bash no se puede continuar")
-            }
-        }
-
+        // Offline payload installs OpenClaw (node + glibc) from the bundled asset.
+        // This is INDEPENDENT of Termux Bootstrap — the payload extracts to
+        // homeDir/payload/ and does NOT require bash or apt from the bootstrap.
+        // Do NOT call installTermuxBootstrap() here.
         val bridgeListener = object : com.openclaw.android.InstallerManager.ProgressListener {
             override fun onProgress(percent: Int, message: String) = listener.onProgress(percent, message)
             override fun onSuccess() = listener.onSuccess()
             override fun onError(message: String, cause: Throwable?) = listener.onError(message, cause)
         }
 
-        // Paso 2: Instalar payload de OpenClaw (node + glibc + openclaw)
         if (customUri != null) {
             payloadInstaller.installFromCustomPayload(customUri, bridgeListener)
         } else if (assetResolver.hasPayloadAsset()) {
             payloadInstaller.installOffline(bridgeListener)
         } else {
-            listener.onError("No hay payload disponible para instalación offline")
+            listener.onError("No payload available for offline installation")
         }
     }
 
     private suspend fun installOnline(listener: ProgressListener) {
-        // Instalar bootstrap primero si no está
+        // Online mode installs OpenClaw via curl | bash run inside the terminal.
+        // It REQUIRES Termux Bootstrap to be installed first because the install
+        // script needs bash, curl, and apt from the bootstrap environment.
         if (!TermuxBootstrapManager(context).isInstalled()) {
             installTermuxBootstrap(listener)
-            // Verificar que realmente se instaló
             if (!TermuxBootstrapManager(context).isInstalled()) {
-                throw Exception("Falló la instalación de Termux Bootstrap")
+                throw Exception("Termux Bootstrap installation failed — required for online install")
             }
         }
-        
-        listener.onProgress(100, "Bootstrap instalado. Abre el terminal para completar la instalación online.")
+
+        listener.onProgress(100, "Bootstrap ready. Open the terminal to run the online install.")
         listener.onSuccess()
     }
 

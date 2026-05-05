@@ -73,9 +73,35 @@ class TerminalSessionManager(
             File(termuxPrefix, "bin/apt").exists()
         ) {
             AppLogger.i(TAG, "Termux Bootstrap mode: using ${termuxBash.absolutePath}")
+
+            // Ensure bash.bashrc exists at the real path — bash is compiled with
+            // /data/data/com.termux/files/usr hardcoded, so it looks for bash.bashrc
+            // there. We create it at the actual prefix path so bash finds it.
+            val etcDir = File(termuxPrefix, "etc").also { it.mkdirs() }
+            val bashRcFile = File(etcDir, "bash.bashrc")
+            if (!bashRcFile.exists()) {
+                bashRcFile.writeText(buildString {
+                    appendLine("# OpenClaw bash.bashrc — auto-generated")
+                    appendLine("export PREFIX=\"${termuxPrefix.absolutePath}\"")
+                    appendLine("export HOME=\"${homeDir.absolutePath}\"")
+                    appendLine("export TMPDIR=\"${tmpDir.absolutePath}\"")
+                    appendLine("export PATH=\"${termuxPrefix.absolutePath}/bin:${termuxPrefix.absolutePath}/bin/applets:/system/bin:/bin\"")
+                    appendLine("export LD_LIBRARY_PATH=\"${termuxPrefix.absolutePath}/lib\"")
+                    appendLine("export LANG=en_US.UTF-8")
+                    appendLine("export TERM=xterm-256color")
+                })
+                AppLogger.i(TAG, "Created bash.bashrc at ${bashRcFile.absolutePath}")
+            }
+            // Ensure .bashrc exists in homeDir
+            val homeBashRc = File(homeDir, ".bashrc")
+            if (!homeBashRc.exists()) {
+                homeBashRc.writeText("export PS1='\\u@openclaw:\\w\\$ '\nalias ls='ls --color=auto'\n")
+            }
+
             // Include ~/.openclaw-android/bin in PATH so node/openclaw wrappers
             // installed by the payload are accessible from the terminal.
             val ocaBin = File(homeDir, ".openclaw-android/bin").absolutePath
+
             // Resolve payload glibc lib dir for LD_LIBRARY_PATH (needed by node)
             val payloadGlibcLib = listOf(
                 File(homeDir, "payload/glibc/lib"),
@@ -85,24 +111,52 @@ class TerminalSessionManager(
                 append("${termuxPrefix.absolutePath}/lib")
                 if (payloadGlibcLib != null) append(":$payloadGlibcLib")
             }
+
+            // libtermux-exec-ld-preload.so redirects hardcoded Termux paths
+            // (/data/data/com.termux/files) to the real app sandbox path at
+            // runtime. Without it, bash reads bash.bashrc from the wrong path
+            // and crashes with "Permission denied" (signal 1).
+            // TERMUX_APP__DATA_DIR tells the library where to redirect to.
+            val termuxExecLdPreload = File(termuxPrefix, "lib/libtermux-exec-ld-preload.so")
+            val termuxExecLinkerLdPreload = File(termuxPrefix, "lib/libtermux-exec-linker-ld-preload.so")
+            val ldPreload = when {
+                termuxExecLdPreload.exists()       -> termuxExecLdPreload.absolutePath
+                termuxExecLinkerLdPreload.exists() -> termuxExecLinkerLdPreload.absolutePath
+                else                               -> null
+            }
+            AppLogger.i(TAG, "LD_PRELOAD: $ldPreload")
+
+            val env = mutableListOf(
+                "HOME=${homeDir.absolutePath}",
+                "PREFIX=${termuxPrefix.absolutePath}",
+                "TMPDIR=${tmpDir.absolutePath}",
+                "TERM=xterm-256color",
+                "LANG=en_US.UTF-8",
+                "PATH=$ocaBin:${termuxPrefix.absolutePath}/bin:${termuxPrefix.absolutePath}/bin/applets:/system/bin:/bin",
+                "LD_LIBRARY_PATH=$ldLibPath",
+                "PACKAGE_MANAGER=apt",
+                "TERMUX_VERSION=1.0",
+                "TERMUX_APP_PID=${android.os.Process.myPid()}",
+                "DEBIAN_FRONTEND=noninteractive",
+                "DEBCONF_NONINTERACTIVE_SEEN=true",
+                // Required by libtermux-exec: tells it the real app data dir
+                // so it can redirect /data/data/com.termux/files → this path.
+                "TERMUX_APP__DATA_DIR=${activity.filesDir.parentFile?.absolutePath ?: activity.filesDir.absolutePath}",
+                "TERMUX_APP__PACKAGE_NAME=${activity.packageName}",
+            )
+            if (ldPreload != null) {
+                env.add("LD_PRELOAD=$ldPreload")
+            }
+
             return TerminalSession(
                 termuxBash.absolutePath,
                 homeDir.absolutePath,
-                arrayOf("bash", "-i"),
-                arrayOf(
-                    "HOME=${homeDir.absolutePath}",
-                    "PREFIX=${termuxPrefix.absolutePath}",
-                    "TMPDIR=${tmpDir.absolutePath}",
-                    "TERM=xterm-256color",
-                    "LANG=en_US.UTF-8",
-                    "PATH=$ocaBin:${termuxPrefix.absolutePath}/bin:${termuxPrefix.absolutePath}/bin/applets:/system/bin:/bin",
-                    "LD_LIBRARY_PATH=$ldLibPath",
-                    "PACKAGE_MANAGER=apt",
-                    "TERMUX_VERSION=1.0",
-                    "TERMUX_APP_PID=${android.os.Process.myPid()}",
-                    "DEBIAN_FRONTEND=noninteractive",
-                    "DEBCONF_NONINTERACTIVE_SEEN=true",
-                ),
+                // --norc: skip /data/data/com.termux/files/usr/etc/bash.bashrc
+                //         (hardcoded Termux path, inaccessible from this app)
+                // --noprofile: skip /data/data/com.termux/files/usr/etc/profile
+                // We source our own .bashrc from HOME via ENV instead.
+                arrayOf("bash", "--norc", "--noprofile", "-i"),
+                env.toTypedArray(),
                 TRANSCRIPT_ROWS,
                 sessionClient,
             )
