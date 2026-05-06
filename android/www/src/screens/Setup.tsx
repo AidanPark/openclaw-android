@@ -221,7 +221,7 @@ export function Setup({ onComplete }: Props) {
 
   // ── Success screens ───────────────────────────────────────────────────
   if (envChoice === 'termux' && ocPhase === 'done') {
-    return <SuccessScreen onComplete={onComplete} bsInstalled={bsPhase === 'done'} />
+    return <SuccessScreen onComplete={onComplete} />
   }
   if (envChoice === 'proot' && prootPhase === 'done') {
     return <ProotSuccessScreen onComplete={onComplete} />
@@ -635,7 +635,7 @@ export function Setup({ onComplete }: Props) {
 }
 
 // ── SuccessScreen (Termux) ────────────────────────────────────────────────
-function SuccessScreen({ onComplete }: { onComplete: () => void; bsInstalled?: boolean }) {
+function SuccessScreen({ onComplete }: { onComplete: () => void }) {
   const [countdown, setCountdown] = useState(3)
 
   useEffect(() => {
