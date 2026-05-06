@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Track (background) -->
+    <item android:id="@android:id/background">
+        <shape>
+            <corners android:radius="4dp"/>
+            <solid android:color="@color/installProgressTrack"/>
+        </shape>
+    </item>
+    <!-- Progress indicator -->
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape>
+                <corners android:radius="4dp"/>
+                <solid android:color="@color/installProgressIndicator"/>
+            </shape>
+        </clip>
+    </item>
+</layer-list>

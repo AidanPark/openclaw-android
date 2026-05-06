@@ -164,13 +164,38 @@ public class CursorAndScreenTest extends TerminalTestCase {
 	 * <p/>
 	 * We do not want to color already written cells when tabbing over them.
 	 */
-	public void DISABLED_testHorizontalTabColorsBackground() {
+	public void testHorizontalTabColorsBackground() {
 		withTerminalSized(10, 3).enterString("\033[48;5;15m").enterString("\t");
 		assertCursorAt(0, 8);
 		for (int i = 0; i < 10; i++) {
 			int expectedColor = i < 8 ? 15 : TextStyle.COLOR_INDEX_BACKGROUND;
 			assertEquals(expectedColor, TextStyle.decodeBackColor(getStyleAt(0, i)));
 		}
+	}
+
+	public void testHorizontalTabDoesNotOverwriteExistingColors() {
+		// Fill first 4 columns with background color 10:
+		withTerminalSized(10, 3).enterString("\033[48;5;10mXXXX");
+		// Move cursor back to start of line:
+		enterString("\r");
+		// Set background color 11 and tab:
+		enterString("\033[48;5;11m\t");
+		assertCursorAt(0, 8);
+		for (int i = 0; i < 10; i++) {
+			int expectedColor;
+			if (i < 4) {
+				expectedColor = 10; // Existing color should be kept.
+			} else if (i < 8) {
+				expectedColor = 11; // New color should be applied to previously empty cells.
+			} else {
+				expectedColor = TextStyle.COLOR_INDEX_BACKGROUND;
+			}
+			assertEquals(expectedColor, TextStyle.decodeBackColor(getStyleAt(0, i)));
+		}
+
+		// Also verify it doesn't overwrite text:
+		withTerminalSized(10, 3).enterString("0123456789\r\033[48;5;11m\tXX");
+		assertLinesAre("01234567XX", "          ", "          ");
 	}
 
 	/**

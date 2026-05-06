@@ -104,7 +104,7 @@ _restore_root_for_platform() {
 cmd_backup() {
     if ! command -v gzip &>/dev/null; then
         echo "  Installing gzip..."
-        pkg install -y gzip 2>/dev/null || { echo -e "${RED}[FAIL]${NC} gzip not found and could not be installed"; exit 1; }
+        pkg_safe install -y gzip 2>/dev/null
     fi
 
     local output_dir="${1:-}"

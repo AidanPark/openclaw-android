@@ -2,7 +2,34 @@
 <resources>
     <string name="app_name">Claw</string>
     <string name="notification_channel_id">openclaw_service</string>
-    <string name="notification_channel_name">OpenClaw Service</string>
-    <string name="notification_title">OpenClaw is running</string>
-    <string name="notification_text">Terminal session active</string>
+    <string name="notification_channel_name">Servicio OpenClaw</string>
+    <string name="notification_title">OpenClaw en ejecución</string>
+    <string name="notification_text">Sesión de terminal activa</string>
+
+    <!-- Terminal UI -->
+    <string name="btn_esc">ESC</string>
+    <string name="btn_ctrl">CTRL</string>
+    <string name="btn_alt">ALT</string>
+    <string name="btn_tab">TAB</string>
+    <string name="btn_home">INICIO</string>
+    <string name="btn_end">FIN</string>
+    <string name="btn_left">◀</string>
+    <string name="btn_up">▲</string>
+    <string name="btn_down">▼</string>
+    <string name="btn_right">▶</string>
+    <string name="btn_dash">-</string>
+    <string name="btn_pipe">|</string>
+    <string name="btn_paste">PEG</string>
+    <string name="btn_pgup">RePág</string>
+    <string name="btn_pgdn">AvPág</string>
+
+    <!-- Session tabs -->
+    <string name="session_label">Sesión %d</string>
+    <string name="add_session">+</string>
+    <string name="close_session">×</string>
+
+    <!-- Errors / messages -->
+    <string name="error_shell_not_found">Shell no encontrado</string>
+    <string name="error_bootstrap_missing">Bootstrap no instalado</string>
+    <string name="msg_loading">Cargando…</string>
 </resources>

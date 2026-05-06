@@ -18,6 +18,11 @@ else
     BOLD='\033[1m'
     NC='\033[0m'
     REPO_BASE_ORIGIN="https://raw.githubusercontent.com/AidanPark/openclaw-android/main"
+    REPO_BASE_MIRRORS=(
+        "https://ghfast.top/https://raw.githubusercontent.com/AidanPark/openclaw-android/main"
+        "https://ghproxy.net/https://raw.githubusercontent.com/AidanPark/openclaw-android/main"
+        "https://mirror.ghproxy.com/https://raw.githubusercontent.com/AidanPark/openclaw-android/main"
+    )
     REPO_BASE="$REPO_BASE_ORIGIN"
     PLATFORM_MARKER="$PROJECT_DIR/.platform"
 
@@ -29,21 +34,18 @@ else
         return 1
     }
 
+    # Fallback resolve_repo_base — mirrors kept in sync with lib.sh
     resolve_repo_base() {
         if curl -sI --connect-timeout 3 "$REPO_BASE_ORIGIN/oa.sh" >/dev/null 2>&1; then
             REPO_BASE="$REPO_BASE_ORIGIN"; return 0
         fi
-        local mirrors=(
-            "https://ghfast.top/$REPO_BASE_ORIGIN"
-            "https://ghproxy.net/$REPO_BASE_ORIGIN"
-            "https://mirror.ghproxy.com/$REPO_BASE_ORIGIN"
-        )
-        for m in "${mirrors[@]}"; do
-            if curl -sI --connect-timeout 3 "$m/oa.sh" >/dev/null 2>&1; then
-                echo -e "  ${YELLOW}[MIRROR]${NC} Using mirror for GitHub downloads"
-                REPO_BASE="$m"; return 0
+        for mirror in "${REPO_BASE_MIRRORS[@]}"; do
+            if curl -sI --connect-timeout 3 "$mirror/oa.sh" >/dev/null 2>&1; then
+                echo -e "  ${YELLOW}[MIRROR]${NC} Using mirror: ${mirror%%/oa.sh*}"
+                REPO_BASE="$mirror"; return 0
             fi
         done
+        REPO_BASE="$REPO_BASE_ORIGIN"
         return 1
     }
 fi
@@ -88,6 +90,32 @@ cmd_update() {
         exit 1
     fi
 
+    # ── Version check before update ──
+    echo "Checking OpenClaw versions..."
+
+    # Get current installed version
+    local CURRENT_VER
+    CURRENT_VER=$(npm list -g openclaw --depth=0 2>/dev/null | grep 'openclaw@' | sed 's/.*openclaw@//' | tr -d '[:space:]') || true
+
+    # Get latest available version
+    local LATEST_VER
+    LATEST_VER=$(npm view openclaw version 2>/dev/null || echo "") || true
+
+    if [ -z "$CURRENT_VER" ]; then
+        echo -e "${YELLOW}[WARN]${NC} OpenClaw not installed locally"
+        echo "Run 'oa --install' first or use the full installer"
+    elif [ -z "$LATEST_VER" ]; then
+        echo -e "${YELLOW}[WARN]${NC} Could not fetch latest version from npm"
+        echo "Check your network connection"
+    elif [ "$CURRENT_VER" = "$LATEST_VER" ]; then
+        echo -e "${GREEN}[OK]${NC} OpenClaw $CURRENT_VER is already the latest"
+        echo "No update needed"
+        exit 0
+    else
+        echo "OpenClaw: $CURRENT_VER → $LATEST_VER (updating)"
+    fi
+
+    # Proceed with update only if versions differ or current not installed
     mkdir -p "$PROJECT_DIR"
     local LOGFILE="$PROJECT_DIR/update.log"
 

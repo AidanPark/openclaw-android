@@ -32,9 +32,6 @@ public interface TerminalViewClient {
 
     boolean shouldEnforceCharBasedInput();
 
-    /** Returns the input mode: 0=default, 1=TYPE_NULL, 2=VISIBLE_PASSWORD */
-    int getInputMode();
-
     boolean shouldUseCtrlSpaceWorkaround();
 
     boolean isTerminalViewSelected();

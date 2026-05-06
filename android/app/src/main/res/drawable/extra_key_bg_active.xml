@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
-    android:color="#55ffffff">
+    android:color="@color/extraKeyRipple">
     <item>
         <shape android:shape="rectangle">
             <solid android:color="@color/extraKeyActive" />
-            <corners android:radius="4dp" />
+            <corners android:radius="6dp" />
+            <stroke android:width="1dp" android:color="@color/extraKeyActive" />
         </shape>
     </item>
 </ripple>

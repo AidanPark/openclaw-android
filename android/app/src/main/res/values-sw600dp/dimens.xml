@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dimensiones para tablets (≥ 600dp de ancho mínimo) -->
+<resources>
+    <!-- Barra de teclas extra — más grandes en tablet -->
+    <dimen name="extra_key_height">48dp</dimen>
+    <dimen name="extra_key_padding_h">8dp</dimen>
+    <dimen name="extra_key_margin">3dp</dimen>
+    <dimen name="extra_key_text_size">13sp</dimen>
+    <dimen name="extra_key_corner_radius">8dp</dimen>
+    <dimen name="extra_keys_bar_padding_v">4dp</dimen>
+
+    <!-- Barra de pestañas -->
+    <dimen name="tab_bar_height">48dp</dimen>
+    <dimen name="tab_name_text_size">14sp</dimen>
+    <dimen name="tab_close_size">26dp</dimen>
+    <dimen name="tab_close_text_size">16sp</dimen>
+    <dimen name="tab_add_text_size">22sp</dimen>
+    <dimen name="tab_indicator_height">3dp</dimen>
+    <dimen name="tab_padding_h">14dp</dimen>
+    <dimen name="tab_padding_v">6dp</dimen>
+    <dimen name="tab_margin">3dp</dimen>
+    <dimen name="tab_add_padding">16dp</dimen>
+</resources>

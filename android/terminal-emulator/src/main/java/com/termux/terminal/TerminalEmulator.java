@@ -592,21 +592,29 @@ public final class TerminalEmulator {
                     int previousRow = mCursorRow - 1;
                     if (previousRow >= 0 && mScreen.getLineWrap(previousRow)) {
                         mScreen.clearLineWrap(previousRow);
-                        setCursorRowCol(previousRow, mRightMargin - 1);
+                        setCursorPositionAbsolute(mRightMargin - 1, previousRow);
                     }
                 } else {
                     setCursorCol(mCursorCol - 1);
                 }
                 break;
             case 9: // Horizontal tab (HT, \t) - move to next tab stop, but not past edge of screen
-                // XXX: Should perhaps use color if writing to new cells. Try with
-                //       printf "\033[41m\tXX\033[0m\n"
-                // The OSX Terminal.app colors the spaces from the tab red, but xterm does not.
-                // Note that Terminal.app only colors on new cells, in e.g.
-                //       printf "\033[41m\t\r\033[42m\tXX\033[0m\n"
-                // the first cells are created with a red background, but when tabbing over
-                // them again with a green background they are not overwritten.
-                mCursorCol = nextTabStop(1);
+                // Color empty cells with the current background color as the cursor moves over them.
+                // Cells that already have content (non-space) are not overwritten.
+                // This matches Terminal.app behaviour: new cells get the active background color,
+                // but tabbing over existing content leaves it unchanged.
+                {
+                    int tabTarget = nextTabStop(1);
+                    long tabStyle = getStyle();
+                    for (int col = mCursorCol; col < tabTarget; col++) {
+                        long existingStyle = mScreen.getStyleAt(mCursorRow, col);
+                        char existingChar = mScreen.getCharAt(mCursorRow, col);
+                        if (existingChar == ' ' || existingChar == 0) {
+                            mScreen.setChar(col, mCursorRow, ' ', tabStyle);
+                        }
+                    }
+                    mCursorCol = tabTarget;
+                }
                 break;
             case 10: // Line feed (LF, \n).
             case 11: // Vertical tab (VT, \v).
@@ -742,11 +750,11 @@ public final class TerminalEmulator {
                             case 't': // "${CSI}${TOP}${LEFT}${BOTTOM}${RIGHT}${ATTRIBUTES}$t"
                                 // Reverse attributes in rectangular area (DECRARA - http://www.vt100.net/docs/vt510-rm/DECRARA).
                                 boolean reverse = b == 't';
-                                // FIXME: "coordinates of the rectangular area are affected by the setting of origin mode (DECOM)".
-                                int top = Math.min(getArg(0, 1, true) - 1, effectiveBottomMargin) + effectiveTopMargin;
-                                int left = Math.min(getArg(1, 1, true) - 1, effectiveRightMargin) + effectiveLeftMargin;
-                                int bottom = Math.min(getArg(2, mRows, true) + 1, effectiveBottomMargin - 1) + effectiveTopMargin;
-                                int right = Math.min(getArg(3, mColumns, true) + 1, effectiveRightMargin - 1) + effectiveLeftMargin;
+                                // "coordinates of the rectangular area are affected by the setting of origin mode (DECOM)".
+                                int top = Math.min(getArg(0, 1, true) - 1 + effectiveTopMargin, effectiveBottomMargin);
+                                int left = Math.min(getArg(1, 1, true) - 1 + effectiveLeftMargin, effectiveRightMargin);
+                                int bottom = Math.min(Math.max(getArg(2, mRows, true) + effectiveTopMargin, top), effectiveBottomMargin);
+                                int right = Math.min(Math.max(getArg(3, mColumns, true) + effectiveLeftMargin, left), effectiveRightMargin);
                                 if (mArgIndex >= 4) {
                                     if (mArgIndex >= mArgs.length) mArgIndex = mArgs.length - 1;
                                     for (int i = 4; i <= mArgIndex; i++) {
@@ -1203,7 +1211,7 @@ public final class TerminalEmulator {
                 setDecsetinternalBit(DECSET_BIT_LEFTRIGHT_MARGIN_MODE, false);
                 // "Erases all data in page memory":
                 blockClear(0, 0, mColumns, mRows);
-                setCursorRowCol(0, 0);
+                setCursorPositionAbsolute(0, 0);
                 break;
             case 4: // DECSCLM-Scrolling Mode. Ignore.
                 break;
@@ -1453,7 +1461,7 @@ public final class TerminalEmulator {
                 doLinefeed();
                 break;
             case 'F': // Cursor to lower-left corner of screen
-                setCursorRowCol(0, mBottomMargin - 1);
+                setCursorPositionAbsolute(mBottomMargin - 1, 0);
                 break;
             case 'H': // Tab set
                 mTabStop[mCursorCol] = true;
@@ -1514,7 +1522,7 @@ public final class TerminalEmulator {
     /** DECRS restore cursor - http://www.vt100.net/docs/vt510-rm/DECRC. See {@link #saveCursor()}. */
     private void restoreCursor() {
         SavedScreenState state = (mScreen == mMainBuffer) ? mSavedStateMain : mSavedStateAlt;
-        setCursorRowCol(state.mSavedCursorRow, state.mSavedCursorCol);
+        setCursorPositionAbsolute(state.mSavedCursorCol, state.mSavedCursorRow);
         mEffect = state.mSavedEffect;
         mForeColor = state.mSavedForeColor;
         mBackColor = state.mSavedBackColor;
@@ -2190,7 +2198,7 @@ public final class TerminalEmulator {
 
     /**
      * NOTE: The parameters of this function respect the {@link #DECSET_BIT_ORIGIN_MODE}. Use
-     * {@link #setCursorRowCol(int, int)} for absolute pos.
+     * {@link #setCursorPositionAbsolute(int, int)} for absolute pos.
      */
     private void setCursorPosition(int x, int y) {
         boolean originMode = isDecsetInternalBitSet(DECSET_BIT_ORIGIN_MODE);
@@ -2200,7 +2208,7 @@ public final class TerminalEmulator {
         int effectiveRightMargin = originMode ? mRightMargin : mColumns;
         int newRow = Math.max(effectiveTopMargin, Math.min(effectiveTopMargin + y, effectiveBottomMargin - 1));
         int newCol = Math.max(effectiveLeftMargin, Math.min(effectiveLeftMargin + x, effectiveRightMargin - 1));
-        setCursorRowCol(newRow, newCol);
+        setCursorPositionAbsolute(newCol, newRow);
     }
 
     private void scrollDownOneLine() {
@@ -2510,10 +2518,10 @@ public final class TerminalEmulator {
         setCursorPosition(col, mCursorRow);
     }
 
-    /** TODO: Better name, distinguished from {@link #setCursorPosition(int, int)} by not regarding origin mode. */
-    private void setCursorRowCol(int row, int col) {
-        mCursorRow = Math.max(0, Math.min(row, mRows - 1));
-        mCursorCol = Math.max(0, Math.min(col, mColumns - 1));
+    /** Sets the absolute cursor position (ignoring origin mode). */
+    private void setCursorPositionAbsolute(int x, int y) {
+        mCursorRow = Math.max(0, Math.min(y, mRows - 1));
+        mCursorCol = Math.max(0, Math.min(x, mColumns - 1));
         mAboutToAutoWrap = false;
     }
 

@@ -7,6 +7,7 @@ export function SettingsKeepAlive() {
   const { navigate } = useRoute()
   const [batteryExcluded, setBatteryExcluded] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [requesting, setRequesting] = useState(false)
 
   useEffect(() => {
     const status = bridge.callJson<{ isIgnoring: boolean }>('getBatteryOptimizationStatus')
@@ -22,11 +23,14 @@ export function SettingsKeepAlive() {
   }
 
   function handleRequestExclusion() {
+    setRequesting(true)
     bridge.call('requestBatteryOptimizationExclusion')
-    // Re-check after user returns
     setTimeout(() => {
-      const status = bridge.callJson<{ isIgnoring: boolean }>('getBatteryOptimizationStatus')
-      if (status) setBatteryExcluded(status.isIgnoring)
+      try {
+        const status = bridge.callJson<{ isIgnoring: boolean }>('getBatteryOptimizationStatus')
+        if (status) setBatteryExcluded(status.isIgnoring)
+      } catch { /* ignore */ }
+      setRequesting(false)
     }, 3000)
   }
 
@@ -41,43 +45,44 @@ export function SettingsKeepAlive() {
         {t('ka_desc')}
       </div>
 
-      {/* 1. Battery Optimization */}
       <div className="section-title">{t('ka_battery')}</div>
       <div className="card">
-        <div className="card-row">
+        <div className="card-row" style={{ cursor: 'default' }}>
           <div className="card-content">
             <div className="card-label">{t('ka_status')}</div>
           </div>
           {batteryExcluded ? (
-            <span style={{ color: 'var(--success)', fontSize: 14 }}>{t('ka_excluded')}</span>
+            <span className="pill pill-success">{t('ka_excluded')}</span>
           ) : (
-            <button className="btn btn-small btn-primary" onClick={handleRequestExclusion}>
-              {t('ka_request')}
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleRequestExclusion}
+              disabled={requesting}
+            >
+              {requesting ? '...' : t('ka_request')}
             </button>
           )}
         </div>
       </div>
 
-      {/* 2. Developer Options */}
       <div className="section-title">{t('ka_developer')}</div>
       <div className="card">
-        <div style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 12 }}>
-          {t('ka_developer_desc').split('\n').map((line, i) => (
-            <span key={i}>{line}{i < t('ka_developer_desc').split('\n').length - 1 && <br />}</span>
+        <div style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 14, color: 'var(--text-secondary)' }}>
+          {t('ka_developer_desc').split('\n').map((line, i, arr) => (
+            <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
           ))}
         </div>
         <button
-          className="btn btn-small btn-secondary"
+          className="btn btn-secondary btn-sm"
           onClick={() => bridge.call('openSystemSettings', 'developer')}
         >
           {t('ka_open_dev')}
         </button>
       </div>
 
-      {/* 3. Phantom Process Killer */}
       <div className="section-title">{t('ka_phantom')}</div>
       <div className="card">
-        <div style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 12 }}>
+        <div style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 12, color: 'var(--text-secondary)' }}>
           {t('ka_phantom_desc')}
         </div>
         <div className="code-block">
@@ -88,7 +93,6 @@ export function SettingsKeepAlive() {
         </div>
       </div>
 
-      {/* 4. Charge Limit */}
       <div className="section-title">{t('ka_charge')}</div>
       <div className="card">
         <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>

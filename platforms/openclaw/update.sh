@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# openclaw/update.sh - Update OpenClaw npm package
+# Implements version check + reapply patches + marker update
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,18 +11,26 @@ export CPATH="$PREFIX/include/glib-2.0:$PREFIX/lib/glib-2.0/include"
 echo "=== Updating OpenClaw Platform ==="
 echo ""
 
+# Ensure build tools are available
 pkg install -y libvips binutils 2>/dev/null || true
 if [ ! -e "$PREFIX/bin/ar" ] && [ -x "$PREFIX/bin/llvm-ar" ]; then
     ln -s "$PREFIX/bin/llvm-ar" "$PREFIX/bin/ar"
 fi
 
-CURRENT_VER=$(npm list -g openclaw 2>/dev/null | grep 'openclaw@' | sed 's/.*openclaw@//' | tr -d '[:space:]')
-LATEST_VER=$(npm view openclaw version 2>/dev/null || echo "")
-OPENCLAW_UPDATED=false
+# ── Version Check ──
+CURRENT_VER=$(npm list -g openclaw --depth=0 2>/dev/null | grep 'openclaw@' | sed 's/.*openclaw@//' | tr -d '[:space:]') || true
+LATEST_VER=$(npm view openclaw version 2>/dev/null || echo "") || true
 
+# If versions match, skip update entirely
 if [ -n "$CURRENT_VER" ] && [ -n "$LATEST_VER" ] && [ "$CURRENT_VER" = "$LATEST_VER" ]; then
     echo -e "${GREEN}[OK]${NC}   openclaw $CURRENT_VER is already the latest"
-else
+    echo "No update needed"
+    exit 0
+fi
+
+OPENCLAW_UPDATED=false
+
+if [ -n "$CURRENT_VER" ] && [ -n "$LATEST_VER" ] && [ "$CURRENT_VER" != "$LATEST_VER" ]; then
     echo "Updating openclaw npm package... ($CURRENT_VER → $LATEST_VER)"
     echo "  (This may take several minutes depending on network speed)"
     if npm install -g openclaw@latest --no-fund --no-audit --ignore-scripts; then
@@ -29,6 +39,16 @@ else
     else
         echo -e "${YELLOW}[WARN]${NC} Package update failed (non-critical)"
         echo "       Retry manually: npm install -g openclaw@latest"
+    fi
+elif [ -z "$CURRENT_VER" ]; then
+    # Not installed - install fresh
+    echo "Installing openclaw npm package..."
+    if npm install -g openclaw@latest --no-fund --no-audit --ignore-scripts; then
+        CURRENT_VER=$(npm list -g openclaw --depth=0 2>/dev/null | grep 'openclaw@' | sed 's/.*openclaw@//' | tr -d '[:space:]')
+        echo -e "${GREEN}[OK]${NC}   openclaw $CURRENT_VER installed"
+        OPENCLAW_UPDATED=true
+    else
+        echo -e "${YELLOW}[WARN]${NC} Package install failed (non-critical)"
     fi
 fi
 
@@ -123,3 +143,38 @@ if [ -d "$OLD_SKILLS_DIR" ] && [ "$(ls -A "$OLD_SKILLS_DIR" 2>/dev/null)" ]; the
 fi
 
 python -c "import yaml" 2>/dev/null || pip install pyyaml -q || true
+
+# ── Update installed.json marker ──
+# Write marker only if openclaw is actually installed
+OC_MJS="$PREFIX/lib/node_modules/openclaw/openclaw.mjs"
+OC_BIN="$PREFIX/bin/openclaw"
+if [ -f "$OC_MJS" ] || [ -f "$OC_BIN" ]; then
+    # Get final version after update
+    INSTALLED_VER=$(npm list -g openclaw --depth=0 2>/dev/null | grep 'openclaw@' | sed 's/.*openclaw@//' | tr -d '[:space:]') || true
+    if [ -z "$INSTALLED_VER" ]; then
+        INSTALLED_VER="unknown"
+    fi
+
+    # Write marker file
+    mkdir -p "$PROJECT_DIR"
+    cat > "$PROJECT_DIR/installed.json" << EOF
+{
+  "installed": true,
+  "version": "$INSTALLED_VER",
+  "updated_at": "$(date -Iseconds)"
+}
+EOF
+    echo -e "${GREEN}[OK]${NC}   installed.json updated (version: $INSTALLED_VER)"
+else
+    echo -e "${YELLOW}[WARN]${NC}   openclaw not found, skipping marker update"
+fi
+
+# ── Final verification ──
+echo ""
+echo "=== Verification ==="
+FINAL_VER=$(openclaw --version 2>/dev/null || echo "NOT FOUND")
+if [ "$FINAL_VER" != "NOT FOUND" ]; then
+    echo -e "${GREEN}[OK]${NC}   openclaw --version: $FINAL_VER"
+else
+    echo -e "${RED}[FAIL]${NC}   openclaw --version not responding"
+fi

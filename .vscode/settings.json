@@ -1,0 +1,8 @@
+{
+    "python.analysis.extraPaths": [
+        "/home/codespace/.vscode-remote/extensions/continue.continue-0.1.3"
+    ],
+    "python.autoComplete.extraPaths": [
+        "/home/codespace/.vscode-remote/extensions/continue.continue-0.1.3"
+    ]
+}

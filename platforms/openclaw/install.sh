@@ -17,21 +17,82 @@ cp "$SCRIPT_DIR/../../patches/glibc-compat.js" "$PROJECT_DIR/patches/glibc-compa
 cp "$SCRIPT_DIR/../../patches/systemctl" "$PREFIX/bin/systemctl"
 chmod +x "$PREFIX/bin/systemctl"
 
+# ── Pre-install network verification ──
+echo "Verifying network connectivity..."
+_NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}"
+if ! curl -fsSL --connect-timeout 10 "$_NPM_REGISTRY" >/dev/null 2>&1; then
+    echo -e "${YELLOW}[WARN]${NC} Primary registry unreachable, trying mirrors..."
+    # Try npmmirror as fallback
+    if curl -fsSL --connect-timeout 10 "https://registry.npmmirror.com/" >/dev/null 2>&1; then
+        export NPM_CONFIG_REGISTRY="https://registry.npmmirror.com/"
+        echo -e "${GREEN}[OK]${NC}   Using npmmirror registry"
+    else
+        echo -e "${RED}[FAIL]${NC} No registry reachable. Check network/DNS."
+        exit 1
+    fi
+fi
+
+# ── SSL certificates verification ──
+_CERT_FILE="$PREFIX/etc/tls/cert.pem"
+if [ ! -s "$_CERT_FILE" ] || ! grep -q "BEGIN CERTIFICATE" "$_CERT_FILE" 2>/dev/null; then
+    echo -e "${YELLOW}[WARN]${NC} SSL certificates corrupted or missing"
+    # Try to regenerate from Android system certs
+    if [ -d "/system/etc/security/cacerts" ]; then
+        mkdir -p "$PREFIX/etc/tls"
+        cat /system/etc/security/cacerts/*.0 > "$_CERT_FILE" 2>/dev/null || true
+        echo -e "${GREEN}[OK]${NC}   Regenerated certificates from system"
+    fi
+fi
+unset _CERT_FILE _NPM_REGISTRY
+
 # Clean up existing installation for smooth reinstall
 if npm list -g openclaw &>/dev/null 2>&1 || [ -d "$PREFIX/lib/node_modules/openclaw" ]; then
-    echo "Existing installation detected \u2014 cleaning up for reinstall..."
+    echo "Existing installation detected — cleaning up for reinstall..."
     npm uninstall -g openclaw 2>/dev/null || true
     rm -rf "$PREFIX/lib/node_modules/openclaw" 2>/dev/null || true
     npm uninstall -g clawdhub 2>/dev/null || true
     rm -rf "$PREFIX/lib/node_modules/clawdhub" 2>/dev/null || true
-    rm -rf "$HOME/.npm/_cacache" 2>/dev/null || true
+    rm -rf "$HOME/.npm/_cacache/tmp" 2>/dev/null || true
     echo -e "${GREEN}[OK]${NC}   Previous installation cleaned"
 fi
 
+# ── Robust npm install with retry logic ──
 echo "Running: npm install -g openclaw@latest --ignore-scripts"
 echo "This may take several minutes..."
 echo ""
-npm install -g openclaw@latest --ignore-scripts
+
+_NPM_RETRIES=3
+_NPM_RETRY_DELAY=5
+_NPM_SUCCESS=false
+
+for _try in $(seq 1 $_NPM_RETRIES); do
+    echo "  Attempt $_try/$_NPM_RETRIES..."
+    if npm install -g openclaw@latest --ignore-scripts 2>&1; then
+        _NPM_SUCCESS=true
+        break
+    else
+        if [ "$_try" -lt "$_NPM_RETRIES" ]; then
+            echo -e "  ${YELLOW}[WARN]${NC} Install failed, retrying in ${_NPM_RETRY_DELAY}s..."
+            sleep $_NPM_RETRY_DELAY
+            _NPM_RETRY_DELAY=$((_NPM_RETRY_DELAY * 2))
+            # Clean cache before retry
+            rm -rf "$HOME/.npm/_cacache/tmp" 2>/dev/null || true
+        fi
+    fi
+done
+
+if [ "$_NPM_SUCCESS" != "true" ]; then
+    echo -e "${RED}[FAIL]${NC} npm install failed after $_NPM_RETRIES attempts"
+    echo "  Last npm error output:"
+    npm install -g openclaw@latest --ignore-scripts 2>&1 | tail -20 || true
+    echo ""
+    echo "  Diagnostic info:"
+    echo "    - Node version: $(node --version 2>&1 || echo 'NOT FOUND')"
+    echo "    - NPM version: $(npm --version 2>&1 || echo 'NOT FOUND')"
+    echo "    - Registry: ${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}"
+    echo "    - SSL certs: $([ -s "$PREFIX/etc/tls/cert.pem" ] && echo 'OK' || echo 'MISSING')"
+    exit 1
+fi
 
 echo ""
 echo -e "${GREEN}[OK]${NC}   OpenClaw installed"

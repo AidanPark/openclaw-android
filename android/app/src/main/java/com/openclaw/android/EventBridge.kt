@@ -28,7 +28,9 @@ class EventBridge(
         data: Any?,
     ) {
         val json = gson.toJson(data ?: emptyMap<String, Any>())
-        val script = "window.__oc&&window.__oc.emit('$type',$json)"
+        // Escape single quotes in type to prevent JS injection
+        val safeType = type.replace("'", "\\'")
+        val script = "window.__oc&&window.__oc.emit('$safeType',$json)"
         webView.post { webView.evaluateJavascript(script, null) }
     }
 }

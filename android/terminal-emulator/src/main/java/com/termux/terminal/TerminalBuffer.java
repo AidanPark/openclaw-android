@@ -459,6 +459,15 @@ public final class TerminalBuffer {
         return allocateFullLineIfNecessary(externalToInternalRow(externalRow)).getStyle(column);
     }
 
+    /** Returns the character at the given column in the given row, or ' ' if the row is unallocated. */
+    public char getCharAt(int externalRow, int column) {
+        int internalRow = externalToInternalRow(externalRow);
+        TerminalRow line = mLines[internalRow];
+        if (line == null) return ' ';
+        // mText is stored column-by-column for simple (non-wide) rows; column index is valid for ASCII/single-width chars.
+        return (column < line.mText.length) ? line.mText[column] : ' ';
+    }
+
     /** Support for http://vt100.net/docs/vt510-rm/DECCARA and http://vt100.net/docs/vt510-rm/DECCARA */
     public void setOrClearEffect(int bits, boolean setOrClear, boolean reverse, boolean rectangular, int leftMargin, int rightMargin, int top, int left,
                                  int bottom, int right) {

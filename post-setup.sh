@@ -33,20 +33,20 @@ NC='\033[0m'
 
 # ─── GitHub mirror fallback (for China/restricted networks) ──
 REPO_BASE_ORIGIN="https://raw.githubusercontent.com/AidanPark/openclaw-android/main"
+REPO_BASE_MIRRORS=(
+    "https://ghfast.top/https://raw.githubusercontent.com/AidanPark/openclaw-android/main"
+    "https://ghproxy.net/https://raw.githubusercontent.com/AidanPark/openclaw-android/main"
+    "https://mirror.ghproxy.com/https://raw.githubusercontent.com/AidanPark/openclaw-android/main"
+)
 REPO_BASE="$REPO_BASE_ORIGIN"
 resolve_repo_base() {
     if curl -sI --connect-timeout 3 "$REPO_BASE_ORIGIN/oa.sh" >/dev/null 2>&1; then
         REPO_BASE="$REPO_BASE_ORIGIN"; return 0
     fi
-    local mirrors=(
-        "https://ghfast.top/$REPO_BASE_ORIGIN"
-        "https://ghproxy.net/$REPO_BASE_ORIGIN"
-        "https://mirror.ghproxy.com/$REPO_BASE_ORIGIN"
-    )
-    for m in "${mirrors[@]}"; do
-        if curl -sI --connect-timeout 3 "$m/oa.sh" >/dev/null 2>&1; then
-            echo -e "  ${YELLOW}[MIRROR]${NC} Using mirror for GitHub downloads"
-            REPO_BASE="$m"; return 0
+    for mirror in "${REPO_BASE_MIRRORS[@]}"; do
+        if curl -sI --connect-timeout 3 "$mirror/oa.sh" >/dev/null 2>&1; then
+            echo -e "  ${YELLOW}[MIRROR]${NC} Using mirror: ${mirror%%/oa.sh*}"
+            REPO_BASE="$mirror"; return 0
         fi
     done
     return 1
@@ -79,6 +79,16 @@ resolve_npm_registry() {
 }
 
 # SSL cert for curl (bootstrap curl looks at hardcoded com.termux path)
+# Bootstrap from Android system certs FIRST so curl can reach packages-cf.termux.dev
+# without "Certificate verification failed" even before ca-certificates is installed.
+_CERT_BUNDLE="$PREFIX/etc/tls/cert.pem"
+if [ ! -s "$_CERT_BUNDLE" ] || ! grep -q "BEGIN CERTIFICATE" "$_CERT_BUNDLE" 2>/dev/null; then
+    mkdir -p "$PREFIX/etc/tls"
+    if [ -d "/system/etc/security/cacerts" ]; then
+        cat /system/etc/security/cacerts/*.0 > "$_CERT_BUNDLE" 2>/dev/null || true
+    fi
+fi
+unset _CERT_BUNDLE
 export CURL_CA_BUNDLE="$PREFIX/etc/tls/cert.pem"
 export SSL_CERT_FILE="$PREFIX/etc/tls/cert.pem"
 export GIT_SSL_CAINFO="$PREFIX/etc/tls/cert.pem"
@@ -91,6 +101,25 @@ export GIT_EXEC_PATH="$PREFIX/libexec/git-core"
 
 # Git template dir (hardcoded /data/data/com.termux path workaround)
 export GIT_TEMPLATE_DIR="$PREFIX/share/git-core/templates"
+
+# ─── Repair bin/ shebangs ────────────────────────────────────────────
+# The Termux bootstrap has scripts in $PREFIX/bin/ (pkg, apt, termux-*)
+# with shebangs hardcoded to /data/data/com.termux/... which breaks when
+# the app package name differs (e.g. com.openclaw.android.debug).
+# libtermux-exec only intercepts execve(), not open(), so we must patch
+# the shebang lines directly. This is idempotent and safe to run always.
+_APP_PKG="$(basename "$(dirname "$(dirname "$PREFIX")")")"
+if [ -n "$_APP_PKG" ] && [ "$_APP_PKG" != "com.termux" ]; then
+    for _f in "$PREFIX/bin"/*; do
+        [ -f "$_f" ] || continue
+        # Only patch text files (skip ELF binaries)
+        _head=$(head -c 4 "$_f" 2>/dev/null | od -An -tx1 | tr -d ' \n')
+        [ "$_head" = "7f454c46" ] && continue
+        # Only patch if shebang contains com.termux
+        head -1 "$_f" 2>/dev/null | grep -q "com\.termux" || continue
+        sed -i "s|com\.termux|$_APP_PKG|g" "$_f" 2>/dev/null || true
+    done
+fi
 
 if [ -f "$MARKER" ]; then
     echo -e "${GREEN}Post-setup already completed.${NC}"
@@ -107,25 +136,36 @@ mkdir -p "$OCA_DIR" "$OCA_DIR/patches" "$TMPDIR"
 
 TERMUX_DEB_REPO="https://packages-cf.termux.dev/apt/termux-main"
 PACMAN_PKG_REPO="https://service.termux-pacman.dev/gpkg/aarch64"
+# Mirrors for termux-pacman packages (used if primary fails DNS resolution)
+PACMAN_PKG_MIRRORS=(
+    "https://service.termux-pacman.dev/gpkg/aarch64"
+    "https://packages.termux.dev/pacman/glibc-aarch64"
+    "https://mirror.termux-pacman.dev/gpkg/aarch64"
+)
 TERMUX_INNER="data/data/com.termux/files/usr"
 DEB_DIR="$TMPDIR/debs"
 PKG_DIR="$TMPDIR/pkgs"
 EXTRACT_DIR="$TMPDIR/pkg-extract"
 
 # ─── Helper: install_deb ──────────────────────
-# Downloads a .deb from Termux repo and extracts into $PREFIX
+# Prioritizes local payload debs for 100% offline install.
 install_deb() {
     local filename="$1"
     local name
     name=$(basename "$filename" | sed 's/_[0-9].*//')
-    local url="${TERMUX_DEB_REPO}/${filename}"
     local deb_file="${DEB_DIR}/$(basename "$filename")"
-
-    if [ -f "$deb_file" ]; then
+    
+    # 1. Try local payload first (Offline-First)
+    local payload_deb="$PAYLOAD_DIR/debs/$(basename "$filename")"
+    if [ -f "$payload_deb" ]; then
+        deb_file="$payload_deb"
+        echo "    (payload) $name"
+    elif [ -f "$deb_file" ]; then
         echo "    (cached) $name"
     else
         echo "    downloading $name..."
-        curl -fsSL --max-time 120 -o "$deb_file" "$url"
+        local url="${TERMUX_DEB_REPO}/${filename}"
+        curl -fsSL --max-time 120 -o "$deb_file" "$url" || return 1
     fi
 
     rm -rf "$EXTRACT_DIR"
@@ -140,20 +180,49 @@ install_deb() {
 }
 
 # ─── Helper: install_pacman_pkg ───────────────
-# Downloads a .pkg.tar.xz from pacman repo and extracts into target dir
+# Downloads a .pkg.tar.xz from pacman repo and extracts into target dir.
+# Tries multiple mirrors if the primary fails DNS resolution.
 install_pacman_pkg() {
     local filename="$1"
     local target="$2"  # e.g., $PREFIX/glibc
     local name
     name=${filename%%-[0-9]*}
-    local url="${PACMAN_PKG_REPO}/${filename}"
     local pkg_file="${PKG_DIR}/${filename}"
 
     if [ -f "$pkg_file" ]; then
         echo "    (cached) $name"
     else
-        echo "    downloading $name..."
-        curl -fsSL --max-time 300 -o "$pkg_file" "$url"
+        # 1. Try local payload first
+        local payload_pkg="$PAYLOAD_DIR/pkgs/$(basename "$filename")"
+        if [ -f "$payload_pkg" ]; then
+            pkg_file="$payload_pkg"
+            echo "    (payload) $name"
+        else
+            echo "    downloading $name..."
+            local downloaded=false
+            for mirror in "${PACMAN_PKG_MIRRORS[@]}"; do
+                local url="${mirror}/${filename}"
+                if curl -fsSL --connect-timeout 10 --max-time 300 -o "$pkg_file" "$url" 2>/dev/null; then
+                    # Verify the file is a valid xz archive (not an error page)
+                    if file "$pkg_file" 2>/dev/null | grep -q "XZ\|xz\|tar"; then
+                        downloaded=true
+                        break
+                    elif tar -tJf "$pkg_file" >/dev/null 2>&1; then
+                        downloaded=true
+                        break
+                    else
+                        rm -f "$pkg_file"
+                    fi
+                else
+                    rm -f "$pkg_file"
+                fi
+                echo "    [mirror failed] $mirror"
+            done
+            if [ "$downloaded" = "false" ]; then
+                echo -e "  ${RED}✗${NC} Failed to download $name from all mirrors"
+                return 1
+            fi
+        fi
     fi
 
     rm -rf "$EXTRACT_DIR"
@@ -175,12 +244,16 @@ install_pacman_pkg() {
 echo -e "▸ ${YELLOW}[1/7]${NC} Installing essential packages..."
 mkdir -p "$DEB_DIR" "$PKG_DIR"
 
-# Download Packages index to resolve .deb filenames
-echo "  Fetching package index..."
-PACKAGES_FILE="$TMPDIR/Packages"
-curl -fsSL --max-time 60 \
-    "${TERMUX_DEB_REPO}/dists/stable/main/binary-aarch64/Packages" \
-    -o "$PACKAGES_FILE"
+# Download Packages index to resolve .deb filenames (SKIP IF OFFLINE)
+if [ ! -f "$OCA_DIR/.glibc-arch" ]; then
+    echo "  Fetching package index..."
+    PACKAGES_FILE="$TMPDIR/Packages"
+    curl -fsSL --max-time 60 \
+        "${TERMUX_DEB_REPO}/dists/stable/main/binary-aarch64/Packages" \
+        -o "$PACKAGES_FILE"
+else
+    echo "  Offline mode: skipping package index fetch."
+fi
 
 # Resolve package filename from Packages index
 get_deb_filename() {
@@ -193,6 +266,7 @@ get_deb_filename() {
 
 # Packages to install via dpkg-deb (dependency order, only those missing from bootstrap)
 DEB_PACKAGES=(
+    ca-certificates   # SSL certs — must be first so apt/curl can verify mirrors
     libexpat          # git dep
     pcre2             # git dep
     git               # for npm/openclaw
@@ -214,6 +288,17 @@ done
 # Make sure newly extracted binaries are executable
 chmod +x "$PREFIX/bin/"* 2>/dev/null || true
 
+# ─── Activate ca-certificates ────────────────────────────────────────
+# ca-certificates extracts certs to $PREFIX/etc/tls/certs/ but curl and
+# apt look for the bundle at $PREFIX/etc/tls/cert.pem (already set via
+# CURL_CA_BUNDLE). Regenerate the bundle from the extracted certs so
+# all subsequent HTTPS requests (apt, curl, npm) can verify SSL.
+if [ -d "$PREFIX/etc/tls/certs" ]; then
+    # Concatenate all PEM certs into the bundle curl/apt already use
+    cat "$PREFIX/etc/tls/certs/"*.pem > "$PREFIX/etc/tls/cert.pem" 2>/dev/null || true
+    echo -e "  ${GREEN}✓${NC} ca-certificates activated"
+fi
+
 # Verify git
 if [ -f "$PREFIX/bin/git" ]; then
     echo -e "  ${GREEN}✓${NC} git $(git --version 2>/dev/null | head -1)"
@@ -230,18 +315,81 @@ if [ -x "$GLIBC_LDSO" ]; then
 else
     mkdir -p "$PREFIX/glibc"
 
-    # Download glibc package directly from pacman repo (no pacman needed)
-    # The gpkg.db tells us: glibc-2.42-0-aarch64.pkg.tar.xz (~9.7MB)
-    echo "  Downloading glibc (~10MB)..."
-    install_pacman_pkg "glibc-2.42-0-aarch64.pkg.tar.xz" "$PREFIX/glibc"
+    # Strategy A: pacman .pkg.tar.xz from termux-pacman service (with mirrors)
+    _glibc_via_pacman() {
+        echo "  Downloading glibc (~10MB)..."
+        install_pacman_pkg "glibc-2.42-0-aarch64.pkg.tar.xz" "$PREFIX/glibc" || return 1
+        echo "  Downloading gcc-libs (~24MB)..."
+        install_pacman_pkg "gcc-libs-glibc-14.2.1-1-aarch64.pkg.tar.xz" "$PREFIX/glibc" || return 1
+        return 0
+    }
 
-    # gcc-libs-glibc provides libstdc++.so.6 needed by Node.js (~24MB)
-    echo "  Downloading gcc-libs (~24MB)..."
-    install_pacman_pkg "gcc-libs-glibc-14.2.1-1-aarch64.pkg.tar.xz" "$PREFIX/glibc"
+    # Strategy B: .deb packages from Termux apt repo (glibc-repo)
+    # These are the same packages compiled in debian format, hosted on packages-cf.termux.dev
+    _glibc_via_apt() {
+        echo "  [fallback] Trying glibc via Termux apt repo..."
+        # First install glibc-repo to get access to glibc packages
+        local glibc_repo_file
+        glibc_repo_file=$(get_deb_filename "glibc-repo" 2>/dev/null || true)
+        if [ -n "$glibc_repo_file" ]; then
+            install_deb "$glibc_repo_file" || true
+        fi
+
+        # Fetch glibc packages index from the glibc repo
+        local GLIBC_DEB_REPO="https://packages-cf.termux.dev/apt/termux-main-glibc"
+        local GLIBC_PACKAGES_FILE="$TMPDIR/Packages-glibc"
+        if curl -fsSL --connect-timeout 10 --max-time 60 \
+            "${GLIBC_DEB_REPO}/dists/stable/main/binary-aarch64/Packages" \
+            -o "$GLIBC_PACKAGES_FILE" 2>/dev/null; then
+
+            get_glibc_deb_filename() {
+                local pkg="$1"
+                awk -v pkg="$pkg" '
+                    /^Package: / { found = ($2 == pkg) }
+                    found && /^Filename:/ { print $2; exit }
+                ' "$GLIBC_PACKAGES_FILE"
+            }
+
+            local _orig_repo="$TERMUX_DEB_REPO"
+            TERMUX_DEB_REPO="$GLIBC_DEB_REPO"
+
+            for pkg in glibc gcc-libs-glibc; do
+                local fn
+                fn=$(get_glibc_deb_filename "$pkg" 2>/dev/null || true)
+                if [ -n "$fn" ]; then
+                    echo "  [apt] Installing $pkg..."
+                    install_deb "$fn" || true
+                fi
+            done
+            TERMUX_DEB_REPO="$_orig_repo"
+
+            # glibc .deb extracts to $PREFIX directly (not $PREFIX/glibc)
+            # Check if linker ended up in $PREFIX/lib instead of $PREFIX/glibc/lib
+            if [ -f "$PREFIX/lib/ld-linux-aarch64.so.1" ] && [ ! -f "$GLIBC_LDSO" ]; then
+                mkdir -p "$PREFIX/glibc/lib"
+                cp -a "$PREFIX/lib/ld-linux-aarch64.so.1" "$PREFIX/glibc/lib/" 2>/dev/null || true
+                # Copy all glibc-related libs
+                for _lib in "$PREFIX/lib"/libstdc++* "$PREFIX/lib"/libgcc_s* \
+                            "$PREFIX/lib"/libc.so* "$PREFIX/lib"/libm.so* \
+                            "$PREFIX/lib"/libpthread* "$PREFIX/lib"/libdl*; do
+                    [ -f "$_lib" ] || [ -L "$_lib" ] || continue
+                    cp -a "$_lib" "$PREFIX/glibc/lib/" 2>/dev/null || true
+                done
+            fi
+            return 0
+        fi
+        return 1
+    }
+
+    if ! _glibc_via_pacman; then
+        echo -e "  ${YELLOW}[WARN]${NC} pacman mirrors failed, trying apt fallback..."
+        _glibc_via_apt || true
+    fi
 
     # Verify linker
     if [ ! -f "$GLIBC_LDSO" ]; then
         echo -e "  ${RED}✗${NC} glibc linker not found at $GLIBC_LDSO"
+        echo "  Tried: pacman mirrors + apt fallback"
         exit 1
     fi
     chmod +x "$GLIBC_LDSO"
@@ -514,15 +662,76 @@ else
     fi
 fi
 
+# ── Pre-install network verification ──
+echo "  Verifying network connectivity..."
+_NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}"
+if ! curl -fsSL --connect-timeout 10 "$_NPM_REGISTRY" >/dev/null 2>&1; then
+    echo -e "    ${YELLOW}[WARN]${NC} Primary registry unreachable, trying mirrors..."
+    # Try npmmirror as fallback
+    if curl -fsSL --connect-timeout 10 "https://registry.npmmirror.com/" >/dev/null 2>&1; then
+        export NPM_CONFIG_REGISTRY="https://registry.npmmirror.com/"
+        echo -e "    ${GREEN}[OK]${NC}   Using npmmirror registry"
+    else
+        echo -e "    ${RED}[FAIL]${NC} No registry reachable. Check network/DNS."
+        # Continue anyway - let npm handle the error
+    fi
+fi
+unset _NPM_REGISTRY
+
+# ── Install OpenClaw with retry logic ──
 if command -v openclaw &>/dev/null 2>&1; then
     OC_VER=$(openclaw --version 2>/dev/null || echo "unknown")
     echo -e "  ${GREEN}[SKIP]${NC} OpenClaw already installed ($OC_VER)"
 else
-    # Clean npm cache tmp dir (leftover from previous failed installs)
-    rm -rf "$HOME/.npm/_cacache/tmp" 2>/dev/null || true
-    npm install -g openclaw@latest --ignore-scripts 2>&1
-    OC_VER=$(openclaw --version 2>/dev/null || echo "installed")
-    echo -e "  ${GREEN}✓${NC} OpenClaw $OC_VER"
+    echo "  Installing OpenClaw (with retry)..."
+    _NPM_RETRIES=3
+    _NPM_RETRY_DELAY=5
+    _NPM_SUCCESS=false
+    
+    for _try in $(seq 1 $_NPM_RETRIES); do
+        echo "    Attempt $_try/$_NPM_RETRIES..."
+        # Clean npm cache tmp dir before each attempt
+        rm -rf "$HOME/.npm/_cacache/tmp" 2>/dev/null || true
+        if npm install -g openclaw@latest --ignore-scripts 2>&1; then
+            _NPM_SUCCESS=true
+            break
+        else
+            if [ "$_try" -lt "$_NPM_RETRIES" ]; then
+                echo -e "    ${YELLOW}[WARN]${NC} Install failed, retrying in ${_NPM_RETRY_DELAY}s..."
+                sleep $_NPM_RETRY_DELAY
+                _NPM_RETRY_DELAY=$((_NPM_RETRY_DELAY * 2))
+            fi
+        fi
+    done
+    
+    if [ "$_NPM_SUCCESS" != "true" ]; then
+        echo -e "  ${RED}[FAIL]${NC} OpenClaw installation failed after $_NPM_RETRIES attempts"
+        echo "  Diagnostic info:"
+        echo "    - Node: $($BIN_DIR/node --version 2>&1 || echo 'NOT FOUND')"
+        echo "    - NPM: $($BIN_DIR/npm --version 2>&1 || echo 'NOT FOUND')"
+        echo "    - Registry: ${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}"
+        echo "    - SSL: $([ -s "$PREFIX/etc/tls/cert.pem" ] && echo 'OK' || echo 'MISSING')"
+        # Try one more time with verbose output to capture error
+        echo ""
+        echo "  Last attempt output:"
+        npm install -g openclaw@latest --ignore-scripts 2>&1 | tail -10 || true
+    else
+        OC_VER=$(openclaw --version 2>/dev/null || echo "installed")
+        echo -e "  ${GREEN}✓${NC} OpenClaw $OC_VER"
+    fi
+fi
+
+# ─── Repair openclaw wrapper ─────────────────
+# The external installer (myopenclawhub.com/install) creates $PREFIX/bin/openclaw
+# with #!/usr/bin/env node which doesn't exist in this environment.
+# Always rewrite it to use our glibc-wrapped node from BIN_DIR.
+_OC_MJS="$PREFIX/lib/node_modules/openclaw/openclaw.mjs"
+_OC_BIN="$PREFIX/bin/openclaw"
+if [ -f "$_OC_MJS" ]; then
+    [ -L "$_OC_BIN" ] && rm -f "$_OC_BIN"
+    printf '#!%s/bin/bash\nexec "%s/node" "%s" "$@"\n' "$PREFIX" "$BIN_DIR" "$_OC_MJS" > "$_OC_BIN"
+    chmod +x "$_OC_BIN"
+    echo -e "  ${GREEN}✓${NC} openclaw wrapper repaired → $BIN_DIR/node"
 fi
 
 # Restore optional/channel deps that --ignore-scripts skips.
@@ -608,6 +817,19 @@ export CPATH="$PREFIX/include/glib-2.0:$PREFIX/lib/glib-2.0/include"
 # npm registry (auto-detected by OpenClaw Android, safe to override manually)
 [ -z "\${NPM_CONFIG_REGISTRY:-}" ] && [ -s "\$HOME/.openclaw-android/.npm-registry" ] && \\
     export NPM_CONFIG_REGISTRY="\$(cat "\$HOME/.openclaw-android/.npm-registry")"
+
+# ── Auto-run post-setup if not yet completed ──────────────────────────────────
+# Runs automatically on first terminal open after bootstrap.
+# Skipped once ~/.openclaw-android/.post-setup-done exists.
+_OCA_SETUP_MARKER="\$HOME/.openclaw-android/.post-setup-done"
+_OCA_SETUP_SCRIPT="\$HOME/.openclaw-android/post-setup.sh"
+if [ ! -f "\$_OCA_SETUP_MARKER" ] && [ -f "\$_OCA_SETUP_SCRIPT" ]; then
+    echo ""
+    echo "  OpenClaw setup not yet complete — running post-setup.sh..."
+    echo ""
+    bash "\$_OCA_SETUP_SCRIPT"
+fi
+unset _OCA_SETUP_MARKER _OCA_SETUP_SCRIPT
 BASHRC
 
 echo -e "  ${GREEN}✓${NC} ~/.bashrc configured"
@@ -629,9 +851,7 @@ if [ -f "$TOOL_CONF" ]; then
 
     HAS_TOOLS=false
     for var in INSTALL_TMUX INSTALL_TTYD INSTALL_DUFS INSTALL_CODE_SERVER INSTALL_PLAYWRIGHT INSTALL_CLAUDE_CODE INSTALL_GEMINI_CLI INSTALL_CODEX_CLI; do
-        eval "val=\${$var:-false}"
-        # shellcheck disable=SC2154
-        [ "$val" = "true" ] && HAS_TOOLS=true && break
+        [ "${!var}" = "true" ] && HAS_TOOLS=true && break
     done
 
     if $HAS_TOOLS; then

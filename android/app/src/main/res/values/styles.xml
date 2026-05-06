@@ -1,22 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
         <item name="android:windowBackground">@color/terminalBackground</item>
-        <item name="android:statusBarColor">@color/colorPrimaryDark</item>
+        <item name="android:statusBarColor">@color/statusBarBackground</item>
+        <item name="android:navigationBarColor">@color/extraKeysBackground</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="o_mr1">shortEdges</item>
     </style>
 
+    <!-- Tecla extra base — tamaño responsivo via dimens.xml -->
     <style name="ExtraKeyButton" parent="Widget.MaterialComponents.Button.TextButton">
-        <item name="android:layout_width">wrap_content</item>
-        <item name="android:layout_height">36dp</item>
-        <item name="android:minWidth">42dp</item>
-        <item name="android:paddingStart">8dp</item>
-        <item name="android:paddingEnd">8dp</item>
-        <item name="android:layout_marginStart">2dp</item>
-        <item name="android:layout_marginEnd">2dp</item>
-        <item name="android:textSize">12sp</item>
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">@dimen/extra_key_height</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:paddingStart">@dimen/extra_key_padding_h</item>
+        <item name="android:paddingEnd">@dimen/extra_key_padding_h</item>
+        <item name="android:layout_marginStart">@dimen/extra_key_margin</item>
+        <item name="android:layout_marginEnd">@dimen/extra_key_margin</item>
+        <item name="android:layout_marginTop">@dimen/extra_key_margin</item>
+        <item name="android:layout_marginBottom">@dimen/extra_key_margin</item>
+        <item name="android:textSize">@dimen/extra_key_text_size</item>
         <item name="android:textColor">@color/extraKeyText</item>
         <item name="backgroundTint">@color/extraKeyDefault</item>
         <item name="android:textAllCaps">false</item>
@@ -24,12 +30,20 @@
         <item name="android:insetBottom">0dp</item>
         <item name="android:focusable">false</item>
         <item name="android:focusableInTouchMode">false</item>
+        <item name="cornerRadius">@dimen/extra_key_corner_radius</item>
+        <item name="rippleColor">@color/extraKeyRipple</item>
     </style>
 
+    <!-- Tecla modificadora (CTRL, ALT) — ligeramente diferente -->
+    <style name="ExtraKeyButtonModifier" parent="ExtraKeyButton">
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- Botón cerrar pestaña -->
     <style name="SessionTabClose">
-        <item name="android:layout_width">20dp</item>
-        <item name="android:layout_height">20dp</item>
-        <item name="android:textSize">14sp</item>
+        <item name="android:layout_width">@dimen/tab_close_size</item>
+        <item name="android:layout_height">@dimen/tab_close_size</item>
+        <item name="android:textSize">@dimen/tab_close_text_size</item>
         <item name="android:textColor">@color/tabTextSecondary</item>
         <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
         <item name="android:gravity">center</item>

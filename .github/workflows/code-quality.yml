@@ -30,16 +30,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify post-setup.sh sync
+      - name: Verify required scripts exist
         run: |
-          if ! diff -q post-setup.sh android/app/src/main/assets/post-setup.sh; then
-            echo "ERROR: post-setup.sh files are out of sync!"
-            echo "  Root:  post-setup.sh"
-            echo "  App:   android/app/src/main/assets/post-setup.sh"
-            echo "Both files must have identical content."
+          # post-setup.sh (root) = Termux online installer (downloads packages from internet)
+          # android/app/src/main/assets/post-setup.sh = Android APK offline setup (no internet)
+          # These are intentionally different — do NOT require them to be identical.
+          ERRORS=0
+          for f in \
+            post-setup.sh \
+            android/app/src/main/assets/post-setup.sh \
+            android/app/src/main/assets/env-init.sh \
+            android/app/src/main/assets/run.sh \
+            android/app/src/main/assets/run-openclaw.sh; do
+            if [ ! -f "$f" ]; then
+              echo "ERROR: Required script missing: $f"
+              ERRORS=$((ERRORS + 1))
+            else
+              echo "OK: $f"
+            fi
+          done
+          if [ "$ERRORS" -gt 0 ]; then
             exit 1
           fi
-          echo "post-setup.sh files are in sync."
+          echo "All required scripts present."
 
   markdownlint:
     name: Markdown Lint

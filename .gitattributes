@@ -24,3 +24,4 @@
 *.zip binary
 gradlew text eol=lf
 gradlew.bat text eol=crlf
+*.tar.gz !text !filter !merge !diff

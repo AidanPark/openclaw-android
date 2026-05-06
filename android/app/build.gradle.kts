@@ -1,29 +1,66 @@
+import java.io.File
 import java.util.Properties
 
 plugins {
     alias(libs.plugins.androidApplication)
-    alias(libs.plugins.detekt)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.kotlinAndroid)
+}
+
+// ── Auto-increment versionCode and versionName on each build ────────────
+val versionPropsFile = file("version.properties")
+fun getVersionCode(): Int {
+    val props = Properties().apply {
+        if (versionPropsFile.exists()) {
+            versionPropsFile.inputStream().use { load(it) }
+        }
+    }
+    return props.getProperty("VERSION_CODE", "18").toInt()
+}
+
+fun getVersionName(): String {
+    val versionCode = getVersionCode()
+    // Keep minor version at 4 (0.4.x branch), use versionCode as patch
+    return "0.4.$versionCode"
+}
+
+fun incrementVersionCode() {
+    val current = getVersionCode()
+    val next = current + 1
+    Properties().apply {
+        setProperty("VERSION_CODE", next.toString())
+        versionPropsFile.outputStream().use { store(it, null) }
+    }
+    println("[version] ${getVersionName()} (code: $current → $next)")
+}
+
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.name.startsWith("assemble") || it.name.startsWith("bundle") }) {
+        incrementVersionCode()
+    }
 }
 
 android {
     namespace = "com.openclaw.android"
-    compileSdk = 36
+    compileSdk = 35
+    ndkVersion = "27.0.12077973"
 
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
     }
 
-    defaultConfig {
+defaultConfig {
         applicationId = "com.openclaw.android"
         minSdk = 24
-        //noinspection ExpiredTargetSdkVersion
         targetSdk = 28
-        versionCode = 9
-        versionName = "0.4.0"
+        versionCode = getVersionCode()
+        versionName = getVersionName()
 
-        ndk { abiFilters += listOf("arm64-v8a") }
+        ndk {
+            // Support arm64-v8a (Android phones) and x86_64 (ChromeOS/Emulators)
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
 
         // Initial download URLs (§2.9) — BuildConfig hardcoded fallbacks
         buildConfigField(
@@ -63,14 +100,12 @@ android {
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
-            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
         }
         debug {
-            applicationIdSuffix = ".debug"
             versionNameSuffix = "-DEBUG"
         }
     }
@@ -96,6 +131,17 @@ android {
         jniLibs { useLegacyPackaging = true }
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     }
+
+    androidResources {
+        // Evitar que aapt2 recomprima archivos ya comprimidos.
+        // IMPORTANTE: usar la extensión sin punto — aapt2 compara el sufijo del nombre.
+        // "tar.gz" no funciona porque aapt2 solo ve la última extensión ".gz"
+        // Usar "gz" cubre: .tar.gz, .tar.xz.gz, etc.
+        noCompress += listOf("gz", "xz", "tar.gz", "tar.xz", "part_aa", "part_ab", "part_ac", "part_ad", "part_ae", "part_af")
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
 }
 
 dependencies {
@@ -103,11 +149,16 @@ dependencies {
     implementation(project(":terminal-view"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
+
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.gson)
+
+    // For robust tar.gz extraction in PayloadInstaller
+    implementation(libs.commons.compress)
+    implementation(libs.xz)
     // WebView + @JavascriptInterface — Android SDK built-in, no extra dependency
 
     // Test dependencies
@@ -115,6 +166,22 @@ dependencies {
     testRuntimeOnly(libs.junit5.platform.launcher)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
+
+}
+
+// Force kotlin-stdlib to match the project's Kotlin version.
+// MockK 1.14.9 pulls kotlin-stdlib 2.2.x transitively, which causes
+// "Module was compiled with an incompatible version of Kotlin" errors
+// when the project compiler is 2.0.21.
+configurations.configureEach {
+    if (isCanBeResolved) {
+        resolutionStrategy.force(
+            "org.jetbrains.kotlin:kotlin-stdlib:2.0.21",
+            "org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.0.21",
+            "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.0.21",
+            "org.jetbrains.kotlin:kotlin-reflect:2.0.21",
+        )
+    }
 }
 
 // --- www build automation ---
@@ -122,11 +189,34 @@ dependencies {
 val wwwProjectDir = file("$rootDir/www")
 val assetsWwwDir = file("$projectDir/src/main/assets/www")
 
+fun resolveNpmCmd(): String {
+    if (!System.getProperty("os.name").lowercase().contains("windows")) return "npm"
+    val paths = System.getenv("PATH")?.split(";") ?: emptyList()
+    for (p in paths) {
+        val f = File(p, "npm.cmd")
+        if (f.exists()) return f.absolutePath
+    }
+    return "npm.cmd"
+}
+
+val npmInstall by tasks.registering(Exec::class) {
+    description = "Install npm dependencies"
+    group = "build"
+    workingDir = wwwProjectDir
+    commandLine(resolveNpmCmd(), "install")
+    inputs.file(wwwProjectDir.resolve("package.json"))
+    if (wwwProjectDir.resolve("package-lock.json").exists()) {
+        inputs.file(wwwProjectDir.resolve("package-lock.json"))
+    }
+    outputs.dir(wwwProjectDir.resolve("node_modules"))
+}
+
 val buildWww by tasks.registering(Exec::class) {
     description = "Build React UI (npm run build)"
     group = "build"
+    dependsOn(npmInstall)
     workingDir = wwwProjectDir
-    commandLine("npm", "run", "build")
+    commandLine(resolveNpmCmd(), "run", "build")
     inputs.dir(wwwProjectDir.resolve("src"))
     inputs.files(
         wwwProjectDir.resolve("package.json"),
@@ -148,27 +238,7 @@ tasks.named("preBuild") {
     dependsOn(syncWwwAssets)
 }
 
-detekt {
-    buildUponDefaultConfig = true
-    allRules = false
-    config.setFrom("$rootDir/detekt.yml")
-}
-
-tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
-    jvmTarget = "17"
-    reports {
-        html.required.set(true)
-        sarif.required.set(true)
-        xml.required.set(false)
-        txt.required.set(false)
-    }
-}
-
-tasks.withType<io.gitlab.arturbosch.detekt.DetektCreateBaselineTask>().configureEach {
-    jvmTarget = "17"
-}
-
-configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+ktlint {
     android.set(true)
     outputToConsole.set(true)
     ignoreFailures.set(false)

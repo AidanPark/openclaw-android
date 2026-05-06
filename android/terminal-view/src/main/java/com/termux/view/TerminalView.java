@@ -310,28 +310,24 @@ public final class TerminalView extends View {
         // initially started with the alternate view or if activity is returned to from another app
         // and the alternate view was the one selected the last time.
         if (mClient.isTerminalViewSelected()) {
-            int mode = mClient.getInputMode();
-            switch (mode) {
-                case 1: // TYPE_NULL - Strict Terminal
-                    // Using InputType.NULL is the most correct input type and avoids issues with other hacks.
-                    // Previous keyboard issues:
-                    // https://github.com/termux/termux-packages/issues/25
-                    // https://github.com/termux/termux-app/issues/87
-                    // https://github.com/termux/termux-app/issues/126
-                    // https://github.com/termux/termux-app/issues/137 (japanese chars and TYPE_NULL).
-                    outAttrs.inputType = InputType.TYPE_NULL;
-                    break;
-                case 2: // VISIBLE_PASSWORD - Legacy Workaround
-                    // Some keyboards do not reset internal state on TYPE_NULL (Samsung stock keyboards).
-                    // https://github.com/termux/termux-app/issues/686
-                    // WARNING: Gboard treats "visible password" as ASCII-only, disabling CJK composition.
-                    outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS;
-                    break;
-                default: // 0 = DEFAULT (Recommended)
-                    // TYPE_CLASS_TEXT signals a text field so all IMEs trigger properly.
-                    // TYPE_TEXT_FLAG_NO_SUGGESTIONS disables autocomplete without blocking CJK composition.
-                    outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS;
-                    break;
+            if (mClient.shouldEnforceCharBasedInput()) {
+                // Some keyboards seems do not reset the internal state on TYPE_NULL.
+                // Affects mostly Samsung stock keyboards.
+                // https://github.com/termux/termux-app/issues/686
+                // However, this is not a valid value as per AOSP since `InputType.TYPE_CLASS_*` is
+                // not set and it logs a warning:
+                // W/InputAttributes: Unexpected input class: inputType=0x00080090 imeOptions=0x02000000
+                // https://cs.android.com/android/platform/superproject/+/android-11.0.0_r40:packages/inputmethods/LatinIME/java/src/com/android/inputmethod/latin/InputAttributes.java;l=79
+                outAttrs.inputType = InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS;
+            } else {
+                // Using InputType.NULL is the most correct input type and avoids issues with other hacks.
+                //
+                // Previous keyboard issues:
+                // https://github.com/termux/termux-packages/issues/25
+                // https://github.com/termux/termux-app/issues/87.
+                // https://github.com/termux/termux-app/issues/126.
+                // https://github.com/termux/termux-app/issues/137 (japanese chars and TYPE_NULL).
+                outAttrs.inputType = InputType.TYPE_NULL;
             }
         } else {
             // Corresponds to android:inputType="text"
@@ -769,6 +765,7 @@ public final class TerminalView extends View {
      * https://cs.android.com/android/platform/superproject/+/master:frameworks/base/services/core/java/com/android/server/input/InputManagerService.java;l=2158
      * https://cs.android.com/android/platform/superproject/+/android-11.0.0_r40:frameworks/base/services/core/jni/com_android_server_input_InputManagerService.cpp;l=616
      */
+    @SuppressWarnings("deprecation")
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
@@ -786,6 +783,8 @@ public final class TerminalView extends View {
         } else if (event.getAction() == KeyEvent.ACTION_MULTIPLE && keyCode == KeyEvent.KEYCODE_UNKNOWN) {
             mTermSession.write(event.getCharacters());
             return true;
+        } else if (keyCode == KeyEvent.KEYCODE_LANGUAGE_SWITCH) {
+            return super.onKeyDown(keyCode, event);
         }
 
         final int metaState = event.getMetaState();

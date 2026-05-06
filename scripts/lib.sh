@@ -14,6 +14,21 @@ NC='\033[0m'
 PROJECT_DIR="$HOME/.openclaw-android"
 BIN_DIR="$PROJECT_DIR/bin"
 PLATFORM_MARKER="$PROJECT_DIR/.platform"
+
+# Detect if running in Android App context vs Termux
+is_app_mode() {
+    [ -n "${APP_PACKAGE:-}" ] || [ -n "${OA_GLIBC:-}" ]
+}
+
+# Wrapper for pkg to prevent crashes in App mode
+pkg_safe() {
+    if is_app_mode; then
+        echo -e "  ${YELLOW}[SKIP]${NC} 'pkg' not available in App Mode. Skipping $1..."
+        return 0
+    fi
+    pkg "$@"
+}
+
 REPO_BASE_ORIGIN="https://raw.githubusercontent.com/AidanPark/openclaw-android/main"
 REPO_BASE_MIRRORS=(
     "https://ghfast.top/https://raw.githubusercontent.com/AidanPark/openclaw-android/main"

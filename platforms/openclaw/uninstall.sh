@@ -39,6 +39,7 @@ fi
 
 step 3 "OpenCode"
 OPENCODE_INSTALLED=false
+command -v opencode &>/dev/null && OPENCODE_INSTALLED=true
 
 if [ "$OPENCODE_INSTALLED" = true ]; then
     if ask_yn "Remove OpenCode (AI coding assistant)?"; then

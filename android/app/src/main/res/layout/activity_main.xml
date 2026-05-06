@@ -3,16 +3,17 @@
     android:id="@+id/rootContainer"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/terminalBackground">
+    android:background="@color/terminalBackground"
+    android:fitsSystemWindows="false">
 
-    <!-- WebView — setup, dashboard, settings, platform selector -->
+    <!-- WebView — configuración, dashboard, ajustes, selector de plataforma -->
     <WebView
         android:id="@+id/webView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:visibility="visible" />
 
-    <!-- Terminal container (TerminalView + Extra Keys bar) -->
+    <!-- Contenedor del terminal (TerminalView + barra de teclas extra) -->
     <LinearLayout
         android:id="@+id/terminalContainer"
         android:layout_width="match_parent"
@@ -20,16 +21,16 @@
         android:orientation="vertical"
         android:visibility="gone">
 
-
-        <!-- Session tab bar -->
+        <!-- Barra de pestañas de sesión -->
         <HorizontalScrollView
             android:id="@+id/sessionTabBar"
             android:layout_width="match_parent"
-            android:layout_height="36dp"
+            android:layout_height="@dimen/tab_bar_height"
             android:scrollbars="none"
             android:background="@color/tabBarBackground"
             android:focusable="false"
-            android:focusableInTouchMode="false">
+            android:focusableInTouchMode="false"
+            android:elevation="2dp">
 
             <LinearLayout
                 android:id="@+id/tabsLayout"
@@ -41,13 +42,13 @@
                 android:paddingEnd="4dp" />
         </HorizontalScrollView>
 
-        <!-- Tab bar / terminal separator -->
+        <!-- Separador barra de pestañas / terminal -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="@color/tabBorder" />
 
-        <!-- TerminalView — native PTY terminal -->
+        <!-- TerminalView — terminal PTY nativo -->
         <com.termux.view.TerminalView
             android:id="@+id/terminalView"
             android:layout_width="match_parent"
@@ -56,50 +57,173 @@
             android:focusable="true"
             android:focusableInTouchMode="true" />
 
-        <!-- Extra Keys — two rows, no scrolling -->
+        <!-- Separador terminal / teclas extra -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/tabBorder" />
+
+        <!-- Barra de teclas extra — dos filas, sin scroll -->
         <LinearLayout
             android:id="@+id/extraKeysBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:background="@color/extraKeysBackground">
+            android:background="@color/extraKeysBackground"
+            android:paddingTop="@dimen/extra_keys_bar_padding_v"
+            android:paddingBottom="@dimen/extra_keys_bar_padding_v"
+            android:elevation="4dp">
 
-            <!-- Row 1: modifier & function keys -->
+            <!-- Fila 1: modificadores y teclas de función -->
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="36dp"
+                android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:paddingStart="2dp"
-                android:paddingEnd="2dp">
+                android:paddingStart="3dp"
+                android:paddingEnd="3dp">
 
-                <Button android:id="@+id/btnEsc"  style="@style/ExtraKeyButton" android:layout_weight="1" android:text="ESC" />
-                <Button android:id="@+id/btnCtrl" style="@style/ExtraKeyButton" android:layout_weight="1" android:text="CTRL" />
-                <Button android:id="@+id/btnAlt"  style="@style/ExtraKeyButton" android:layout_weight="1" android:text="ALT" />
-                <Button android:id="@+id/btnTab"  style="@style/ExtraKeyButton" android:layout_weight="1" android:text="TAB" />
-                <Button android:id="@+id/btnHome" style="@style/ExtraKeyButton" android:layout_weight="1" android:text="HOME" />
-                <Button android:id="@+id/btnEnd"  style="@style/ExtraKeyButton" android:layout_weight="1" android:text="END" />
+                <Button android:id="@+id/btnEsc"  style="@style/ExtraKeyButton" android:text="@string/btn_esc" />
+                <Button android:id="@+id/btnCtrl" style="@style/ExtraKeyButtonModifier" android:text="@string/btn_ctrl" />
+                <Button android:id="@+id/btnAlt"  style="@style/ExtraKeyButtonModifier" android:text="@string/btn_alt" />
+                <Button android:id="@+id/btnTab"  style="@style/ExtraKeyButton" android:text="@string/btn_tab" />
+                <Button android:id="@+id/btnHome" style="@style/ExtraKeyButton" android:text="@string/btn_home" />
+                <Button android:id="@+id/btnEnd"  style="@style/ExtraKeyButton" android:text="@string/btn_end" />
             </LinearLayout>
 
-            <!-- Row 2: arrow keys & common chars -->
+            <!-- Fila 2: flechas y caracteres comunes -->
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="36dp"
+                android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:paddingStart="2dp"
-                android:paddingEnd="2dp">
+                android:paddingStart="3dp"
+                android:paddingEnd="3dp">
 
-                <Button android:id="@+id/btnLeft"  style="@style/ExtraKeyButton" android:layout_weight="1" android:text="◀" />
-                <Button android:id="@+id/btnUp"    style="@style/ExtraKeyButton" android:layout_weight="1" android:text="▲" />
-                <Button android:id="@+id/btnDown"  style="@style/ExtraKeyButton" android:layout_weight="1" android:text="▼" />
-                <Button android:id="@+id/btnRight" style="@style/ExtraKeyButton" android:layout_weight="1" android:text="▶" />
-                <Button android:id="@+id/btnDash"  style="@style/ExtraKeyButton" android:layout_weight="1" android:text="-" />
-                <Button android:id="@+id/btnPipe"  style="@style/ExtraKeyButton" android:layout_weight="1" android:text="|" />
-                <Button android:id="@+id/btnPaste" style="@style/ExtraKeyButton" android:layout_weight="1" android:text="PST" />
+                <Button android:id="@+id/btnLeft"  style="@style/ExtraKeyButton" android:text="@string/btn_left" />
+                <Button android:id="@+id/btnUp"    style="@style/ExtraKeyButton" android:text="@string/btn_up" />
+                <Button android:id="@+id/btnDown"  style="@style/ExtraKeyButton" android:text="@string/btn_down" />
+                <Button android:id="@+id/btnRight" style="@style/ExtraKeyButton" android:text="@string/btn_right" />
+                <Button android:id="@+id/btnDash"  style="@style/ExtraKeyButton" android:text="@string/btn_dash" />
+                <Button android:id="@+id/btnPipe"  style="@style/ExtraKeyButton" android:text="@string/btn_pipe" />
+                <Button android:id="@+id/btnPaste" style="@style/ExtraKeyButton" android:text="@string/btn_paste" />
             </LinearLayout>
 
         </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- Install progress overlay — shown during payload/bootstrap install -->
+    <!-- Completely independent of terminal shell lifecycle.              -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <LinearLayout
+        android:id="@+id/installOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@color/installOverlayBackground"
+        android:padding="32dp"
+        android:visibility="gone">
+
+        <!-- App branding -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="OpenClaw"
+            android:textColor="@color/installProgressText"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp"
+            android:fontFamily="sans-serif-medium" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Instalando entorno..."
+            android:textColor="@color/installProgressSubtext"
+            android:textSize="14sp"
+            android:layout_marginBottom="48dp" />
+
+        <!-- Progress bar -->
+        <ProgressBar
+            android:id="@+id/installProgressBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:max="100"
+            android:progress="0"
+            android:progressDrawable="@drawable/install_progress_drawable"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Percentage -->
+        <TextView
+            android:id="@+id/installProgressPercent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0%"
+            android:textColor="@color/installProgressText"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Current step description -->
+        <TextView
+            android:id="@+id/installProgressMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Preparando..."
+            android:textColor="@color/installProgressSubtext"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:maxLines="3"
+            android:ellipsize="end" />
+
+<!-- Error display (hidden by default) -->
+        <TextView
+            android:id="@+id/installErrorText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/installErrorText"
+            android:textSize="13sp"
+            android:gravity="center"
+            android:layout_marginTop="24dp"
+            android:maxLines="5"
+            android:visibility="gone" />
+
+        <!-- Botón para abrir terminal cuando la instalación falla -->
+        <Button
+            android:id="@+id/btnOpenTerminalOnError"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Abrir Terminal"
+            android:textColor="@android:color/white"
+            android:textSize="14sp"
+            android:backgroundTint="@color/installErrorText"
+            android:layout_marginTop="16dp"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:visibility="gone" />
+
+        <!-- Mini-terminal para ver el progreso de instalación en tiempo real -->
+        <FrameLayout
+            android:id="@+id/installTerminalContainer"
+            android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:layout_marginTop="24dp"
+            android:background="#1A1A1A"
+            android:padding="1dp">
+
+            <com.termux.view.TerminalView
+                android:id="@+id/installTerminalView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:focusable="false"
+                android:focusableInTouchMode="false" />
+        </FrameLayout>
 
     </LinearLayout>
 

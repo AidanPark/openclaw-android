@@ -100,6 +100,10 @@ chmod +x "$PREFIX/bin/oaupdate"
 cp "$SCRIPT_DIR/uninstall.sh" "$PROJECT_DIR/uninstall.sh"
 chmod +x "$PROJECT_DIR/uninstall.sh"
 
+# Copy post-setup.sh so ~/.bashrc auto-run hook can find it
+cp "$SCRIPT_DIR/post-setup.sh" "$PROJECT_DIR/post-setup.sh"
+chmod +x "$PROJECT_DIR/post-setup.sh"
+
 mkdir -p "$PROJECT_DIR/scripts"
 mkdir -p "$PROJECT_DIR/platforms"
 cp "$SCRIPT_DIR/scripts/lib.sh" "$PROJECT_DIR/scripts/lib.sh"

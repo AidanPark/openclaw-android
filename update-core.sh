@@ -32,8 +32,7 @@ fi
 echo -e "${GREEN}[OK]${NC}   Termux detected"
 
 if ! command -v curl &>/dev/null; then
-    echo -e "${RED}[FAIL]${NC} curl not found. Install it with: pkg install curl"
-    exit 1
+    pkg_safe install -y curl
 fi
 
 OLD_DIR="$HOME/.openclaw-lite"
@@ -145,6 +144,37 @@ if [ -f "$RELEASE_TMP/scripts/backup.sh" ]; then
     cp "$RELEASE_TMP/scripts/backup.sh" "$PROJECT_DIR/scripts/backup.sh"
 fi
 
+# Update CA certificate bundle
+# Try to download the latest from curl.se first; fall back to the bundled copy.
+_CERT_BUNDLE="$PREFIX/etc/tls/cert.pem"
+mkdir -p "$PREFIX/etc/tls"
+echo "  Updating CA certificates..."
+_CERT_UPDATED=false
+if curl -fsSL --max-time 15 "https://curl.se/ca/cacert.pem" \
+        -o "$PREFIX/etc/tls/cacert.pem.tmp" 2>/dev/null; then
+    # Verify it's a real cert bundle before replacing
+    if grep -q "BEGIN CERTIFICATE" "$PREFIX/etc/tls/cacert.pem.tmp" 2>/dev/null; then
+        mv "$PREFIX/etc/tls/cacert.pem.tmp" "$_CERT_BUNDLE"
+        _N=$(grep -c "BEGIN CERTIFICATE" "$_CERT_BUNDLE" 2>/dev/null || echo "?")
+        echo -e "  ${GREEN}[OK]${NC}   CA certs updated from curl.se ($_N certs)"
+        _CERT_UPDATED=true
+    else
+        rm -f "$PREFIX/etc/tls/cacert.pem.tmp"
+    fi
+fi
+if [ "$_CERT_UPDATED" = false ] && [ -f "$RELEASE_TMP/scripts/cacert.pem" ]; then
+    cp "$RELEASE_TMP/scripts/cacert.pem" "$_CERT_BUNDLE"
+    _N=$(grep -c "BEGIN CERTIFICATE" "$_CERT_BUNDLE" 2>/dev/null || echo "?")
+    echo -e "  ${GREEN}[OK]${NC}   CA certs updated from bundled cacert.pem ($_N certs)"
+    _CERT_UPDATED=true
+fi
+if [ "$_CERT_UPDATED" = false ]; then
+    echo -e "  ${YELLOW}[WARN]${NC} CA cert update skipped (no source available)"
+fi
+export CURL_CA_BUNDLE="$_CERT_BUNDLE"
+export SSL_CERT_FILE="$_CERT_BUNDLE"
+unset _CERT_BUNDLE _CERT_UPDATED _N
+
 cp "$RELEASE_TMP/patches/glibc-compat.js" "$PROJECT_DIR/patches/glibc-compat.js"
 cp "$RELEASE_TMP/patches/argon2-stub.js" "$PROJECT_DIR/patches/argon2-stub.js"
 cp "$RELEASE_TMP/patches/spawn.h" "$PROJECT_DIR/patches/spawn.h"
@@ -181,6 +211,12 @@ chmod +x "$PREFIX/bin/oaupdate"
 
 cp "$RELEASE_TMP/uninstall.sh" "$PROJECT_DIR/uninstall.sh"
 chmod +x "$PROJECT_DIR/uninstall.sh"
+
+# Keep a local copy of cacert.pem for offline use (bootstrap/install fallback)
+if [ -f "$RELEASE_TMP/scripts/cacert.pem" ]; then
+    mkdir -p "$PROJECT_DIR/scripts"
+    cp "$RELEASE_TMP/scripts/cacert.pem" "$PROJECT_DIR/scripts/cacert.pem"
+fi
 
 if [ "$IS_GLIBC" = false ]; then
     echo ""

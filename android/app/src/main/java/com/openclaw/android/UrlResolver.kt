@@ -36,6 +36,12 @@ class UrlResolver(
         return config?.www?.url ?: BuildConfig.WWW_URL
     }
 
+    /** Returns the full ComponentConfig for www, including optional sha256. */
+    suspend fun getWwwConfig(): ComponentConfig? {
+        val config = loadConfig()
+        return config?.www
+    }
+
     private suspend fun loadConfig(): RemoteConfig? {
         // 1. Local cache
         if (configFile.exists()) {

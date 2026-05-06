@@ -25,3 +25,7 @@ www/dist/
 # Release keystore
 *.jks
 *.keystore
+
+#payload
+/openclaw-payload.tar.gz
+

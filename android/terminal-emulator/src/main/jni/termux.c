@@ -1,4 +1,4 @@
-#include <dirent.h>
+﻿#include <dirent.h>
 #include <fcntl.h>
 #include <jni.h>
 #include <signal.h>

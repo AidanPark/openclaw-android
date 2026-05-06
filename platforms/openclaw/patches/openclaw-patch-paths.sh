@@ -86,6 +86,39 @@ for f in $ENV_FILES $ENV_FILES2; do
     fi
 done
 
+# ── Fix: apt update dpkg lock path duplication ────────────────────────────────
+# Bug: openclaw builds the dpkg lock path as:
+#   `${PREFIX}/var/lib/apt` + `/var/lib/dpkg/lock-frontend`
+# which produces a duplicated path:
+#   /data/.../usr/var/lib/apt/var/lib/dpkg/lock-frontend
+#
+# Root cause: the code concatenates PREFIX onto an already-absolute path segment.
+# Fix: replace the broken path construction with the correct dpkg lock path,
+# and make all `apt update` calls non-fatal (|| true) since Termux apt is
+# non-interactive and lock errors must not abort the OpenClaw startup sequence.
+echo "Patching apt/dpkg lock path duplication..."
+APT_FILES=$(grep -rl 'apt update\|dpkg.*lock\|lock-frontend\|var/lib/apt' \
+    "$OPENCLAW_DIR" --include='*.js' --include='*.mjs' --include='*.cjs' 2>/dev/null || true)
+
+for f in $APT_FILES; do
+    if [ -f "$f" ]; then
+        # Fix duplicated path: .../var/lib/apt/var/lib/dpkg/... → .../var/lib/dpkg/...
+        # Handles both string-literal and template-literal forms
+        sed -i \
+            "s|var/lib/apt/var/lib/dpkg|var/lib/dpkg|g" \
+            "$f"
+        # Fix: PREFIX + '/var/lib/apt' used as dpkg root — should be PREFIX alone
+        # Pattern: execSync/spawn('apt update') calls — wrap to suppress lock errors
+        sed -i \
+            "s|'apt update'|'apt update 2>/dev/null || true'|g; \
+             s|\"apt update\"|\"apt update 2>/dev/null || true\"|g; \
+             s|\`apt update\`|\`apt update 2>/dev/null || true\`|g" \
+            "$f"
+        echo -e "  ${GREEN}[PATCHED]${NC} $f (apt/dpkg lock path)"
+        PATCHED=$((PATCHED + 1))
+    fi
+done
+
 echo ""
 if [ "$PATCHED" -eq 0 ]; then
     echo -e "${YELLOW}[INFO]${NC} No hardcoded paths found to patch."

@@ -1,11 +1,20 @@
 package com.openclaw.android
 
+import com.openclaw.android.core.env.EnvironmentResolver
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
+import java.io.File
 
 /**
- * Multi-terminal session management (§2.6, Phase 1 checklist).
- * Uses TerminalView.attachSession() for session switching — one TerminalView, many sessions.
+ * Manages multiple terminal sessions.
+ * One TerminalView, many sessions — switch via attachSession().
+ *
+ * Shell selection priority:
+ *   1. termux-bootstrap: bash from Termux Bootstrap installation (default mode)
+ *   2. proot mode: openclaw-shell.sh (bash inside Ubuntu rootfs via proot) — advanced/optional
+ *   3. online install: bash from prefix/bin/bash with full glibc env
+ *   4. payload mode: glibc-wrapped bash from payload
+ *   5. fallback: /system/bin/sh (limited, no glibc tools)
  */
 class TerminalSessionManager(
     private val activity: MainActivity,
@@ -25,55 +34,179 @@ class TerminalSessionManager(
     val activeSession: TerminalSession?
         get() = sessions.getOrNull(activeSessionIndex)
 
-    /**
-     * Create a new terminal session. Returns the session handle.
-     */
     fun createSession(): TerminalSession {
-        val env = EnvironmentBuilder.build(activity)
-        val prefix = env["PREFIX"] ?: ""
-        val homeDir = env["HOME"] ?: activity.filesDir.absolutePath
-        val tmpDir = env["TMPDIR"]
+        val base = activity.filesDir.absolutePath
+        val homeDir = File(base, "home").also { it.mkdirs() }
+        val tmpDir = File(base, "tmp").also { it.mkdirs() }
 
-        // Ensure HOME and TMP directories exist before starting the shell.
-        // Without this, chdir() fails if bootstrap hasn't been run yet.
-        java.io.File(homeDir).mkdirs()
-        tmpDir?.let { java.io.File(it).mkdirs() }
-
-        val shell =
-            if (java.io.File("$prefix/bin/bash").exists()) {
-                "$prefix/bin/bash"
-            } else if (java.io.File("$prefix/bin/sh").exists()) {
-                "$prefix/bin/sh"
-            } else {
-                "/system/bin/sh"
-            }
-
-        val session =
-            TerminalSession(
-                shell,
-                homeDir,
-                arrayOf<String>(),
-                env.entries.map { "${it.key}=${it.value}" }.toTypedArray(),
-                TRANSCRIPT_ROWS,
-                sessionClient,
-            )
-
+        val session = buildSession(base, homeDir, tmpDir)
         sessions.add(session)
         switchSession(sessions.size - 1)
-
-        eventBridge.emit(
-            "session_changed",
-            mapOf("id" to session.mHandle, "action" to "created"),
-        )
+        eventBridge.emit("session_changed", mapOf("id" to session.mHandle, "action" to "created"))
         activity.runOnUiThread { onSessionsChanged?.invoke() }
-
-        AppLogger.i(TAG, "Created session ${session.mHandle} (total: ${sessions.size})")
         return session
     }
 
     /**
-     * Switch to session by index.
+     * Selects the best available shell and builds a TerminalSession.
      */
+    private fun buildSession(base: String, homeDir: File, tmpDir: File): TerminalSession {
+        val config = EnvironmentResolver.resolve(activity)
+        val envMap = EnvironmentResolver.buildEnvMap(config, activity.packageName).toMutableMap()
+        
+        // Ensure directories exist
+        config.homeDir.mkdirs()
+        config.tmpDir.mkdirs()
+        config.prefix.resolve("etc").mkdirs()
+
+        // ── 1. Termux Bootstrap mode (default) ──────────────────────────────
+        val termuxBash = File(config.prefix, "bin/bash")
+        val bootstrapInstalled = File(config.filesDir, ".termux-bootstrap-installed").exists()
+        
+        if (bootstrapInstalled && termuxBash.exists() && termuxBash.canExecute()) {
+            AppLogger.i(TAG, "Termux Bootstrap mode: using ${termuxBash.absolutePath}")
+
+            // Fix: bash has /data/data/com.termux/files/usr hardcoded.
+            val etcDir = File(config.prefix, "etc")
+            val bashRcFile = File(etcDir, "bash.bashrc")
+            bashRcFile.writeText(buildString {
+                appendLine("# OpenClaw bash.bashrc")
+                appendLine("export PREFIX=\"${config.prefix.absolutePath}\"")
+                appendLine("export HOME=\"${config.homeDir.absolutePath}\"")
+                appendLine("export TMPDIR=\"${config.tmpDir.absolutePath}\"")
+                appendLine("export PATH=\"${envMap["PATH"]}\"")
+                appendLine("export LD_LIBRARY_PATH=\"${config.prefix.absolutePath}/lib\"")
+                appendLine("export LANG=en_US.UTF-8")
+                appendLine("export TERM=xterm-256color")
+            })
+
+            // .bashrc in homeDir — user prompt and aliases
+            val homeBashRc = File(config.homeDir, ".bashrc")
+            homeBashRc.writeText(buildString {
+                appendLine("# OpenClaw .bashrc — sourced via --init-file")
+                appendLine("export HOME=\"${config.homeDir.absolutePath}\"")
+                appendLine("export PREFIX=\"${config.prefix.absolutePath}\"")
+                appendLine("export TMPDIR=\"${config.tmpDir.absolutePath}\"")
+                appendLine("export PATH=\"${config.homeDir.absolutePath}/.openclaw-android/bin:${envMap["PATH"]}\"")
+                appendLine("export LD_LIBRARY_PATH=\"${config.prefix.absolutePath}/lib\"")
+                appendLine("export LANG=en_US.UTF-8")
+                appendLine("export TERM=xterm-256color")
+                appendLine("export PS1='\\$ '")
+                appendLine("alias ls='ls --color=auto'")
+                appendLine("alias ll='ls -la'")
+                appendLine("cd \"${config.homeDir.absolutePath}\"")
+            })
+
+            // CRITICAL: Clear etc/ld.so.preload to prevent signal 1 crash (hardcoded com.termux)
+            val ldSoPreload = File(etcDir, "ld.so.preload")
+            if (ldSoPreload.exists()) {
+                try {
+                    ldSoPreload.writeText("")
+                } catch (_: Exception) {}
+            }
+
+            val envArray = envMap.entries.map { "${it.key}=${it.value}" }.toTypedArray()
+
+            return TerminalSession(
+                termuxBash.absolutePath,
+                config.homeDir.absolutePath,
+                arrayOf("bash", "--norc", "--noprofile", "--init-file", homeBashRc.absolutePath, "-i"),
+                envArray,
+                TRANSCRIPT_ROWS,
+                sessionClient,
+            )
+        }
+
+        // ── 2. Proot Ubuntu mode (advanced/optional) ─────────────────────────
+        val prootShellScript = File(config.homeDir, "openclaw-shell.sh")
+        if (File(config.filesDir, ".proot-installed").exists() &&
+            prootShellScript.exists() && prootShellScript.canExecute()
+        ) {
+            AppLogger.i(TAG, "Proot mode: using openclaw-shell.sh")
+            return TerminalSession(
+                prootShellScript.absolutePath,
+                config.homeDir.absolutePath,
+                arrayOf("openclaw-shell.sh"),
+                arrayOf(
+                    "HOME=${config.homeDir.absolutePath}",
+                    "TMPDIR=${config.tmpDir.absolutePath}",
+                    "TERM=xterm-256color",
+                    "LANG=en_US.UTF-8",
+                    "PROOT_NO_SECCOMP=1",
+                    "PROOT_TMP_DIR=${activity.cacheDir.absolutePath}",
+                ),
+                TRANSCRIPT_ROWS,
+                sessionClient,
+            )
+        }
+
+        // ── 3. Fallback to best available shell ─────────────────────────────
+        val shellBin = listOf(
+            File(config.prefix, "bin/bash").absolutePath,
+            File(config.prefix, "bin/sh").absolutePath,
+            "/system/bin/sh",
+        ).firstOrNull { File(it).exists() } ?: "/system/bin/sh"
+
+        AppLogger.i(TAG, "Default mode: shell=$shellBin")
+
+        if (shellBin.endsWith("/bash")) {
+            val homeBashRc = File(config.homeDir, ".bashrc")
+            if (!homeBashRc.exists()) {
+                homeBashRc.writeText(buildString {
+                    appendLine("export HOME=\"${config.homeDir.absolutePath}\"")
+                    appendLine("export PREFIX=\"${config.prefix.absolutePath}\"")
+                    appendLine("export TMPDIR=\"${config.tmpDir.absolutePath}\"")
+                    appendLine("export PATH=\"${envMap["PATH"]}\"")
+                    appendLine("export LD_LIBRARY_PATH=\"${config.prefix.absolutePath}/lib\"")
+                    appendLine("export LANG=en_US.UTF-8")
+                    appendLine("export TERM=xterm-256color")
+                    appendLine("export PS1='\\$ '")
+                    appendLine("cd \"${config.homeDir.absolutePath}\"")
+                })
+            }
+            return TerminalSession(
+                shellBin,
+                config.homeDir.absolutePath,
+                arrayOf("bash", "--norc", "--noprofile", "--init-file", homeBashRc.absolutePath, "-i"),
+                envMap.entries.map { "${it.key}=${it.value}" }.toTypedArray(),
+                TRANSCRIPT_ROWS,
+                sessionClient,
+            )
+        }
+
+        // Fallback banner for system shell
+        val bannerLines = listOf(
+            "OpenClaw Android - Terminal",
+            "No environment installed.",
+            "Go to Dashboard -> Setup to install the runtime.",
+        )
+        val bannerCmd = bannerLines.joinToString("\\n") { "  $it" }.let { "printf '\\n$it\\n\\n'" }
+
+        if (shellBin == "/system/bin/sh") {
+            envMap.remove("LD_PRELOAD")
+            envMap.remove("LD_LIBRARY_PATH")
+        }
+
+        val session = TerminalSession(
+            shellBin,
+            config.homeDir.absolutePath,
+            arrayOf(if (shellBin.endsWith("/sh")) "sh" else shellBin, "-i"),
+            envMap.entries.map { "${it.key}=${it.value}" }.toTypedArray(),
+            TRANSCRIPT_ROWS,
+            sessionClient,
+        )
+
+        if (shellBin == "/system/bin/sh") {
+            activity.runOnUiThread {
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    session.write("$bannerCmd\n")
+                }, 300)
+            }
+        }
+
+        return session
+    }
+
     fun switchSession(index: Int) {
         if (index < 0 || index >= sessions.size) return
         activeSessionIndex = index
@@ -83,69 +216,43 @@ class TerminalSessionManager(
             terminalView.attachSession(session)
             terminalView.invalidate()
         }
-        eventBridge.emit(
-            "session_changed",
-            mapOf("id" to session.mHandle, "action" to "switched"),
-        )
+        eventBridge.emit("session_changed", mapOf("id" to session.mHandle, "action" to "switched"))
         activity.runOnUiThread { onSessionsChanged?.invoke() }
     }
 
-    /**
-     * Switch to session by handle ID.
-     */
     fun switchSession(handleId: String) {
         val index = sessions.indexOfFirst { it.mHandle == handleId }
         if (index >= 0) switchSession(index)
     }
 
-    /**
-     * Find a session by handle ID.
-     */
-    fun getSessionById(handleId: String): TerminalSession? = sessions.find { it.mHandle == handleId }
+    fun getSessionById(handleId: String): TerminalSession? =
+        sessions.find { it.mHandle == handleId }
 
-    /**
-     * Close a session by handle ID.
-     */
     fun closeSession(handleId: String) {
         val index = sessions.indexOfFirst { it.mHandle == handleId }
         if (index < 0) return
 
         finishedSessionIds.remove(handleId)
-        val session = sessions.removeAt(index)
-        session.finishIfRunning()
+        val removedSession = sessions.removeAt(index)
+        removedSession.finishIfRunning()
 
-        eventBridge.emit(
-            "session_changed",
-            mapOf("id" to handleId, "action" to "closed"),
-        )
+        eventBridge.emit("session_changed", mapOf("id" to handleId, "action" to "closed"))
 
-        // Switch to another session if available
         if (sessions.isNotEmpty()) {
-            val newIndex = (index).coerceAtMost(sessions.size - 1)
-            switchSession(newIndex)
+            switchSession(index.coerceAtMost(sessions.size - 1))
         } else {
             activeSessionIndex = -1
         }
 
         activity.runOnUiThread { onSessionsChanged?.invoke() }
-        AppLogger.i(TAG, "Closed session $handleId (remaining: ${sessions.size})")
     }
 
-    /**
-     * Called when a session's process exits.
-     */
     fun onSessionFinished(session: TerminalSession) {
         finishedSessionIds.add(session.mHandle)
-        eventBridge.emit(
-            "session_changed",
-            mapOf("id" to session.mHandle, "action" to "finished"),
-        )
+        eventBridge.emit("session_changed", mapOf("id" to session.mHandle, "action" to "finished"))
         activity.runOnUiThread { onSessionsChanged?.invoke() }
     }
 
-    /**
-     * Get all sessions info for JsBridge.
-     */
     fun getSessionsInfo(): List<Map<String, Any>> =
         sessions.mapIndexed { index, session ->
             mapOf(
