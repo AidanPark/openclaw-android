@@ -32,11 +32,9 @@ object EnvironmentResolver {
         val ocaDir = File(homeDir, ".openclaw-android").also { it.mkdirs() }
 
         val payloadDir = resolvePayloadDir(filesDir, homeDir)
-        val prefix = if (payloadDir.absolutePath != filesDir.absolutePath) {
-            payloadDir
-        } else {
-            File(filesDir, "usr").also { it.mkdirs() }
-        }
+        // CRÍTICO: El PREFIX para Termux Bootstrap DEBE ser filesDir/usr.
+        // Si usamos el payloadDir como prefix, bash no encontrará sus binarios.
+        val prefix = File(filesDir, "usr").also { it.mkdirs() }
 
         val glibcLib = resolveGlibcLib(payloadDir, prefix)
         val linker = File(glibcLib, "ld-linux-aarch64.so.1")

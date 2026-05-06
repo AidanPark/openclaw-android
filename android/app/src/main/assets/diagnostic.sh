@@ -15,7 +15,18 @@ echo ""
 
 # Verificar estructura de directorios
 echo "2. Estructura de directorios:"
-APP_BASE="/data/data/com.openclaw.android/files"
+# Detectar APP_BASE dinámicamente si no está en el entorno
+if [ -z "${APP_FILES_DIR:-}" ]; then
+    if [ -n "${HOME:-}" ] && [ "${HOME}" != "${HOME%/home}" ]; then
+        APP_FILES_DIR="${HOME%/home}"
+    elif [ -n "${PREFIX:-}" ] && [ "${PREFIX}" != "${PREFIX%/usr}" ]; then
+        APP_FILES_DIR="${PREFIX%/usr}"
+    else
+        # Fallback razonable
+        APP_FILES_DIR="/data/data/com.openclaw.android/files"
+    fi
+fi
+APP_BASE="$APP_FILES_DIR"
 if [ -d "$APP_BASE" ]; then
     echo "   ✓ Directorio base existe: $APP_BASE"
     ls -la "$APP_BASE/" | head -20

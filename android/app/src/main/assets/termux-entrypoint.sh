@@ -2,8 +2,19 @@
 # Entrypoint para Termux Bootstrap en OpenClaw Android
 # Configura el entorno y ejecuta bash con el entorno correcto
 
-# Ruta base de la aplicación
-APP_BASE="${APP_FILES_DIR:-/data/data/com.openclaw.android/files}"
+# Ruta base de la aplicación — Detectar dinámicamente si no está en el entorno
+if [ -z "${APP_FILES_DIR:-}" ]; then
+    if [ -n "${HOME:-}" ] && [ "${HOME}" != "${HOME%/home}" ]; then
+        APP_FILES_DIR="${HOME%/home}"
+    elif [ -n "${PREFIX:-}" ] && [ "${PREFIX}" != "${PREFIX%/usr}" ]; then
+        APP_FILES_DIR="${PREFIX%/usr}"
+    else
+        # Fallback razonable si todo falla, pero evitando com.termux
+        APP_FILES_DIR="/data/data/com.openclaw.android/files"
+    fi
+fi
+
+APP_BASE="$APP_FILES_DIR"
 PREFIX="${PREFIX:-$APP_BASE/usr}"
 HOME_DIR="${HOME:-$APP_BASE/home}"
 

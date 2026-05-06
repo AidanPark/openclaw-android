@@ -43,6 +43,9 @@ internal class ActivityPermissionHandler(
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
             selectedPayloadUri = it
+            // Sincronizar con MainActivity para que SetupBridge y otros lo vean
+            (activity as? MainActivity)?.selectedPayloadUri = it
+
             AppLogger.i(TAG, "Payload file selected: $it")
             // Emitir evento al bridge (si está disponible)
             (activity as? MainActivity)?.eventBridge?.emit(

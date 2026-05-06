@@ -1,5 +1,6 @@
 package com.openclaw.android
 
+import com.openclaw.android.core.env.EnvironmentResolver
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import java.io.File
@@ -14,9 +15,6 @@ import java.io.File
  *   3. online install: bash from prefix/bin/bash with full glibc env
  *   4. payload mode: glibc-wrapped bash from payload
  *   5. fallback: /system/bin/sh (limited, no glibc tools)
- *
- * Termux Bootstrap is checked first because it is the default installation mode.
- * Proot is only used when the user explicitly chose the advanced proot installation.
  */
 class TerminalSessionManager(
     private val activity: MainActivity,
@@ -51,159 +49,87 @@ class TerminalSessionManager(
 
     /**
      * Selects the best available shell and builds a TerminalSession.
-     *
-     * Priority order (default first, advanced optional):
-     *   1. Termux Bootstrap — default mode, native Termux environment
-     *   2. Proot Ubuntu — advanced/optional mode, only if explicitly activated
-     *   3. Online install — curl | bash layout
-     *   4. Payload / legacy mode
-     *   5. Fallback — /system/bin/sh (no environment installed)
-     *
-     * Proot is checked AFTER Termux Bootstrap because it is an optional advanced
-     * mode that the user must explicitly choose. Termux Bootstrap is the default.
      */
     private fun buildSession(base: String, homeDir: File, tmpDir: File): TerminalSession {
+        val config = EnvironmentResolver.resolve(activity)
+        val envMap = EnvironmentResolver.buildEnvMap(config, activity.packageName).toMutableMap()
+        
+        // Ensure directories exist
+        config.homeDir.mkdirs()
+        config.tmpDir.mkdirs()
+        config.prefix.resolve("etc").mkdirs()
 
         // ── 1. Termux Bootstrap mode (default) ──────────────────────────────
-        val termuxPrefix = File(base, "usr")
-        val termuxBash = File(termuxPrefix, "bin/bash")
-        if (File(base, ".termux-bootstrap-installed").exists() &&
-            termuxBash.exists() && termuxBash.canExecute() &&
-            File(termuxPrefix, "bin/dpkg").exists() &&
-            File(termuxPrefix, "bin/apt").exists()
-        ) {
+        val termuxBash = File(config.prefix, "bin/bash")
+        val bootstrapInstalled = File(config.filesDir, ".termux-bootstrap-installed").exists()
+        
+        if (bootstrapInstalled && termuxBash.exists() && termuxBash.canExecute()) {
             AppLogger.i(TAG, "Termux Bootstrap mode: using ${termuxBash.absolutePath}")
 
-            // bash is compiled with /data/data/com.termux/files/usr hardcoded.
-            // It reads bash.bashrc and profile from that path at startup.
-            // Since our app is com.openclaw.android, those paths don't exist
-            // and bash dies with signal 1 (SIGHUP / Permission denied).
-            //
-            // Fix: create bash.bashrc and profile at the REAL prefix path.
-            // bash will find them because our PREFIX IS the real path.
-            // We also pass --rcfile pointing to our .bashrc in HOME so the
-            // user gets a proper prompt.
-            val etcDir = File(termuxPrefix, "etc").also { it.mkdirs() }
-
-            // bash.bashrc — system-wide rc file bash reads on interactive start
+            // Fix: bash has /data/data/com.termux/files/usr hardcoded.
+            val etcDir = File(config.prefix, "etc")
             val bashRcFile = File(etcDir, "bash.bashrc")
             bashRcFile.writeText(buildString {
                 appendLine("# OpenClaw bash.bashrc")
-                appendLine("export PREFIX=\"${termuxPrefix.absolutePath}\"")
-                appendLine("export HOME=\"${homeDir.absolutePath}\"")
-                appendLine("export TMPDIR=\"${tmpDir.absolutePath}\"")
-                appendLine("export PATH=\"${termuxPrefix.absolutePath}/bin:${termuxPrefix.absolutePath}/bin/applets:/system/bin:/bin\"")
-                appendLine("export LD_LIBRARY_PATH=\"${termuxPrefix.absolutePath}/lib\"")
+                appendLine("export PREFIX=\"${config.prefix.absolutePath}\"")
+                appendLine("export HOME=\"${config.homeDir.absolutePath}\"")
+                appendLine("export TMPDIR=\"${config.tmpDir.absolutePath}\"")
+                appendLine("export PATH=\"${envMap["PATH"]}\"")
+                appendLine("export LD_LIBRARY_PATH=\"${config.prefix.absolutePath}/lib\"")
                 appendLine("export LANG=en_US.UTF-8")
                 appendLine("export TERM=xterm-256color")
             })
 
-            // profile — read by login shells
-            val profileFile = File(etcDir, "profile")
-            if (!profileFile.exists()) {
-                profileFile.writeText(". ${bashRcFile.absolutePath}\n")
-            }
-
             // .bashrc in homeDir — user prompt and aliases
-            // This file is sourced via --init-file so bash never touches
-            // the hardcoded /data/data/com.termux/... paths.
-            val homeBashRc = File(homeDir, ".bashrc")
+            val homeBashRc = File(config.homeDir, ".bashrc")
             homeBashRc.writeText(buildString {
                 appendLine("# OpenClaw .bashrc — sourced via --init-file")
-                appendLine("export HOME=\"${homeDir.absolutePath}\"")
-                appendLine("export PREFIX=\"${termuxPrefix.absolutePath}\"")
-                appendLine("export TMPDIR=\"${tmpDir.absolutePath}\"")
-                appendLine("export PATH=\"${File(homeDir, ".openclaw-android/bin").absolutePath}:${termuxPrefix.absolutePath}/bin:${termuxPrefix.absolutePath}/bin/applets:/system/bin:/bin\"")
-                appendLine("export LD_LIBRARY_PATH=\"${termuxPrefix.absolutePath}/lib\"")
+                appendLine("export HOME=\"${config.homeDir.absolutePath}\"")
+                appendLine("export PREFIX=\"${config.prefix.absolutePath}\"")
+                appendLine("export TMPDIR=\"${config.tmpDir.absolutePath}\"")
+                appendLine("export PATH=\"${config.homeDir.absolutePath}/.openclaw-android/bin:${envMap["PATH"]}\"")
+                appendLine("export LD_LIBRARY_PATH=\"${config.prefix.absolutePath}/lib\"")
                 appendLine("export LANG=en_US.UTF-8")
                 appendLine("export TERM=xterm-256color")
                 appendLine("export PS1='\\$ '")
                 appendLine("alias ls='ls --color=auto'")
                 appendLine("alias ll='ls -la'")
-                appendLine("cd \"${homeDir.absolutePath}\"")
+                appendLine("cd \"${config.homeDir.absolutePath}\"")
             })
 
-            // CRITICAL: Clear etc/ld.so.preload unconditionally.
-            // The Termux bootstrap ships with etc/ld.so.preload pointing to
-            // libtermux-exec-ld-preload.so compiled for com.termux.
-            // When loaded in com.openclaw.android it either:
-            //   a) fails to open (wrong path) → signal 1
-            //   b) loads but crashes (wrong package name hardcoded) → signal 1
-            // The safest fix is to always clear this file. The terminal works
-            // correctly without it — it only affects shebang execution in scripts,
-            // which we handle via the PATH and env vars we set explicitly.
+            // CRITICAL: Clear etc/ld.so.preload to prevent signal 1 crash (hardcoded com.termux)
             val ldSoPreload = File(etcDir, "ld.so.preload")
             if (ldSoPreload.exists()) {
                 try {
                     ldSoPreload.writeText("")
-                    AppLogger.i(TAG, "Cleared ld.so.preload to prevent signal 1 crash")
-                } catch (e: Exception) {
-                    AppLogger.e(TAG, "Failed to clear ld.so.preload: ${e.message}")
-                }
+                } catch (_: Exception) {}
             }
 
-            // Include ~/.openclaw-android/bin in PATH so node/openclaw wrappers
-            // installed by the payload are accessible from the terminal.
-            val ocaBin = File(homeDir, ".openclaw-android/bin").absolutePath
-
-            // Resolve payload glibc lib dir for LD_LIBRARY_PATH (needed by node)
-            val payloadGlibcLib = listOf(
-                File(homeDir, "payload/glibc/lib"),
-                File(homeDir, "openclaw-payload/glibc/lib"),
-            ).firstOrNull { it.isDirectory }?.absolutePath
-            val ldLibPath = buildString {
-                append("${termuxPrefix.absolutePath}/lib")
-                if (payloadGlibcLib != null) append(":$payloadGlibcLib")
-            }
-
-            // DO NOT set LD_PRELOAD with libtermux-exec-ld-preload.so.
-            // That library was compiled for com.termux and will cause bash
-            // to crash (signal 1) when loaded in com.openclaw.android.
-            // The bash.bashrc approach above is sufficient.
-
-            val env = arrayOf(
-                "HOME=${homeDir.absolutePath}",
-                "PREFIX=${termuxPrefix.absolutePath}",
-                "TMPDIR=${tmpDir.absolutePath}",
-                "TERM=xterm-256color",
-                "LANG=en_US.UTF-8",
-                "PATH=$ocaBin:${termuxPrefix.absolutePath}/bin:${termuxPrefix.absolutePath}/bin/applets:/system/bin:/bin",
-                "LD_LIBRARY_PATH=$ldLibPath",
-                "PACKAGE_MANAGER=apt",
-                "TERMUX_VERSION=1.0",
-                "TERMUX_APP_PID=${android.os.Process.myPid()}",
-                "DEBIAN_FRONTEND=noninteractive",
-                "DEBCONF_NONINTERACTIVE_SEEN=true",
-            )
+            val envArray = envMap.entries.map { "${it.key}=${it.value}" }.toTypedArray()
 
             return TerminalSession(
                 termuxBash.absolutePath,
-                homeDir.absolutePath,
-                // --norc:      skip /data/data/com.termux/.../bash.bashrc (hardcoded, Permission denied)
-                // --noprofile: skip /data/data/com.termux/.../profile     (hardcoded, Permission denied)
-                // --init-file: source OUR .bashrc from the real homeDir instead
-                // -i:          interactive shell
+                config.homeDir.absolutePath,
                 arrayOf("bash", "--norc", "--noprofile", "--init-file", homeBashRc.absolutePath, "-i"),
-                env,
+                envArray,
                 TRANSCRIPT_ROWS,
                 sessionClient,
             )
         }
 
         // ── 2. Proot Ubuntu mode (advanced/optional) ─────────────────────────
-        // Only activated when the user explicitly chose proot installation.
-        val prootShellScript = File(homeDir, "openclaw-shell.sh")
-        if (File(activity.filesDir, ".proot-installed").exists() &&
+        val prootShellScript = File(config.homeDir, "openclaw-shell.sh")
+        if (File(config.filesDir, ".proot-installed").exists() &&
             prootShellScript.exists() && prootShellScript.canExecute()
         ) {
             AppLogger.i(TAG, "Proot mode: using openclaw-shell.sh")
             return TerminalSession(
                 prootShellScript.absolutePath,
-                homeDir.absolutePath,
+                config.homeDir.absolutePath,
                 arrayOf("openclaw-shell.sh"),
                 arrayOf(
-                    "HOME=${homeDir.absolutePath}",
-                    "TMPDIR=${tmpDir.absolutePath}",
+                    "HOME=${config.homeDir.absolutePath}",
+                    "TMPDIR=${config.tmpDir.absolutePath}",
                     "TERM=xterm-256color",
                     "LANG=en_US.UTF-8",
                     "PROOT_NO_SECCOMP=1",
@@ -214,195 +140,71 @@ class TerminalSessionManager(
             )
         }
 
-        // ── 3. Online install mode ───────────────────────────────────────────
-        // Layout left by: curl -sL myopenclawhub.com/install | bash
-        val onlinePrefix = File(base, "usr")
-        val ocaDir = File(homeDir, ".openclaw-android")
-        val bashBin = File(onlinePrefix, "bin/bash")
-        val nodeReal = File(ocaDir, "node/bin/node.real")
-        val glibcLdso = File(onlinePrefix, "glibc/lib/ld-linux-aarch64.so.1")
-        val ocaMjs = File(onlinePrefix, "lib/node_modules/openclaw/openclaw.mjs")
+        // ── 3. Fallback to best available shell ─────────────────────────────
+        val shellBin = listOf(
+            File(config.prefix, "bin/bash").absolutePath,
+            File(config.prefix, "bin/sh").absolutePath,
+            "/system/bin/sh",
+        ).firstOrNull { File(it).exists() } ?: "/system/bin/sh"
 
-        if (bashBin.exists() && bashBin.canExecute() &&
-            File(ocaDir, "installed.json").exists() &&
-            nodeReal.exists() && glibcLdso.exists() && ocaMjs.exists()
-        ) {
-            AppLogger.i(TAG, "Online install mode: using ${bashBin.absolutePath}")
-            val ocaBin = File(ocaDir, "bin").absolutePath
-            val nodeDir = File(ocaDir, "node/bin").absolutePath
-            val glibcLib = File(onlinePrefix, "glibc/lib").absolutePath
-            val certPem = File(onlinePrefix, "etc/tls/cert.pem").absolutePath
-            // Create .bashrc for --init-file so bash never reads the hardcoded
-            // /data/data/com.termux/... path → Permission denied / signal 1
-            val onlineBashRc = File(homeDir, ".bashrc")
-            if (!onlineBashRc.exists()) {
-                onlineBashRc.parentFile?.mkdirs()
-                onlineBashRc.writeText(buildString {
-                    appendLine("export HOME=\"${homeDir.absolutePath}\"")
-                    appendLine("export PREFIX=\"${onlinePrefix.absolutePath}\"")
-                    appendLine("export TMPDIR=\"${tmpDir.absolutePath}\"")
-                    appendLine("export PATH=\"$ocaBin:$nodeDir:${onlinePrefix.absolutePath}/bin:${onlinePrefix.absolutePath}/bin/applets:/system/bin:/bin\"")
-                    appendLine("export LD_LIBRARY_PATH=\"${onlinePrefix.absolutePath}/lib:$glibcLib\"")
+        AppLogger.i(TAG, "Default mode: shell=$shellBin")
+
+        if (shellBin.endsWith("/bash")) {
+            val homeBashRc = File(config.homeDir, ".bashrc")
+            if (!homeBashRc.exists()) {
+                homeBashRc.writeText(buildString {
+                    appendLine("export HOME=\"${config.homeDir.absolutePath}\"")
+                    appendLine("export PREFIX=\"${config.prefix.absolutePath}\"")
+                    appendLine("export TMPDIR=\"${config.tmpDir.absolutePath}\"")
+                    appendLine("export PATH=\"${envMap["PATH"]}\"")
+                    appendLine("export LD_LIBRARY_PATH=\"${config.prefix.absolutePath}/lib\"")
                     appendLine("export LANG=en_US.UTF-8")
                     appendLine("export TERM=xterm-256color")
                     appendLine("export PS1='\\$ '")
-                    appendLine("cd \"${homeDir.absolutePath}\"")
+                    appendLine("cd \"${config.homeDir.absolutePath}\"")
                 })
             }
-            return TerminalSession(
-                bashBin.absolutePath,
-                homeDir.absolutePath,
-                arrayOf("bash", "--norc", "--noprofile", "--init-file", onlineBashRc.absolutePath, "-i"),
-                arrayOf(
-                    "HOME=${homeDir.absolutePath}",
-                    "PREFIX=${onlinePrefix.absolutePath}",
-                    "TMPDIR=${tmpDir.absolutePath}",
-                    "PATH=$ocaBin:$nodeDir:${onlinePrefix.absolutePath}/bin:${onlinePrefix.absolutePath}/bin/applets:/system/bin:/bin",
-                    "LD_LIBRARY_PATH=${onlinePrefix.absolutePath}/lib:$glibcLib",
-                    "SSL_CERT_FILE=$certPem",
-                    "CURL_CA_BUNDLE=$certPem",
-                    "GIT_SSL_CAINFO=$certPem",
-                    "OA_GLIBC=1",
-                    "CONTAINER=1",
-                    "TERM=xterm-256color",
-                    "LANG=en_US.UTF-8",
-                    "GIT_CONFIG_NOSYSTEM=1",
-                    "CLAWDHUB_WORKDIR=${homeDir.absolutePath}/.openclaw/workspace",
-                ),
-                TRANSCRIPT_ROWS,
-                sessionClient,
-            )
-        }
-
-        // ── 4. Payload / legacy mode ─────────────────────────────────────────
-        val config = com.openclaw.android.core.env.EnvironmentResolver.resolve(activity.filesDir)
-        val env = com.openclaw.android.core.env.EnvironmentResolver
-            .buildEnvMap(config, activity.packageName)
-            .toMutableMap()
-
-        val prefixPath = env["PREFIX"] ?: "$base/usr"
-        val prefix = File(prefixPath).also { if (!it.exists()) it.mkdirs() }
-        env["HOME"] = homeDir.absolutePath
-        env["PREFIX"] = prefix.absolutePath
-        env["TMPDIR"] = tmpDir.absolutePath
-
-        val installerManager = InstallerManager(activity)
-        val isEnvironmentReady = installerManager.isReady()
-        val hasGlibcLinker = File(prefix, "glibc/lib/ld-linux-aarch64.so.1").exists()
-        val hasTermuxExec = File(prefix, "lib/libtermux-exec.so").exists()
-
-        val isBashWrapper = try {
-            val f = File(prefix, "bin/bash")
-            f.exists() && f.length() < 200 && f.readText().contains("# Emergency bash wrapper")
-        } catch (_: Exception) { false }
-
-        val isShWrapper = try {
-            val f = File(prefix, "bin/sh")
-            f.exists() && f.length() < 200 && f.readText().contains("# Emergency")
-        } catch (_: Exception) { false }
-
-        val mustUseSafeMode = !isEnvironmentReady ||
-            (!hasGlibcLinker && !hasTermuxExec) ||
-            isBashWrapper || isShWrapper
-
-        if (mustUseSafeMode) {
-            AppLogger.w(TAG, "Safe mode: envReady=$isEnvironmentReady glibc=$hasGlibcLinker termuxExec=$hasTermuxExec")
-            env.remove("LD_PRELOAD")
-            env.remove("LD_LIBRARY_PATH")
-        }
-
-        val ldPreload = env["LD_PRELOAD"]
-        if (ldPreload != null && !File(ldPreload).exists()) env.remove("LD_PRELOAD")
-
-        val shellBin = if (mustUseSafeMode) {
-            "/system/bin/sh"
-        } else {
-            listOf(
-                File(prefix, "bin/bash").absolutePath,
-                File(prefix, "bin/sh").absolutePath,
-                "/system/bin/sh",
-            ).firstOrNull { File(it).exists() } ?: "/system/bin/sh"
-        }
-
-        if (shellBin == "/system/bin/sh") {
-            env.remove("LD_PRELOAD")
-            // CRITICAL: never put glibc/lib in LD_LIBRARY_PATH for Bionic shells.
-            // It causes: "CANNOT LINK EXECUTABLE: cannot find libc.so from verneed[0]"
-            env.remove("LD_LIBRARY_PATH")
-        }
-
-        val shellArgs = if (shellBin.endsWith("/bash")) {
-            // --norc / --noprofile: skip hardcoded /data/data/com.termux/... paths → Permission denied
-            // --init-file: source our .bashrc from the real homeDir instead
-            val homeBashRcLegacy = File(homeDir, ".bashrc")
-            if (!homeBashRcLegacy.exists()) {
-                homeBashRcLegacy.parentFile?.mkdirs()
-                homeBashRcLegacy.writeText(buildString {
-                    appendLine("export HOME=\"${homeDir.absolutePath}\"")
-                    appendLine("export PREFIX=\"${prefix.absolutePath}\"")
-                    appendLine("export TMPDIR=\"${tmpDir.absolutePath}\"")
-                    appendLine("export PATH=\"${prefix.absolutePath}/bin:${prefix.absolutePath}/bin/applets:/system/bin:/bin\"")
-                    appendLine("export LD_LIBRARY_PATH=\"${prefix.absolutePath}/lib\"")
-                    appendLine("export LANG=en_US.UTF-8")
-                    appendLine("export TERM=xterm-256color")
-                    appendLine("export PS1='\\$ '")
-                    appendLine("cd \"${homeDir.absolutePath}\"")
-                })
-            }
-            arrayOf("bash", "--norc", "--noprofile", "--init-file", homeBashRcLegacy.absolutePath, "-i")
-        } else {
-            arrayOf("sh", "-i")
-        }
-
-        AppLogger.i(TAG, "Payload/legacy mode: shell=$shellBin")
-        if (isEnvironmentReady) {
             return TerminalSession(
                 shellBin,
-                homeDir.absolutePath,
-                shellArgs,
-                env.entries.map { "${it.key}=${it.value}" }.toTypedArray(),
+                config.homeDir.absolutePath,
+                arrayOf("bash", "--norc", "--noprofile", "--init-file", homeBashRc.absolutePath, "-i"),
+                envMap.entries.map { "${it.key}=${it.value}" }.toTypedArray(),
                 TRANSCRIPT_ROWS,
                 sessionClient,
             )
         }
 
-        // ── 5. Fallback — no environment installed ───────────────────────────
-        AppLogger.w(TAG, "Fallback: no environment installed, using /system/bin/sh")
-
-        // Build the banner as a single echo command so the shell prints it
-        // instead of trying to execute each line as a command (which causes
-        // "inaccessible or not found" errors for box-drawing characters).
+        // Fallback banner for system shell
         val bannerLines = listOf(
             "OpenClaw Android - Terminal",
             "No environment installed.",
             "Go to Dashboard -> Setup to install the runtime.",
-            "Limited shell: ls, cd, echo, cat available.",
         )
-        val bannerCmd = bannerLines.joinToString("\\n") { "  $it" }
-            .let { "printf '\\n$it\\n\\n'" }
+        val bannerCmd = bannerLines.joinToString("\\n") { "  $it" }.let { "printf '\\n$it\\n\\n'" }
 
-        val fallbackSession = TerminalSession(
-            "/system/bin/sh",
-            homeDir.absolutePath,
-            arrayOf("sh", "-i"),
-            arrayOf(
-                "HOME=${homeDir.absolutePath}",
-                "TERM=xterm-256color",
-                "PATH=/system/bin:/bin",
-            ),
+        if (shellBin == "/system/bin/sh") {
+            envMap.remove("LD_PRELOAD")
+            envMap.remove("LD_LIBRARY_PATH")
+        }
+
+        val session = TerminalSession(
+            shellBin,
+            config.homeDir.absolutePath,
+            arrayOf(if (shellBin.endsWith("/sh")) "sh" else shellBin, "-i"),
+            envMap.entries.map { "${it.key}=${it.value}" }.toTypedArray(),
             TRANSCRIPT_ROWS,
             sessionClient,
         )
 
-        activity.runOnUiThread {
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                // Write as a shell command so the shell executes printf and
-                // outputs the text — no box-drawing chars that confuse sh.
-                fallbackSession.write("$bannerCmd\n")
-            }, 300)
+        if (shellBin == "/system/bin/sh") {
+            activity.runOnUiThread {
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    session.write("$bannerCmd\n")
+                }, 300)
+            }
         }
 
-        return fallbackSession
+        return session
     }
 
     fun switchSession(index: Int) {

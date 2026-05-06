@@ -14,8 +14,10 @@ internal class PayloadAssetResolver(private val context: Context) {
 
     private val CANDIDATE_NAMES = listOf(
         "payload.tar.gz",
+        "payload-aarch64.tar.gz",
         "payload-final.tar.gz",
         "openclaw-payload.tar.gz",
+        "openclaw-payload-aarch64.tar.gz",
         "payload/openclaw-payload.tar.gz",
         "payload/payload.tar.gz",
     )

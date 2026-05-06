@@ -30,7 +30,7 @@ const path = require('path');
 // Fix: point process.execPath to the wrapper script.
 
 const _wrapperPath = process.env._OA_WRAPPER_PATH || path.join(
-  process.env.HOME || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/home' : '/data/data/com.openclaw.android/files/home'),
+  process.env.HOME || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/home' : '/data/local/tmp'),
   '.openclaw-android', 'bin', 'node'
 );
 try {
@@ -141,7 +141,7 @@ os.networkInterfaces = function networkInterfaces() {
 
 {
   const child_process = require('child_process');
-  const termuxSh = (process.env.PREFIX || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/usr' : '/data/data/com.openclaw.android/files/usr')) + '/bin/sh';
+  const termuxSh = (process.env.PREFIX || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/usr' : '/data/local/tmp/usr')) + '/bin/sh';
 
   if (fs.existsSync(termuxSh)) {
     const _originalExec = child_process.exec;
@@ -187,7 +187,7 @@ try {
   let dnsServers = ['8.8.8.8', '8.8.4.4'];
   try {
     const resolvConf = fs.readFileSync(
-      (process.env.PREFIX || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/usr' : '/data/data/com.openclaw.android/files/usr')) + '/etc/resolv.conf',
+      (process.env.PREFIX || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/usr' : '/data/local/tmp/usr')) + '/etc/resolv.conf',
       'utf8'
     );
     const parsed = resolvConf.match(/^nameserver\s+(.+)$/gm);
@@ -300,9 +300,9 @@ try {
 // Intercept child_process spawn APIs to detect ELF binaries and automatically
 // route them through the glibc dynamic linker (ld.so).
 
-const _glibcLdso = (process.env.PREFIX || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/usr' : '/data/data/com.openclaw.android/files/usr'))
+const _glibcLdso = (process.env.PREFIX || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/usr' : '/data/local/tmp/usr'))
   + '/glibc/lib/ld-linux-aarch64.so.1';
-const _glibcLibPath = (process.env.PREFIX || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/usr' : '/data/data/com.openclaw.android/files/usr'))
+const _glibcLibPath = (process.env.PREFIX || (process.env.APP_FILES_DIR ? process.env.APP_FILES_DIR + '/usr' : '/data/local/tmp/usr'))
   + '/glibc/lib';
 
 function _needsGlibcWrap(filePath) {
