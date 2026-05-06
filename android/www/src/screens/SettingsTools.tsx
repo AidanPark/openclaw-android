@@ -156,12 +156,28 @@ export function SettingsTools() {
   }, [])
 
   const onInstallProgress = useCallback((data: unknown) => {
-    const d = data as { target?: string; progress?: number; message?: string }
+    const d = data as { target?: string; progress?: number; message?: string; operation?: string }
     if (d.progress !== undefined) setProgress(d.progress)
     if (d.message) setProgressMsg(d.message)
+
     if (d.progress !== undefined && d.progress >= 1) {
-      if (d.target) setInstalled(prev => new Set([...prev, d.target!]))
+      // Installation or uninstallation complete
+      const isUninstall = d.operation === 'uninstall'
+      if (isUninstall && d.target) {
+        // Uninstall success: remove from installed set
+        setInstalled(prev => { const n = new Set(prev); n.delete(d.target!); return n })
+        setUninstalling(null)
+      } else if (d.target) {
+        // Install success: add to installed set
+        setInstalled(prev => new Set([...prev, d.target!]))
+        setInstalling(null)
+      }
+      setProgress(0)
+      setProgressMsg('')
+    } else if (d.progress !== undefined && d.progress < 0) {
+      // Error case
       setInstalling(null)
+      setUninstalling(null)
       setProgress(0)
       setProgressMsg('')
     }
@@ -182,16 +198,14 @@ export function SettingsTools() {
   }, [])
 
   // Step 2: confirmed — proceed with uninstall
+  // Progress will be tracked via useNativeEvent listener; UI updates when progress >= 1
   const handleUninstallConfirm = useCallback(() => {
     if (!pendingUninstall) return
     const id = pendingUninstall.id
     setPendingUninstall(null)
     setUninstalling(id)
     bridge.call('uninstallTool', id)
-    setTimeout(() => {
-      setInstalled(prev => { const n = new Set(prev); n.delete(id); return n })
-      setUninstalling(null)
-    }, 1500)
+    // Do not assume success; wait for install_progress event with progress >= 1
   }, [pendingUninstall])
 
   const handleUninstallCancel = useCallback(() => {

@@ -250,10 +250,33 @@ object GlibcRunner {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 process.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
             } else {
-                val thread = Thread { try { process.waitFor() } catch (_: InterruptedException) {} }
-                thread.start()
-                thread.join(timeoutMs)
-                !thread.isAlive
+                // For API < 26, implement timeout with proper process destruction
+                val startTime = System.currentTimeMillis()
+                var exited = false
+                while (System.currentTimeMillis() - startTime < timeoutMs) {
+                    try {
+                        process.exitValue()  // Throws if still running
+                        exited = true
+                        break
+                    } catch (_: IllegalThreadStateException) {
+                        // Process still running, wait a bit
+                        Thread.sleep(100)
+                    }
+                }
+                if (!exited) {
+                    // Timeout expired, destroy process
+                    AppLogger.w(TAG, "Process timeout expired, destroying forcibly")
+                    process.destroy()
+                    // Give it a brief moment to terminate gracefully
+                    Thread.sleep(500)
+                    try {
+                        process.exitValue()  // Check if destroyed
+                    } catch (_: IllegalThreadStateException) {
+                        // Still running, force destroy
+                        process.destroyForcibly()
+                    }
+                }
+                true
             }
         } catch (_: Exception) {
             false

@@ -10,11 +10,9 @@ import com.openclaw.android.ProotManager
 import com.openclaw.android.TerminalSessionManager
 import com.openclaw.android.TermuxBootstrapManager
 import com.openclaw.android.core.env.EnvironmentResolver
-import com.openclaw.android.core.install.InstallProgress
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -79,14 +77,17 @@ class SetupBridge(
 
     @JavascriptInterface
     fun getBootstrapStatus(): String {
-        val bootstrapInstalled = TermuxBootstrapManager(activity).isInstalled()
+        val bootstrapInstalled = TermuxBootstrapManager.isInstalled(activity)
+        val hasConflictingSystem = TermuxBootstrapManager.hasConflictingSystem(activity)
         val config = EnvironmentResolver.resolve(activity.filesDir)
         return gson.toJson(mapOf(
             "installed" to bootstrapInstalled,
             "openclawInstalled" to installerManager.isInstalled(),
             "prefixPath" to config.prefix.absolutePath,
             "homePath" to config.homeDir.absolutePath,
-            "source" to "payload",
+            "source" to "termux-bootstrap",
+            "hasConflictingSystem" to hasConflictingSystem,
+            "conflictMessage" to if (hasConflictingSystem) TermuxBootstrapManager.getConflictMessage(activity) else null,
         ))
     }
 

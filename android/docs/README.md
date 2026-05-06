@@ -1,74 +1,143 @@
 # Documentación Técnica — OpenClaw Android
 
-## Índice
+> **⚠️ Todo funciona dentro del sandbox de la app** — No requiere apps externas, todo está embebido o descargado a `context.getFilesDir()`.
 
-| Documento | Descripción |
-|-----------|-------------|
-| [INSTALLATION_FLOW.md](INSTALLATION_FLOW.md) | Flujo completo de instalación, todos los modos, diagramas |
-| [DPKG_FIX.md](DPKG_FIX.md) | Manejo del prompt interactivo de dpkg --configure -a |
-| [ENVIRONMENT_VARS.md](ENVIRONMENT_VARS.md) | Variables de entorno críticas y por qué son necesarias |
-| [PAYLOAD_ASSET.md](PAYLOAD_ASSET.md) | Qué es payload.tar.gz, cómo se gestiona y extrae |
+---
 
-## Resumen rápido
+## 📚 Índice de Documentos
 
-### Flujo de instalación
+### Documentación Principal
+
+| Documento                                                                                      | Descripción                                                                                    |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **[TERMUX_BOOTSTRAP_PROOT_PAYLOAD_TECHNICAL.md](TERMUX_BOOTSTRAP_PROOT_PAYLOAD_TECHNICAL.md)** | 🎯 **Documento principal** — Arquitectura completa de 2 sistemas (Termux vs Proot) con sandbox |
+| [ARQUITECTURA_VISUAL.md](ARQUITECTURA_VISUAL.md)                                               | Diagramas visuales de la arquitectura de la app                                                |
+| [RESUMEN_SISTEMAS.md](RESUMEN_SISTEMAS.md)                                                     | Resumen conciso de componentes de instalación                                                  |
+
+### Instalación y Flujos
+
+| Documento                                    | Descripción                                     |
+| -------------------------------------------- | ----------------------------------------------- |
+| [INSTALLATION_FLOW.md](INSTALLATION_FLOW.md) | Flujo detallado de instalación, todos los modos |
+| [PAYLOAD_ASSET.md](PAYLOAD_ASSET.md)         | Gestión de payload.tar.gz embebido en APK       |
+| [ASSETS_STRUCTURE.md](ASSETS_STRUCTURE.md)   | Estructura de archivos en assets/               |
+
+### Solución de Problemas
+
+| Documento                                  | Descripción                                 |
+| ------------------------------------------ | ------------------------------------------- |
+| [DPKG_FIX.md](DPKG_FIX.md)                 | Manejo de `dpkg --configure -a` interactivo |
+| [ENVIRONMENT_VARS.md](ENVIRONMENT_VARS.md) | Variables de entorno críticas               |
+| [GLIBC_COMPAT_JS.md](GLIBC_COMPAT_JS.md)   | Compatibilidad glibc/JavaScript             |
+
+---
+
+## 🏗️ Arquitectura en 2 Sistemas
 
 ```
-InstallationOrchestrator
-    │
-    ├── Modo offline  → PayloadInstaller (payload.tar.gz bundleado en APK)
-    ├── Modo online   → TermuxBootstrapOrchestrator + curl | bash en terminal
-    └── Modo proot    → ProotRootfsDownloader + ProotCommandExecutor
+┌─────────────────────────────────────────────────────────────┐
+│                    OPENCLAW ANDROID                         │
+│                   (Todo en sandbox)                          │
+│                                                             │
+│  ┌─────────────────────┐    ┌─────────────────────┐        │
+│  │  SISTEMA TERMUX     │    │  SISTEMA PROOT      │        │
+│  │  (Por defecto)      │    │  (Alternativa)      │        │
+│  │                     │    │                     │        │
+│  │  Terminal básica    │    │  Ubuntu mini        │        │
+│  │  + Payload (offline)│    │  + proot            │        │
+│  │  o Bootstrap (online│   │  (~80MB)            │        │
+│  └─────────────────────┘    └─────────────────────┘        │
+│                                                             │
+│  ⚠️ Sistemas MUTUAMENTE EXCLUYENTES — Solo uno activo      │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Modos disponibles
+### Sistema Termux (2 opciones)
 
-| Modo | Cuándo usar |
-|------|-------------|
-| `auto` | APK con payload bundled — instalación sin internet |
-| `online` | APK sin payload — instala OpenClaw desde internet |
-| `proot` | Usuarios avanzados, resistencia a Phantom Process Killer |
+| Opción        | Modo    | Contenido                   | Uso                      |
+| ------------- | ------- | --------------------------- | ------------------------ |
+| **Payload**   | Offline | OpenClaw + Node embebido    | Sin internet, rápido     |
+| **Bootstrap** | Online  | curl, bash, apt descargados | Scripts online, flexible |
 
-### Archivos de marcador
+### Sistema Proot
 
-| Archivo | Indica |
-|---------|--------|
-| `.termux-bootstrap-installed` | Bootstrap de Termux instalado |
-| `.installed` | Payload de OpenClaw instalado |
-| `.proot-installed` | Ubuntu via proot instalado |
-| `home/.openclaw-android/installed.json` | Instalación online completada |
+| Característica | Descripción                         |
+| -------------- | ----------------------------------- |
+| **Base**       | Ubuntu mini rootfs                  |
+| **Runtime**    | proot binario estático              |
+| **Ventaja**    | Resistente a Phantom Process Killer |
+| **Tamaño**     | ~80MB descargados                   |
 
-### Problema más común
+---
 
-**dpkg --configure -a se cuelga** → Ver [DPKG_FIX.md](DPKG_FIX.md)
+## 📋 Referencia Rápida
 
-Solución rápida:
+### Modos de Instalación
+
+```kotlin
+// Modo Payload (offline, embebido en APK)
+orchestrator.install("offline", null, listener)
+
+// Modo Termux Bootstrap (online, curl/bash/apt)
+orchestrator.install("termux-bootstrap", null, listener)
+
+// Modo Proot (Ubuntu mini, resistente a Phantom Killer)
+orchestrator.install("proot", null, listener)
+
+// Forzar reinstalación limpia
+orchestrator.install("force", null, listener)
+```
+
+### Archivos de Marcador
+
+| Archivo                       | Sistema          | Significado                 |
+| ----------------------------- | ---------------- | --------------------------- |
+| `.payload-installed`          | Payload          | OpenClaw embebido listo     |
+| `.termux-bootstrap-installed` | Termux Bootstrap | Bootstrap oficial instalado |
+| `.proot-installed`            | Proot            | Ubuntu rootfs activo        |
+
+### Permisos Requeridos
+
+| Permiso              | Uso                                          |
+| -------------------- | -------------------------------------------- |
+| `INTERNET`           | Descargar Bootstrap/Proot (solo modo online) |
+| `FOREGROUND_SERVICE` | Mantener procesos en background              |
+
+**Eliminados (no requeridos):**
+
+- ❌ `MANAGE_EXTERNAL_STORAGE`
+- ❌ `WRITE_EXTERNAL_STORAGE`
+- ❌ Root
+
+---
+
+## 🔧 Solución de Problemas Comunes
+
+### dpkg --configure -a se cuelga
+
 ```bash
 yes N | dpkg --configure -a --force-confold
 ```
 
-### Arquitectura de permisos
+Ver [DPKG_FIX.md](DPKG_FIX.md) para detalles.
 
-`ModernPermissionManager` gestiona todos los permisos con API `suspend`:
+### Conflicto de sistemas
 
-```kotlin
-// Solicitar almacenamiento (Android 11+: MANAGE_EXTERNAL_STORAGE)
-val granted = permissionManager.requestStorage()
-
-// Solicitar notificaciones (Android 13+)
-val granted = permissionManager.requestNotifications()
+```
+Error: "Cannot install Termux: Proot system is already installed"
+Solución: Desinstalar primero: InstallationOrchestrator.cleanInstallation()
 ```
 
-### Bridge batch
+---
 
-Para obtener múltiples estados en una sola llamada:
+## 📝 Notas de Diseño
 
-```typescript
-const results = await bridge.batchCall([
-  'getSetupStatus',
-  'getEnvironmentInfo',
-  'getStorageInfo',
-])
-```
+- **Todo embebido**: Ningún componente requiere apps externas
+- **Sandbox completo**: Todo en `context.getFilesDir()`
+- **Validaciones**: Bloqueo automático de instalación sobre otro sistema
+- **Exclusión mutua**: Termux y Proot no coexisten
 
-Equivale a llamar `window.OpenClaw.batchQuery(callbackId, JSON.stringify([...]))` y esperar el evento `native:batch_result`.
+---
+
+_Para información completa de arquitectura, ver [TERMUX_BOOTSTRAP_PROOT_PAYLOAD_TECHNICAL.md](TERMUX_BOOTSTRAP_PROOT_PAYLOAD_TECHNICAL.md)_

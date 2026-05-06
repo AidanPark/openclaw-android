@@ -13,15 +13,18 @@ import java.io.File
 
 /**
  * InstallationOrchestrator — orquestador unificado de instalación.
- * 
+ *
  * Unifica todos los flujos de instalación mediante un sealed class InstallationMode:
- *   - AUTO: Bootstrap + Payload offline (si existe) o online
- *   - TERMUX_BOOTSTRAP: Solo Termux Bootstrap  
- *   - OFFLINE: Bootstrap + Payload desde assets
- *   - ONLINE: Bootstrap (si no está) + instalación online en terminal
- *   - PROOT: Ubuntu completo via proot
+ *   - TERMUX_BOOTSTRAP: Termux environment ONLINE (curl, bash, apt)
+ *   - OFFLINE: Payload embebido offline desde assets
+ *   - PROOT: Ubuntu mini via proot ONLINE (alternativa a Termux)
  *   - FORCE: Fuerza reinstalación ignorando el marcador
- * 
+ *
+ * ⚠️ SISTEMAS MUTUAMENTE EXCLUYENTES:
+ *   - Termux Bootstrap ≠ Proot ≠ Payload
+ *   - Solo UNO puede estar instalado a la vez
+ *   - Instalar uno requiere desinstalar el otro primero
+ *
  * Este orchestrator reemplaza a InstallOrchestrator, SetupManager (lógica de proot),
  * y RootfsManager con modo ROOTFS.
  */
@@ -45,33 +48,25 @@ class InstallationOrchestrator(
      * Modos de instalación soportados.
      */
     sealed class InstallationMode {
-        /** Modo normal: Entorno nativo de Termux */
+        /** Modo Termux: Entorno nativo con bash, curl, apt (ONLINE) */
         object TermuxBootstrap : InstallationMode()
-        
-        /** Modo avanzado: Ubuntu completo via proot (resistente a Phantom Process Killer) */
+
+        /** Modo avanzado: Ubuntu completo via proot (ONLINE alternativa a Termux) */
         object ProotUbuntu : InstallationMode()
-        
-        /** Offline: requiere payload en assets */
+
+        /** Offline: Payload embebido en assets (sin internet) */
         object OfflinePayload : InstallationMode()
-        
-        /** Online: abre terminal para instalación interactiva */
-        object OnlineOnly : InstallationMode()
-        
+
         /** Fuerza reinstalación ignorando marcadores existentes */
         object Force : InstallationMode()
 
         companion object {
             fun fromString(mode: String, hasPayload: Boolean = false): InstallationMode = when (mode.lowercase()) {
-                "termux-bootstrap", "bootstrap" -> TermuxBootstrap
+                "termux", "bootstrap", "termux-bootstrap" -> TermuxBootstrap
                 "proot", "ubuntu", "rootfs"     -> ProotUbuntu
-                "offline"                       -> OfflinePayload
-                "online"                        -> OnlineOnly
+                "offline", "auto"               -> OfflinePayload
                 "force"                         -> Force
-                // "auto" always starts with Termux Bootstrap — it is the
-                // mandatory first step. The UI then triggers payload/online
-                // separately as a second independent step.
-                "auto"                          -> TermuxBootstrap
-                else                            -> TermuxBootstrap
+                else                            -> OfflinePayload
             }
         }
     }
@@ -110,24 +105,34 @@ class InstallationOrchestrator(
             // Do NOT use a shared isInstalled() check that mixes all markers.
             when (installationMode) {
                 is InstallationMode.TermuxBootstrap -> {
-                    if (!isForce && TermuxBootstrapManager(context).isInstalled()) {
-                        AppLogger.i(TAG, "Termux Bootstrap already installed — skipping")
-                        listener.onSuccess()
+                    if (!isForce && hasConflictingSystem()) {
+                        listener.onError("Cannot install Termux: ${getConflictMessage()}", null)
                         return@withContext
                     }
                     installTermuxBootstrap(listener)
                 }
-                is InstallationMode.ProotUbuntu -> installProot(listener)
-                is InstallationMode.OfflinePayload -> {
-                    if (!isForce && isPayloadInstalled()) {
-                        AppLogger.i(TAG, "Payload already installed — skipping")
-                        listener.onSuccess()
+                is InstallationMode.ProotUbuntu -> {
+                    if (!isForce && hasConflictingSystem()) {
+                        listener.onError("Cannot install Proot: ${getConflictMessage()}", null)
                         return@withContext
+                    }
+                    installProot(listener)
+                }
+                is InstallationMode.OfflinePayload -> {
+                    if (!isForce) {
+                        if (hasConflictingSystem()) {
+                            listener.onError("Cannot install Payload: ${getConflictMessage()}", null)
+                            return@withContext
+                        }
+                        if (isPayloadInstalled()) {
+                            AppLogger.i(TAG, "Payload already installed — skipping")
+                            listener.onSuccess()
+                            return@withContext
+                        }
                     }
                     installOffline(customUri, listener)
                 }
-                is InstallationMode.OnlineOnly -> installOnline(listener)
-                is InstallationMode.Force -> installTermuxBootstrap(listener)
+                is InstallationMode.Force -> installOffline(null, listener)
             }
 
         } catch (e: Exception) {
@@ -145,21 +150,60 @@ class InstallationOrchestrator(
      */
     suspend fun cleanInstallation(): Boolean = withContext(Dispatchers.IO) {
         try {
-            // Eliminar marcadores
+            // Eliminar TODOS los marcadores de todos los sistemas
             File(context.filesDir, ".installed").delete()
             File(context.filesDir, ".proot-installed").delete()
             File(context.filesDir, ".termux-bootstrap-installed").delete()
             File(context.filesDir, ".rootfs-extracted").delete()
             File(context.filesDir, ".payload-installed").delete()
 
-            // Eliminar directorio de datos
+            // Eliminar directorios de datos de todos los sistemas
             File(context.filesDir, "home/.openclaw-android").deleteRecursively()
+            File(context.filesDir, "usr").deleteRecursively()
+            File(context.filesDir, "ubuntu-rootfs").deleteRecursively()
 
-            AppLogger.i(TAG, "Installation cleaned")
+            AppLogger.i(TAG, "All installations cleaned")
             true
         } catch (e: Exception) {
             AppLogger.e(TAG, "cleanInstallation failed: ${e.message}", e)
             false
+        }
+    }
+
+    /**
+     * Verifica si existe un sistema instalado que cause conflicto.
+     * Los sistemas son mutuamente excluyentes.
+     */
+    private fun hasConflictingSystem(): Boolean {
+        // Contar cuántos marcadores existen
+        val termuxInstalled = File(context.filesDir, ".termux-bootstrap-installed").exists() ||
+                File(context.filesDir, "usr/bin/bash").exists()
+        val prootInstalled = File(context.filesDir, ".proot-installed").exists() ||
+                File(context.filesDir, "ubuntu-rootfs").exists()
+        val payloadInstalled = File(context.filesDir, ".payload-installed").exists() &&
+                File(context.filesDir, "home/payload").exists()
+
+        return termuxInstalled || prootInstalled || payloadInstalled
+    }
+
+    /**
+     * Obtiene mensaje descriptivo del conflicto detectado.
+     */
+    private fun getConflictMessage(): String {
+        return when {
+            File(context.filesDir, ".termux-bootstrap-installed").exists() ->
+                "Termux Bootstrap is already installed. Uninstall it first."
+            File(context.filesDir, "usr/bin/bash").exists() ->
+                "Termux environment detected. Uninstall it first."
+            File(context.filesDir, ".proot-installed").exists() ->
+                "Proot is already installed. Uninstall it first."
+            File(context.filesDir, "ubuntu-rootfs").exists() ->
+                "Proot rootfs detected. Uninstall it first."
+            File(context.filesDir, ".payload-installed").exists() ->
+                "Payload (offline) is already installed. Uninstall it first."
+            File(context.filesDir, "home/payload").exists() ->
+                "Payload directory detected. Uninstall it first."
+            else -> "Another system is already installed. Clean install required."
         }
     }
 
@@ -188,42 +232,6 @@ class InstallationOrchestrator(
     )
 
     // ── Flujos de instalación privados ───────────────────────────────────
-
-    private suspend fun installTermuxBootstrap(listener: ProgressListener) {
-        val bootstrapManager = TermuxBootstrapManager(context)
-        
-        if (bootstrapManager.isInstalled()) {
-            listener.onProgress(100, "Termux Bootstrap ya instalado")
-            listener.onSuccess()
-            return
-        }
-
-        val deferred = CompletableDeferred<Boolean>()
-
-        bootstrapManager.install(object : TermuxBootstrapManager.ProgressListener {
-            override fun onProgress(percent: Int, message: String) {
-                listener.onProgress(percent, message)
-            }
-
-            override fun onSuccess() {
-                try {
-                    markerWriter.writeMarker()
-                } catch (e: Exception) {
-                    AppLogger.w(TAG, "Could not write marker: ${e.message}")
-                }
-                deferred.complete(true)
-            }
-
-            override fun onError(message: String, cause: Throwable?) {
-                listener.onError(message, cause)
-                deferred.complete(false)
-            }
-        })
-
-        if (!deferred.await()) {
-            throw Exception("Termux Bootstrap installation failed")
-        }
-    }
 
     private suspend fun installOffline(customUri: Uri?, listener: ProgressListener) {
         // Offline payload installs OpenClaw (node + glibc) from the bundled asset.
@@ -256,21 +264,6 @@ class InstallationOrchestrator(
         }
     }
 
-    private suspend fun installOnline(listener: ProgressListener) {
-        // Online mode installs OpenClaw via curl | bash run inside the terminal.
-        // It REQUIRES Termux Bootstrap to be installed first because the install
-        // script needs bash, curl, and apt from the bootstrap environment.
-        if (!TermuxBootstrapManager(context).isInstalled()) {
-            installTermuxBootstrap(listener)
-            if (!TermuxBootstrapManager(context).isInstalled()) {
-                throw Exception("Termux Bootstrap installation failed — required for online install")
-            }
-        }
-
-        listener.onProgress(100, "Bootstrap ready. Open the terminal to run the online install.")
-        listener.onSuccess()
-    }
-
     private suspend fun installProot(listener: ProgressListener) {
         // Use ProotManager directly — SetupManager removed
         val prootReady = ProotManager.isProotReady(context) && ProotManager.isRootfsReady(context)
@@ -281,26 +274,26 @@ class InstallationOrchestrator(
             return
         }
 
-        // Step 1: Download proot binary
+        // Step 1: Extract proot binary from assets (offline)
         if (!ProotManager.isProotReady(context)) {
-            listener.onProgress(5, "Downloading proot binary...")
-            val ok = ProotManager.downloadProot(context) { pct, msg ->
+            listener.onProgress(5, "Extrayendo proot desde assets...")
+            val ok = ProotManager.extractProotFromAssets(context) { pct, msg ->
                 listener.onProgress(pct, msg)
             }
             if (!ok) {
-                listener.onError("Failed to download proot. Check internet connection.")
+                listener.onError("Failed to extract proot from assets. Check APK includes payload-proot.tar.xz.")
                 return
             }
         }
 
-        // Step 2: Download and extract Ubuntu rootfs
+        // Step 2: Extract Ubuntu rootfs from assets (offline)
         if (!ProotManager.isRootfsReady(context)) {
-            listener.onProgress(10, "Downloading Ubuntu rootfs (~80MB)...")
-            val ok = ProotManager.downloadAndExtractRootfs(context) { pct, msg ->
+            listener.onProgress(10, "Extrayendo Ubuntu rootfs desde assets...")
+            val ok = ProotManager.extractRootfsFromAssets(context) { pct, msg ->
                 listener.onProgress(pct, msg)
             }
             if (!ok) {
-                listener.onError("Failed to download Ubuntu rootfs. Check internet connection.")
+                listener.onError("Failed to extract rootfs from assets. Check APK includes payload-rootfs.tar.xz.")
                 return
             }
         }
@@ -344,12 +337,52 @@ class InstallationOrchestrator(
 
     private fun detectSource(): String {
         return when {
-            File(context.filesDir, ".proot-installed").exists() -> "proot"
             File(context.filesDir, ".termux-bootstrap-installed").exists() -> "termux-bootstrap"
+            File(context.filesDir, ".proot-installed").exists() -> "proot"
             File(context.filesDir, ".rootfs-extracted").exists() -> "rootfs"
-            stateChecker.isOnlineInstallPresent() -> "online"
+            File(context.filesDir, ".payload-installed").exists() -> "payload"
             stateChecker.isInstalled() -> "payload"
             else -> "none"
+        }
+    }
+
+    // ── Instalación Termux Bootstrap ───────────────────────────────────────
+
+    private suspend fun installTermuxBootstrap(listener: ProgressListener) {
+        val bootstrapManager = TermuxBootstrapManager(context)
+
+        if (bootstrapManager.isInstalled()) {
+            listener.onProgress(100, "Termux Bootstrap ya instalado")
+            listener.onSuccess()
+            return
+        }
+
+        // Validar conflicto antes de instalar
+        if (bootstrapManager.hasConflictingSystem()) {
+            val msg = TermuxBootstrapManager.getConflictMessage(context)
+            listener.onError(msg, null)
+            return
+        }
+
+        val deferred = CompletableDeferred<Boolean>()
+
+        bootstrapManager.install(object : TermuxBootstrapManager.ProgressListener {
+            override fun onProgress(percent: Int, message: String) {
+                listener.onProgress(percent, message)
+            }
+
+            override fun onSuccess() {
+                deferred.complete(true)
+            }
+
+            override fun onError(message: String, cause: Throwable?) {
+                listener.onError(message, cause)
+                deferred.complete(false)
+            }
+        })
+
+        if (!deferred.await()) {
+            throw Exception("Termux Bootstrap installation failed")
         }
     }
 }

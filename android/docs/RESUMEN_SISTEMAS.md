@@ -31,6 +31,7 @@ Extrae `payload.tar.gz` bundleado en el APK.
 Descarga e instala el bootstrap oficial de Termux (~50MB).
 
 Componentes:
+
 - `TermuxArchitectureDetector` — detecta ABI
 - `TermuxBootstrapDownloader` — descarga ZIP
 - `TermuxBootstrapExtractor` — extrae con permisos y symlinks
@@ -51,6 +52,7 @@ Luego el terminal ejecuta `curl -sL myopenclawhub.com/install | bash`.
 Instala Ubuntu rootfs y lanza el gateway dentro de proot.
 
 Componentes en `core/proot/`:
+
 - `ProotBinaryDownloader`, `ProotRootfsDownloader`
 - `ProotRootfsConfigurator`, `ProotCommandExecutor`
 
@@ -73,14 +75,14 @@ Fallback                                → /system/bin/sh
 
 ## Comparación de modos
 
-| | Offline (payload) | Online | Proot |
-|---|---|---|---|
-| **Requiere internet** | ❌ | ✅ | ✅ |
-| **Tamaño descarga** | 0 (bundleado) | ~50MB + online | ~80MB |
-| **Tiempo** | 1-2 min | 5-10 min | 5-7 min |
-| **pkg install** | ✅ | ✅ | ❌ (usa apt) |
-| **Phantom Process Killer** | ⚠️ | ⚠️ | ✅ resistente |
-| **Recomendado para** | APK con payload | Sin payload | Avanzados |
+|                            | Offline (payload) | Online         | Proot         |
+| -------------------------- | ----------------- | -------------- | ------------- |
+| **Requiere internet**      | ❌                | ✅             | ✅            |
+| **Tamaño descarga**        | 0 (bundleado)     | ~50MB + online | ~80MB         |
+| **Tiempo**                 | 1-2 min           | 5-10 min       | 5-7 min       |
+| **pkg install**            | ✅                | ✅             | ❌ (usa apt)  |
+| **Phantom Process Killer** | ⚠️                | ⚠️             | ✅ resistente |
+| **Recomendado para**       | APK con payload   | Sin payload    | Avanzados     |
 
 ---
 
@@ -93,6 +95,7 @@ Fallback                                → /system/bin/sh
 3. ¿Payload instalado? → `prefix/` + `.installed`
 
 `InstallerManager.isReady()` — entorno completamente funcional:
+
 - Verifica que `ld-linux-aarch64.so.1` existe y tiene tamaño > 100KB
 - Verifica que `node.real` existe y tiene tamaño > 1MB
 - Verifica que `openclaw.mjs` existe
@@ -101,34 +104,32 @@ Fallback                                → /system/bin/sh
 
 ## ModernPermissionManager
 
-Gestiona todos los permisos con API `suspend`:
+Gestiona permisos con API `suspend`:
 
 ```kotlin
-suspend fun requestStorage(): Boolean
 suspend fun requestNotifications(): Boolean
-suspend fun requestManageExternalStorage(): Boolean
-fun hasStoragePermission(): Boolean
 fun hasNotificationPermission(): Boolean
 ```
 
-Internamente usa `ActivityResultLaunchers` y `CompletableDeferred<Boolean>`. No usa `onRequestPermissionsResult` (deprecado).
+**Nota:** `MANAGE_EXTERNAL_STORAGE` y permisos de almacenamiento externo fueron eliminados. Todo funciona dentro del sandbox privado de la app.
+
+Internamente usa `ActivityResultLaunchers` y `CompletableDeferred<Boolean>`.
 
 ---
 
-## CommandRunner — seguridad
+## Seguridad — Comandos
 
-Todos los comandos recibidos desde WebView pasan por `sanitizeCommand()`:
+**⚠️ Métodos `runCommand()` y `runCommandAsync` eliminados de SystemBridge**
+
+Por seguridad, la ejecución de comandos arbitrarios desde WebView ya no está disponible:
 
 ```kotlin
-// Bloqueado
-sanitizeCommand("rm -rf /")          // → null
-sanitizeCommand("ls | bash")         // → null
-sanitizeCommand("echo $(cat /etc/passwd)") // → null
+// ❌ ELIMINADO — No expuesto a JavaScript
+// @JavascriptInterface
+// fun runCommand(cmd: String): String
 
-// Permitido
-sanitizeCommand("openclaw --version") // → "openclaw --version"
-sanitizeCommand("ls -la")            // → "ls -la"
-sanitizeCommand("git status")        // → "git status"
+// ✅ Comandos internos usan runSyncUnsafe (no expuesto)
+// Solo para uso interno del sistema, nunca desde WebView
 ```
 
-Los comandos internos del sistema usan `runSyncUnsafe` / `runStreamingUnsafe` para saltarse la sanitización.
+**Principio de seguridad:** Ningún comando shell puede ser ejecutado desde el frontend React. Todo procesamiento crítico ocurre en Kotlin nativo.

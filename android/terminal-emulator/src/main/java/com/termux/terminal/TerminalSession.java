@@ -67,6 +67,9 @@ public final class TerminalSession extends TerminalOutput {
      */
     private int mTerminalFileDescriptor;
 
+    /** The ParcelFileDescriptor wrapping the terminal file descriptor, must be closed to prevent leaks. */
+    private ParcelFileDescriptor mTerminalParcelFileDescriptor;
+
     /** Set by the application for user identification of session, not by terminal. */
     public String mSessionName;
 
@@ -255,6 +258,16 @@ public final class TerminalSession extends TerminalOutput {
         mTerminalToProcessIOQueue.close();
         mProcessToTerminalIOQueue.close();
         JNI.close(mTerminalFileDescriptor);
+
+        // Close the ParcelFileDescriptor to prevent file descriptor leaks
+        if (mTerminalParcelFileDescriptor != null) {
+            try {
+                mTerminalParcelFileDescriptor.close();
+            } catch (IOException e) {
+                Logger.logWarn(mClient, LOG_TAG, "Failed to close ParcelFileDescriptor: " + e.getMessage());
+            }
+            mTerminalParcelFileDescriptor = null;
+        }
     }
 
     @Override
@@ -316,8 +329,9 @@ public final class TerminalSession extends TerminalOutput {
         return null;
     }
 
-    private static FileDescriptor wrapFileDescriptor(int fileDescriptor) {
-        return ParcelFileDescriptor.adoptFd(fileDescriptor).getFileDescriptor();
+    private FileDescriptor wrapFileDescriptor(int fileDescriptor) {
+        mTerminalParcelFileDescriptor = ParcelFileDescriptor.adoptFd(fileDescriptor);
+        return mTerminalParcelFileDescriptor.getFileDescriptor();
     }
 
     @SuppressLint("HandlerLeak")

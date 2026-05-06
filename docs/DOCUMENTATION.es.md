@@ -8,48 +8,88 @@ Bienvenido a la documentación técnica exhaustiva de **OpenClaw-Android**. Este
 
 **OpenClaw-Android** es una solución que permite ejecutar la plataforma OpenClaw (un entorno para agentes y herramientas de IA) directamente en dispositivos Android, con una configuración mínima y sin necesidad de realizar _root_ en el dispositivo.
 
+**🔒 Principio Fundamental: Sandbox Completo**
+
+Todo funciona **dentro del sandbox de la aplicación** (`context.getFilesDir()`). No requiere:
+
+- ❌ App de Termux instalada en el dispositivo
+- ❌ Acceso root
+- ❌ Permisos de almacenamiento externo (`MANAGE_EXTERNAL_STORAGE` eliminado)
+- ❌ Acceso a `/system` o directorios externos
+
 **El problema que resuelve:**
-Típicamente, para ejecutar herramientas complejas de Linux (como Node.js con dependencias nativas o binarios precompilados) en Android, se requería instalar una distribución de Linux completa utilizando herramientas como `proot-distro`. Esto introduce una sobrecarga considerable de almacenamiento (1-2 GB) y un impacto negativo en el rendimiento debido a la capa de traducción de `proot`.
+Típicamente, para ejecutar herramientas complejas de Linux en Android, se requería instalar una distribución de Linux completa (1-2 GB) o depender de apps externas como Termux. OpenClaw-Android descarta ambos enfoques.
 
 **Filosofía y Enfoque:**
-OpenClaw-Android descarta la necesidad de una distribución de Linux completa. En su lugar, utiliza **glibc-runner**, un entorno mínimo que proporciona únicamente el enlazador dinámico de GNU C Library (`ld.so`) dentro de Termux (que nativamente usa Bionic libc). Al ejecutar binarios compilados para Linux (como Node.js oficial para linux-arm64) directamente a través del enlazador dinámico `ld.so`, se logra una velocidad nativa, reduciendo drásticamente el uso de almacenamiento a aproximadamente ~200MB y logrando tiempos de instalación de entre 3 a 10 minutos.
+
+1. **Sandbox autocontenido**: Todo en `/data/data/com.openclaw.android/files/`
+2. **2 Sistemas principales** (mutuamente excluyentes):
+   - **Sistema Termux**: Terminal básica + Payload (offline) o Bootstrap (online con curl/bash/apt)
+   - **Sistema Proot**: Ubuntu mini aislado, resistente a Phantom Process Killer
+3. **glibc-runner**: Entorno mínimo con solo el enlazador dinámico GNU (`ld.so`)
+4. **Velocidad nativa**: ~200MB, 3-10 min instalación, sin capas de emulación
 
 ---
 
 ## 2. Arquitectura de alto nivel
 
-El proyecto está dividido en dos grandes dominios que se comunican entre sí: el **Entorno de Ejecución en Termux (Shell/Scripts)** y la **Aplicación Android (APK)**.
+El proyecto implementa **2 sistemas principales** dentro de un sandbox autocontenido. Todo ocurre en `context.getFilesDir()` sin depender de apps externas.
 
 ```mermaid
 flowchart TD
-    subgraph App["App Android (APK)"]
-        UI[WebView React SPA\nInterfaz de usuario y OTA]
-        Kotlin[Clases Kotlin\nGestión del sistema, Servicios en background, JsBridge]
-        Term[TerminalView\nEmulador de Terminal PTY]
-        UI <-->|JsBridge / EventBridge| Kotlin
-        Kotlin <-->|Bash -l -c| Term
+    subgraph Android["Android System"]
+        subgraph Sandbox["OpenClaw App Sandbox"]
+            direction TB
+
+            subgraph AppLayer["App Layer"]
+                UI[WebView React SPA\nDashboard + Configuración]
+                Kotlin[Kotlin Core\nJsBridge + Servicios]
+                Term[TerminalView\nEmulador PTY Nativo]
+                UI <-->|JsBridge / EventBridge| Kotlin
+                Kotlin <-->|Native calls| Term
+            end
+
+            subgraph SystemTermux["Sistema Termux"]
+                direction TB
+                TermuxCore[Terminal Base\nSiempre presente]
+                Payload[Payload\nOpenClaw embebido]
+                Bootstrap[Bootstrap\ncurl/bash/apt online]
+                TermuxCore --> Payload
+                TermuxCore --> Bootstrap
+            end
+
+            subgraph SystemProot["Sistema Proot"]
+                ProotBin[proot binario\nestático]
+                Rootfs[Ubuntu mini\nrootfs (~80MB)]
+                ProotBin --> Rootfs
+            end
+
+            AppLayer --> SystemTermux
+            AppLayer --> SystemProot
+        end
     end
 
-    subgraph Termux["Entorno Sandbox (Archivos de la App)"]
-        Boot[InstallerManager.kt\n(Online/Offline)]
-        Core[Scripts / Plataformas / Parches]
-        Glibc[glibc-runner\nEnlazador Dinámico ld.so]
-        Node[Node.js Linux-arm64]
-        OpenClaw[Gateway OpenClaw]
-
-        Boot --> Core
-        Core --> Glibc
-        Glibc --> Node
-        Node --> OpenClaw
-    end
-
-    App <==>|Ejecuta comandos, lee estado| Termux
+    style Sandbox fill:#e1f5fe
+    style SystemTermux fill:#fff3e0
+    style SystemProot fill:#f3e5f5
 ```
 
-1. **Scripts de Instalación y Core:** Agnósticos de la plataforma, preparan la infraestructura (Termux, paquetes de red).
-2. **Entorno L2 (glibc + Node.js):** Proporciona la compatibilidad binaria requerida, utilizando `grun` (glibc-runner).
-3. **Plataforma OpenClaw:** Instalada mediante scripts específicos que aplican parches de compatibilidad (bypass de systemd, resolución de DNS, etc.).
-4. **La App Android:** Un contenedor independiente que incluye una PTY (Pseudo-Terminal), y una SPA en React para gestionar la instalación, configuración y ejecución de la plataforma, sin que el usuario interactúe directamente con la aplicación de Termux (aunque utilice su entorno por debajo).
+### 2 Sistemas Mutuamente Excluyentes
+
+| Sistema    | Componentes                       | Cuándo usar                | Internet                   |
+| ---------- | --------------------------------- | -------------------------- | -------------------------- |
+| **Termux** | Terminal base + Payload/Bootstrap | Uso general, desarrollo    | Payload: ❌, Bootstrap: ✅ |
+| **Proot**  | proot + Ubuntu mini rootfs        | Resistencia Phantom Killer | ✅                         |
+
+**Regla de exclusión**: Solo un sistema activo a la vez. La app valida y bloquea instalación de uno sobre otro.
+
+### Componentes principales
+
+1. **Terminal Base**: Siempre presente, embebida en la app. Comandos simples sin instalación.
+2. **Payload**: OpenClaw + Node embebido en APK, extracción offline rápida.
+3. **Termux Bootstrap**: Descarga curl/bash/apt al sandbox para scripts online.
+4. **Proot**: Ubuntu mini aislado completo, máxima estabilidad.
+5. **glibc-runner**: Enlazador dinámico que permite ejecutar Node.js Linux en Android.
 
 ---
 
@@ -79,39 +119,55 @@ openclaw-android/
 ## 4. Guía detallada por carpetas
 
 ### `android/` (App Android Nativa)
-**Atención Especial:** Esta carpeta contiene el código de la aplicación Android independiente. Permite a los usuarios tener una interfaz y consola integradas sin abrir la app de Termux.
+
+**🔒 Sandbox Autocontenido**: Todo funciona dentro de `context.getFilesDir()`. No requiere app Termux externa.
 
 - **Estructura Interna:** `app/src/main/java/com/openclaw/android/`
 - **Clases Kotlin principales:**
-  - `MainActivity.kt`: Contenedor principal que maneja permisos, aloja la WebView y el TerminalView.
-  - `InstallerManager.kt`: **Cerebro de la instalación.** Gestiona el flujo híbrido (Online vía GitHub o Offline vía Assets), utiliza `PayloadExtractor` para streaming de archivos grandes y crea los wrappers binarios en `/usr/bin`.
-  - `PayloadExtractor.kt`: Motor de descompresión basado en Apache Commons Compress que permite extraer el entorno sin saturar la memoria RAM del dispositivo.
-  - `JsBridge.kt`: API que conecta React con Kotlin. Incluye métodos para iniciar instalaciones, detectar estado del runtime y ejecutar scripts de forma asíncrona.
-  - `EnvironmentBuilder.kt`: Construye las variables de entorno críticas (LD_LIBRARY_PATH, PATH, etc.) para que los binarios glibc funcionen en el sandbox de Android.
-  - `TerminalSessionManager.kt`: Orquesta sesiones de terminal (PTY) y previene conflictos de librerías entre el sistema Android y el sandbox.
+  - `MainActivity.kt`: Contenedor principal con fachada delgada que delega a componentes especializados.
+  - `InstallationOrchestrator.kt`: **Orquestador unificado** de los 2 sistemas (Termux con Payload/Bootstrap, y Proot). Gestiona validaciones de exclusión mutua.
+  - `TermuxBootstrapManager.kt`: Fachada para instalación del bootstrap de Termux (online, curl/bash/apt).
+  - `ProotManager.kt`: Gestión del sistema Proot (Ubuntu mini aislado).
+  - `PayloadAssetResolver.kt` / `PayloadInstaller.kt`: Extracción del payload embebido en APK.
+  - `JsBridgeFacade.kt`: API segura WebView↔Kotlin. **⚠️ Métodos `runCommand()` eliminados por seguridad**.
+  - `SystemBridge.kt`: Info de sistema sin comandos shell expuestos.
+  - `TerminalSessionManager.kt`: 3 modos de terminal: proot / online install / payload.
+  - `GlibcRunner.kt`: Ejecutor de ELF via `ld-linux-aarch64.so.1`.
 
-- **Interfaz WebView React (`android/www/`):** Una aplicación de una sola página (SPA) construida en React. Utiliza un enrutador basado en Hash (`HashRouter` porque el esquema `file://` no soporta el History API) y proporciona los paneles de configuración y _dashboard_. El empaquetado final (`www.zip`) soporta un sistema de **OTA** (Over-The-Air) para actualizar atómicamente la interfaz sin necesidad de recompilar e instalar una nueva versión del APK.
-- **Terminal PTY (`terminal-emulator/` y `terminal-view/`):** Subsistema basado en C++ (libtermux.so) y Java para emular un entorno de terminal real.
-- **Sistema de Arranque:** El `BootReceiver.kt` detecta el encendido del dispositivo y, si está configurado, reinicia automáticamente el `OpenClawService` y el gateway.
+- **Seguridad:**
+  - ❌ `runCommand()` / `runCommandAsync()` eliminados de bridges
+  - ❌ `MANAGE_EXTERNAL_STORAGE` eliminado del manifest
+  - ✅ Todo en sandbox privado
+  - ✅ Coroutines con `Dispatchers.IO` para operaciones bloqueantes
+
+- **Interfaz WebView React (`android/www/`):** SPA con HashRouter (compatible `file://`), sistema OTA para actualizaciones atómicas.
+- **Terminal PTY (`terminal-emulator/` y `terminal-view/`):** Emulador nativo basado en fork de ReTerminal.
 
 ### `.github/`
+
 Contiene los flujos de trabajo de GitHub Actions (`workflows/`) como `android-build.yml` (construye el APK y publica releases) y `code-quality.yml` (analiza la calidad del código, linting, tests). También incluye la configuración de Dependabot para mantener actualizadas las dependencias del proyecto.
 
 ### `.githooks/`
+
 Aloja scripts que se ejecutan automáticamente durante el ciclo de vida de Git. El archivo `pre-commit` asegura que los estándares de código, linters y validaciones de seguridad se ejecuten antes de permitir un commit.
 
 ### `.vscode/`
+
 Contiene los ajustes específicos para Visual Studio Code (`settings.json`), configurando reglas de formateo y validación de sintaxis para los diferentes lenguajes utilizados en el repositorio.
 
 ### `docs/`
+
 Carpeta de documentación complementaria y recursos visuales. Incluye:
+
 - `disable-phantom-process-killer.md`: Guía crítica para evitar que Android mate procesos pesados en background (Phantom Process Killer).
 - `termux-ssh-guide.md`: Instrucciones para acceder al entorno vía SSH.
 - `troubleshooting.md`: Guía de solución de problemas comunes.
 - `images/`: Recursos gráficos como capturas de pantalla de la aplicación y diagramas.
 
 ### `patches/`
+
 Contiene archivos vitales para asegurar que las aplicaciones Linux se ejecuten sin problemas dentro del contenedor glibc en Android.
+
 - `glibc-compat.js`: Inyectado en Node.js para mitigar fallos específicos de resolución de red, paths o variables de entorno cuando se corre bajo glibc-runner.
 - `argon2-stub.js`: Modifica o salta la compilación de argon2 (utilizada por code-server) que comúnmente falla al compilar dependencias nativas en la arquitectura del teléfono.
 - `systemctl`: Un script "stub" (falso) para aplicaciones que intentan usar `systemd` para manejar demonios, devolviendo códigos de éxito falsos para que la instalación no falle.
@@ -119,14 +175,18 @@ Contiene archivos vitales para asegurar que las aplicaciones Linux se ejecuten s
 - `apply-patches.sh`: El script que se encarga de inyectar estos parches en sus lugares correspondientes dentro de `node_modules` o en la jerarquía del sistema de archivos de Termux.
 
 ### `platforms/openclaw/`
+
 Define cómo debe instalarse y configurarse el motor OpenClaw. La arquitectura de instalación está pensada como _plugins_ de plataforma.
+
 - `config.env`: Declara metadatos de la plataforma y booleanos de dependencias (`PLATFORM_NEEDS_GLIBC`, `PLATFORM_NEEDS_NODEJS`).
 - `install.sh` / `uninstall.sh` / `update.sh`: Lógica específica para descargar los paquetes NPM, instalar dependencias (`clawdhub`, `sharp`) e ignorar scripts post-install problemáticos.
 - `env.sh`: Define y exporta las variables de entorno críticas necesarias para que la plataforma funcione en runtime.
 - `verify.sh` / `status.sh`: Analiza la integridad de la plataforma instalada.
 
 ### `scripts/`
+
 El "músculo" de los instaladores. Aloja piezas modulares llamadas por `install.sh`.
+
 - `lib.sh`: Librería con funciones de uso común (impresión con color, lectura de prompts, detección de arquitectura).
 - `check-env.sh`: Script de verificación previa al vuelo (pre-flight) para comprobar que la CPU es compatible (aarch64) y hay espacio suficiente.
 - `install-infra-deps.sh`: Instala requerimientos base del sistema usando `pkg` (git, utilidades principales).
@@ -136,6 +196,7 @@ El "músculo" de los instaladores. Aloja piezas modulares llamadas por `install.
 - `backup.sh`: Herramienta para realizar copias de seguridad de las configuraciones y restaurarlas (`oa --backup` / `oa --restore`).
 
 ### `tests/`
+
 Contiene `verify-install.sh` y `verify-compat.sh`, scripts que se ejecutan al final del proceso de instalación para garantizar que `ld.so`, Node.js, `npm`, y las rutas del sistema fueron configuradas exitosamente. Emiten alertas (WARN/FAIL) si algo no funcionó.
 
 ---
@@ -154,25 +215,61 @@ Contiene `verify-install.sh` y `verify-compat.sh`, scripts que se ejecutan al fi
 
 ---
 
-## 6. Flujo de instalación y ejecución
+## 6. Flujos de Instalación
 
-La magia de OpenClaw-Android ocurre en una secuencia de pasos altamente orquestada:
+### Flujo A: App APK (Recomendado)
 
-### Proceso de Instalación (Vía Termux o App)
-1. **Punto de Entrada (`bootstrap.sh`):** El usuario ejecuta `curl -sL myopenclawhub.com/install | bash`. El script comprueba que esté en Termux, maneja los certificados SSL y descarga el resto del repositorio en una carpeta temporal.
-2. **Chequeos Previos (Paso 1):** `install.sh` ejecuta `scripts/check-env.sh`. Verifica la arquitectura `aarch64` y el espacio disponible.
-3. **Selección y Prompts (Pasos 2-3):** Se carga `platforms/openclaw/config.env` y se le pregunta al usuario qué herramientas extra (tmux, chromium, etc.) desea instalar.
-4. **Infraestructura Base (Paso 4):** Se ejecuta `install-infra-deps.sh` actualizando los repositorios de Termux (`pkg update`).
-5. **Entorno de Runtime (Paso 5):** **Crucial:** Si la plataforma requiere glibc, se ejecuta `install-glibc.sh`. Esto instala `pacman` y, a través de este, `glibc-runner`. Seguidamente, `install-nodejs.sh` descarga el Node.js oficial y crea un _wrapper_ ejecutable para Node que inyecta `grun` (ej. `/path/to/grun /path/to/node`).
-6. **Instalación de la Plataforma (Paso 6):** Se ejecuta `platforms/openclaw/install.sh`. Se instala OpenClaw vía NPM de manera global, y se ejecutan parches (ej: `apply-patches.sh`) para asegurar su funcionamiento.
-7. **Herramientas Adicionales y CLI (Pasos 7 y 8):** Se copian los scripts interactivos como `oa.sh` a las rutas binarias (`$PREFIX/bin/oa`) y se corren los scripts de tests (`verify-install.sh`).
+El APK contiene todo lo necesario. No requiere apps externas ni comandos shell.
 
-### Ejecución Cotidiana
-Cuando un usuario ejecuta `openclaw gateway` en Termux, o cuando la App Android invoca el servicio en background:
-1. El comando ingresa a través del binario instalado por NPM, que usa el wrapper de Node.
-2. El wrapper de Node asegura que el comando se pase a `grun` (glibc-runner).
-3. `grun` utiliza `ld-linux-aarch64.so.1` para cargar el entorno de Node.js sin depender de la libc nativa de Android (Bionic).
-4. El proceso de OpenClaw corre a velocidad nativa, manejando las peticiones locales.
+```
+Usuario abre App
+    ↓
+InstallationOrchestrator.detectMode()
+    ↓
+┌─────────────────┬──────────────────┬──────────────────┐
+│   Modo Payload  │ Modo Bootstrap   │   Modo Proot     │
+│   (Offline)     │   (Online)       │   (Online)       │
+│                 │                  │                  │
+│ Extrae desde    │ Descarga         │ Descarga         │
+│ assets/         │ bootstrap zip    │ proot+rootfs     │
+│                 │                  │                  │
+│ ~30 segundos    │ ~3 minutos       │ ~5 minutos       │
+│ Sin internet    │ Requiere net     │ Requiere net     │
+└─────────────────┴──────────────────┴──────────────────┘
+    ↓
+EnvironmentConfigurator.setup()
+    ↓
+Dashboard WebView React abierto
+```
+
+**Validaciones de exclusión mutua:**
+
+```kotlin
+// InstallationOrchestrator verifica antes de instalar
+if (hasConflictingSystem()) {
+    throw IllegalStateException("Cannot install: Another system active")
+}
+```
+
+### Flujo B: Scripts de Shell (Desarrollo/Termux Externo)
+
+Para desarrollo o usuarios que prefieren Termux externo:
+
+1. `curl -sL myopenclawhub.com/install | bash` → descarga repo
+2. `install.sh` → orquesta scripts en `scripts/`
+3. `install-glibc.sh` → instala glibc-runner vía pacman
+4. `install-nodejs.sh` → descarga Node.js linux-arm64
+5. `platforms/openclaw/install.sh` → instala OpenClaw vía NPM
+6. Parches aplicados (`glibc-compat.js`, etc.)
+
+**Nota:** Este flujo requiere app Termux instalada (solo para desarrollo).
+
+### Ejecución Cotidiana (App APK)
+
+1. `MainActivity` inicia `OpenClawService` (foreground)
+2. `GlibcRunner` ejecuta: `ld-linux-aarch64.so.1 → node → openclaw`
+3. `JsBridgeFacade` expone API segura a WebView (sin comandos shell)
+4. Dashboard React consume estado vía `AppContext`
 
 ---
 
@@ -189,7 +286,7 @@ OpenClaw-Android da la bienvenida activa a los contribuidores. Los siguientes do
   - Promueve la empatía, el feedback constructivo y desaprueba terminantemente ataques personales o lenguajes despectivos.
 - **`SECURITY.md`:**
   - Específica qué versiones reciben soporte (App v0.4.x, Script v1.0.x).
-  - Prohíbe estrictamente reportar vulnerabilidades en *issues* públicos. Las vulnerabilidades deben reportarse privadamente a través de los GitHub Security Advisories.
+  - Prohíbe estrictamente reportar vulnerabilidades en _issues_ públicos. Las vulnerabilidades deben reportarse privadamente a través de los GitHub Security Advisories.
 
 ---
 
@@ -197,4 +294,4 @@ OpenClaw-Android da la bienvenida activa a los contribuidores. Los siguientes do
 
 El código principal de OpenClaw-Android (scripts y lógica central) está liberado bajo la **Licencia MIT**. Esto permite que el software sea usado, copiado, modificado, fusionado, publicado o distribuido libremente, con la única condición de incluir siempre el aviso de derechos de autor y la propia licencia MIT.
 
-*Nota:* Algunas secciones relativas a adaptaciones de terminal dentro del código Android pueden estar vinculadas a GPL v3 en partes específicas heredadas de otros proyectos, pero la licencia maestra del repositorio como un todo es MIT.
+_Nota:_ Algunas secciones relativas a adaptaciones de terminal dentro del código Android pueden estar vinculadas a GPL v3 en partes específicas heredadas de otros proyectos, pero la licencia maestra del repositorio como un todo es MIT.

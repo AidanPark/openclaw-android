@@ -1,126 +1,77 @@
 package com.openclaw.android.core.bootstrap
 
+import android.content.Context
 import com.openclaw.android.AppLogger
-import com.openclaw.android.TermuxBootstrapManager
 import java.io.File
 
 /**
- * Maneja la ejecución de `pkg update` con reintentos automáticos.
- *
- * Responsabilidad única: ejecutar pkg update para actualizar repositorios,
- * con reintentos y reparación automática de dpkg entre intentos.
+ * Configura el gestor de paquetes (apt) para Termux.
  */
-internal class TermuxPkgManager(
-    private val prefix: File,
-    private val homeDir: File,
-    private val envConfigurator: TermuxEnvironmentConfigurator,
-    private val dpkgManager: TermuxDpkgManager,
-) {
+class TermuxPkgManager(private val context: Context) {
 
-    private val TAG = "TermuxPkgManager"
+    companion object {
+        private const val TAG = "TermuxPkgManager"
+    }
 
-    /**
-     * Ejecuta `pkg update` con hasta [maxAttempts] reintentos.
-     *
-     * Si falla, ejecuta `dpkg --configure -a` antes de reintentar.
-     * Esto resuelve el caso donde dpkg quedó en estado inconsistente.
-     *
-     * @return true si pkg update tuvo éxito en algún intento
-     */
-    fun runPkgUpdateWithRetry(
-        listener: TermuxBootstrapManager.ProgressListener,
-        maxAttempts: Int = 3,
-    ): Boolean {
-        val bash = File(prefix, "bin/bash")
-        if (!bash.exists()) {
-            AppLogger.w(TAG, "bash not found, skipping pkg update")
-            return false
-        }
+    fun setupPackageManager() {
+        try {
+            // Crear directorios necesarios
+            val usrDir = File(context.filesDir, "usr")
+            val binDir = File(usrDir, "bin")
+            val libDir = File(usrDir, "lib")
+            val etcDir = File(usrDir, "etc")
 
-        repeat(maxAttempts) { attempt ->
-            val attemptNum = attempt + 1
-            listener.onProgress(80 + attempt * 2, "pkg update (intento $attemptNum/$maxAttempts)...")
-            AppLogger.i(TAG, "pkg update attempt $attemptNum/$maxAttempts")
+            binDir.mkdirs()
+            libDir.mkdirs()
+            etcDir.mkdirs()
 
-            val success = runSinglePkgUpdate(bash)
-            if (success) {
-                AppLogger.i(TAG, "pkg update succeeded on attempt $attemptNum")
-                return true
+            // Configurar apt sources si es necesario
+            val sourcesList = File(etcDir, "apt/sources.list")
+            if (!sourcesList.exists()) {
+                sourcesList.parentFile?.mkdirs()
+                sourcesList.writeText("deb https://packages.termux.dev/apt/termux-main stable main\n")
             }
 
-            // Falló — ejecutar dpkg --configure -a antes de reintentar
-            if (attemptNum < maxAttempts) {
-                AppLogger.w(TAG, "pkg update failed, running dpkg --configure -a before retry...")
-                listener.onProgress(81 + attempt * 2, "Reparando dpkg antes de reintentar...")
-                dpkgManager.runDpkgConfigure(listener)
-                Thread.sleep(1000)
+            // Crear link simbólico o script wrapper para termux-fix-shebang si existe
+            val fixShebang = File(binDir, "termux-fix-shebang")
+            if (!fixShebang.exists()) {
+                // Crear un script simple
+                fixShebang.writeText("#!/bin/sh\n# termux-fix-shebang placeholder\nexec \"\$@\"\n")
+                fixShebang.setExecutable(true, false)
             }
-        }
 
-        return false
+            AppLogger.i(TAG, "Package manager setup complete")
+
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Setup failed: ${e.message}", e)
+        }
     }
 
     /**
-     * Ejecuta un único intento de `pkg update`.
-     *
-     * Usa DEBIAN_FRONTEND=noninteractive y --force-confold para evitar
-     * cualquier prompt interactivo, incluyendo el de sources.list.
+     * Verifica si apt está disponible.
      */
-    private fun runSinglePkgUpdate(bash: File): Boolean {
-        val env = envConfigurator.buildTermuxEnv() + mapOf(
-            "DEBIAN_FRONTEND"              to "noninteractive",
-            "DEBCONF_NONINTERACTIVE_SEEN"  to "true",
-        )
+    fun isAptAvailable(): Boolean {
+        val apt = File(context.filesDir, "usr/bin/apt")
+        return apt.exists() && apt.canExecute()
+    }
 
-        // El script pasa "N" a stdin como respuesta por defecto a cualquier prompt
-        // y usa --force-confold para que dpkg no pregunte sobre archivos de config
-        val script = """
-            export DEBIAN_FRONTEND=noninteractive
-            export DEBCONF_NONINTERACTIVE_SEEN=true
-            export PATH="${prefix.absolutePath}/bin:${'$'}PATH"
-            export PREFIX="${prefix.absolutePath}"
-            export HOME="${homeDir.absolutePath}"
-            export TMPDIR="${prefix.absolutePath}/tmp"
-
-            # Responder N a cualquier prompt de dpkg sobre archivos de configuración
-            yes N | pkg update -y -o Dpkg::Options::="--force-confold" 2>&1
-        """.trimIndent()
-
+    /**
+     * Obtiene la versión de apt.
+     */
+    fun getAptVersion(): String {
         return try {
-            val pb = ProcessBuilder(bash.absolutePath, "-c", script)
-            pb.environment().clear()
-            pb.environment().putAll(env)
-            pb.directory(homeDir)
-            pb.redirectErrorStream(true)
+            val process = ProcessBuilder(
+                File(context.filesDir, "usr/bin/apt").absolutePath,
+                "--version"
+            )
+                .directory(context.filesDir)
+                .start()
 
-            val process = pb.start()
-
-            val output = StringBuilder()
-            val outputThread = Thread {
-                process.inputStream.bufferedReader().forEachLine { line ->
-                    AppLogger.d(TAG, "[pkg update] $line")
-                    output.appendLine(line)
-                }
-            }
-            outputThread.start()
-
-            val finished = process.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)
-            outputThread.join(5000)
-
-            if (!finished) {
-                process.destroyForcibly()
-                AppLogger.w(TAG, "pkg update timed out")
-                return false
-            }
-
-            val exitCode = process.exitValue()
-            AppLogger.i(TAG, "pkg update exit code: $exitCode")
-
-            // Considerar éxito si el exit code es 0 o si la salida indica éxito
-            exitCode == 0 || output.contains("Reading package lists") || output.contains("All packages are up to date")
+            val output = process.inputStream.bufferedReader().readText()
+            process.waitFor()
+            output.trim()
         } catch (e: Exception) {
-            AppLogger.e(TAG, "pkg update exception: ${e.message}", e)
-            false
+            "unknown"
         }
     }
 }

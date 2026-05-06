@@ -1,126 +1,62 @@
 package com.openclaw.android.core.bootstrap
 
 import com.openclaw.android.AppLogger
-import java.io.BufferedInputStream
 import java.io.File
-import java.io.FileOutputStream
-import java.net.HttpURLConnection
 import java.net.URL
+import javax.net.ssl.HttpsURLConnection
 
 /**
- * Descarga el archivo ZIP del bootstrap de Termux desde packages.termux.dev.
- *
- * Responsabilidad única: descargar el archivo con manejo de progreso,
- * reutilización de descargas existentes y manejo de errores HTTP.
+ * Descarga el bootstrap de Termux desde GitHub.
  */
-internal class TermuxBootstrapDownloader(
-    private val cacheDir: File,
-) {
+class TermuxBootstrapDownloader {
 
-    private val TAG = "TermuxBootstrapDownloader"
+    companion object {
+        private const val TAG = "TermuxBootstrapDownloader"
+        private const val BUFFER_SIZE = 8192
+        private const val CONNECT_TIMEOUT = 30000
+        private const val READ_TIMEOUT = 120000
+    }
 
-    /**
-     * Descarga el bootstrap ZIP desde la URL especificada.
-     *
-     * @param url URL del bootstrap ZIP
-     * @param dest Archivo de destino
-     * @param onProgress Callback con bytes descargados y total (total puede ser -1)
-     * @throws IllegalStateException si la respuesta HTTP no es 200 OK
-     */
-    fun downloadBootstrap(
-        url: String,
-        dest: File,
-        onProgress: (Long, Long) -> Unit,
-    ) {
-        dest.parentFile?.mkdirs()
+    fun download(
+        url: URL,
+        outputFile: File,
+        onProgress: (Int) -> Unit
+    ): Boolean {
+        return try {
+            AppLogger.i(TAG, "Downloading from: $url")
 
-        // Reutilizar si ya está descargado y tiene tamaño razonable (>5MB)
-        if (dest.exists() && dest.length() > 5_000_000) {
-            AppLogger.i(TAG, "Bootstrap already downloaded: ${dest.length()} bytes")
-            onProgress(dest.length(), dest.length())
-            return
-        }
+            val connection = url.openConnection() as HttpsURLConnection
+            connection.connectTimeout = CONNECT_TIMEOUT
+            connection.readTimeout = READ_TIMEOUT
+            connection.setRequestProperty("User-Agent", "OpenClaw-Android")
 
-        AppLogger.i(TAG, "Downloading bootstrap from $url")
+            val totalSize = connection.contentLength
+            var downloaded = 0
 
-        // GitHub releases redirect from github.com to objects.githubusercontent.com.
-        // HttpURLConnection does not follow cross-domain HTTPS redirects automatically,
-        // so we resolve the final URL manually before downloading.
-        val finalUrl = resolveRedirects(url)
-        AppLogger.i(TAG, "Final download URL: $finalUrl")
+            connection.inputStream.use { input ->
+                outputFile.outputStream().use { output ->
+                    val buffer = ByteArray(BUFFER_SIZE)
+                    var bytesRead: Int
 
-        val conn = URL(finalUrl).openConnection() as HttpURLConnection
-        conn.connectTimeout = 30_000
-        conn.readTimeout = 120_000
-        conn.instanceFollowRedirects = true
-        conn.setRequestProperty("User-Agent", "OpenClaw-Android/1.0")
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                        downloaded += bytesRead
 
-        try {
-            if (conn.responseCode != HttpURLConnection.HTTP_OK) {
-                throw IllegalStateException("HTTP ${conn.responseCode}: ${conn.responseMessage}")
-            }
-
-            val total = conn.contentLengthLong
-            var downloaded = 0L
-
-            conn.inputStream.use { input ->
-                BufferedInputStream(input, 32 * 1024).use { buf ->
-                    FileOutputStream(dest).use { out ->
-                        val buffer = ByteArray(32 * 1024)
-                        var n: Int
-                        while (buf.read(buffer).also { n = it } != -1) {
-                            out.write(buffer, 0, n)
-                            downloaded += n
-                            onProgress(downloaded, total)
+                        if (totalSize > 0) {
+                            val progress = (downloaded * 100 / totalSize).coerceIn(0, 100)
+                            onProgress(progress)
                         }
                     }
                 }
             }
-            AppLogger.i(TAG, "Downloaded: ${dest.length()} bytes")
-        } finally {
-            conn.disconnect()
-        }
-    }
 
-    /**
-     * Obtiene la ruta del archivo ZIP en cache para una arquitectura específica.
-     */
-    fun getBootstrapCacheFile(arch: String): File {
-        return File(cacheDir, "termux-bootstrap-$arch.zip")
-    }
+            AppLogger.i(TAG, "Download complete: ${outputFile.length()} bytes")
+            true
 
-    /**
-     * Resuelve redirects HTTP/HTTPS manualmente hasta llegar a la URL final.
-     *
-     * HttpURLConnection en Android no sigue redirects cross-domain automáticamente
-     * (e.g. github.com → objects.githubusercontent.com). Este método los resuelve
-     * manualmente con un máximo de 10 saltos para evitar bucles infinitos.
-     */
-    private fun resolveRedirects(startUrl: String, maxHops: Int = 10): String {
-        var currentUrl = startUrl
-        repeat(maxHops) {
-            val conn = URL(currentUrl).openConnection() as HttpURLConnection
-            conn.connectTimeout = 10_000
-            conn.readTimeout = 10_000
-            conn.instanceFollowRedirects = false
-            conn.setRequestProperty("User-Agent", "OpenClaw-Android/1.0")
-            try {
-                val code = conn.responseCode
-                if (code in 300..399) {
-                    val location = conn.getHeaderField("Location")
-                    if (!location.isNullOrBlank()) {
-                        AppLogger.i(TAG, "Redirect $code: $currentUrl → $location")
-                        currentUrl = location
-                        return@repeat
-                    }
-                }
-                // Not a redirect — this is the final URL
-                return currentUrl
-            } finally {
-                conn.disconnect()
-            }
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Download failed: ${e.message}", e)
+            outputFile.delete()
+            false
         }
-        AppLogger.w(TAG, "Max redirect hops reached, using: $currentUrl")
-        return currentUrl
     }
 }

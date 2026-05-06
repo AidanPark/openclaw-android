@@ -16,6 +16,8 @@ import com.openclaw.android.EventBridge
 import com.openclaw.android.InstallerManager
 import com.openclaw.android.MainActivity
 import com.openclaw.android.core.env.EnvironmentResolver
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.File
 import java.security.MessageDigest
 
@@ -59,15 +61,30 @@ class SystemBridge(
 
     @JavascriptInterface
     fun getStorageInfo(): String {
+        // Fast path: return immediately with basic info
         val filesDir = activity.filesDir
-        // Device-level storage (total/free on the partition)
         val total = filesDir.totalSpace
         val free = filesDir.freeSpace
         val used = total - free
 
-        // App-level storage: actual disk usage of the app sandbox
-        val appUsedBytes = calculateDirSize(filesDir)
+        // Async calculation of directory size to avoid blocking UI thread
+        val scope = activity.lifecycleScope
+        scope.launch(Dispatchers.IO) {
+            val appUsedBytes = calculateDirSize(filesDir)
+            val result = gson.toJson(mapOf(
+                "total" to total,
+                "free" to free,
+                "used" to used,
+                "totalMb" to total / 1024 / 1024,
+                "freeMb" to free / 1024 / 1024,
+                "usedMb" to used / 1024 / 1024,
+                "appUsedBytes" to appUsedBytes,
+                "appUsedMb" to appUsedBytes / 1024 / 1024,
+            ))
+            eventBridge.emit("storage_info", result)
+        }
 
+        // Return immediate response; full calculation will come via event
         return gson.toJson(mapOf(
             "total" to total,
             "free" to free,
@@ -75,9 +92,9 @@ class SystemBridge(
             "totalMb" to total / 1024 / 1024,
             "freeMb" to free / 1024 / 1024,
             "usedMb" to used / 1024 / 1024,
-            // App sandbox usage (what the user actually installed)
-            "appUsedBytes" to appUsedBytes,
-            "appUsedMb" to appUsedBytes / 1024 / 1024,
+            "appUsedBytes" to -1,  // -1 indicates async calculation in progress
+            "appUsedMb" to -1,
+            "async" to true,
         ))
     }
 
@@ -93,13 +110,10 @@ class SystemBridge(
 
     @JavascriptInterface
     fun getPermissionsStatus(): String {
-        val hasStorage = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            android.os.Environment.isExternalStorageManager()
-        } else {
-            androidx.core.content.ContextCompat.checkSelfPermission(
-                activity, android.Manifest.permission.WRITE_EXTERNAL_STORAGE
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
+        // MANAGE_EXTERNAL_STORAGE removed - no longer needed for embedded app
+        val hasStorage = androidx.core.content.ContextCompat.checkSelfPermission(
+            activity, android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         val hasNotifications = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             androidx.core.content.ContextCompat.checkSelfPermission(
                 activity, android.Manifest.permission.POST_NOTIFICATIONS
@@ -262,60 +276,6 @@ class SystemBridge(
         }
     }
 
-    @JavascriptInterface
-    fun runCommand(cmd: String): String {
-        val env = com.openclaw.android.CommandRunner.buildTermuxEnv(activity)
-        val config = com.openclaw.android.core.env.EnvironmentResolver.resolve(activity.filesDir)
-        val result = com.openclaw.android.CommandRunner.runSync(cmd, env, config.homeDir, timeoutMs = 10_000)
-        return gson.toJson(mapOf(
-            "exitCode" to result.exitCode,
-            "stdout" to result.stdout,
-            "stderr" to result.stderr,
-        ))
-    }
-
-    @JavascriptInterface
-    fun runCommandAsync(callbackId: String, cmd: String) {
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            Thread {
-                val env = com.openclaw.android.CommandRunner.buildTermuxEnv(activity)
-                val config = com.openclaw.android.core.env.EnvironmentResolver.resolve(activity.filesDir)
-                val result = com.openclaw.android.CommandRunner.runSync(cmd, env, config.homeDir, timeoutMs = 15_000)
-                eventBridge.emit("command_result", mapOf(
-                    "callbackId" to callbackId,
-                    "result" to result.stdout.trim().ifEmpty { result.stderr.trim() },
-                    "exitCode" to result.exitCode,
-                ))
-            }.start()
-        }
-    }
-
-    @JavascriptInterface
-    fun launchGateway() {
-        Thread {
-            com.openclaw.android.CommandRunner.launchGateway(activity.filesDir)
-        }.start()
-    }
-
-    @JavascriptInterface
-    fun applyUpdate(component: String) {
-        // Run update in terminal
-        eventBridge.emit("install_progress", mapOf("target" to component, "progress" to 0.1f, "message" to "Abriendo terminal para actualizar $component..."))
-        activity.runOnUiThread {
-            activity.showTerminal()
-        }
-        eventBridge.emit("install_progress", mapOf("target" to component, "progress" to 1.0f, "message" to "Ejecuta: openclaw update"))
-    }
-
-    @JavascriptInterface
-    fun getApkUpdateInfo(): String {
-        val pInfo = activity.packageManager.getPackageInfo(activity.packageName, 0)
-        return gson.toJson(mapOf(
-            "currentVersion" to (pInfo.versionName ?: "0.0.0"),
-            "updateAvailable" to false,
-            "updateUrl" to "https://github.com/AidanPark/openclaw-android/releases/latest",
-        ))
-    }
 
     // ── Storage setup ──────────────────────────────────────────────────────
 
@@ -326,45 +286,6 @@ class SystemBridge(
         }
     }
 
-    /**
-     * Fix executable permissions on all .sh scripts in the app sandbox.
-     * Returns a JSON summary of how many files were fixed.
-     */
-    @JavascriptInterface
-    fun fixScriptPermissions(): String {
-        val filesDir = activity.filesDir
-        var fixed = 0
-        var skipped = 0
-        val errors = mutableListOf<String>()
-
-        try {
-            filesDir.walkTopDown()
-                .filter { it.isFile && (it.name.endsWith(".sh") || it.name.endsWith(".mjs") || it.name == "node" || it.name == "npm" || it.name == "npx" || it.name == "openclaw") }
-                .forEach { file ->
-                    try {
-                        if (!file.canExecute()) {
-                            file.setExecutable(true, false)
-                            fixed++
-                        } else {
-                            skipped++
-                        }
-                    } catch (e: Exception) {
-                        errors.add("${file.name}: ${e.message}")
-                    }
-                }
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "fixScriptPermissions failed: ${e.message}", e)
-            return gson.toJson(mapOf("success" to false, "error" to e.message))
-        }
-
-        AppLogger.i(TAG, "fixScriptPermissions: fixed=$fixed skipped=$skipped errors=${errors.size}")
-        return gson.toJson(mapOf(
-            "success" to true,
-            "fixed" to fixed,
-            "skipped" to skipped,
-            "errors" to errors,
-        ))
-    }
 
     /**
      * Get detailed version info for all components.

@@ -15,7 +15,6 @@ import android.widget.PopupWindow;
 
 import com.termux.view.R;
 import com.termux.view.TerminalView;
-import com.termux.view.support.PopupWindowCompatGingerbread;
 
 @SuppressLint("ViewConstructor")
 public class TextSelectionHandleView extends View {
@@ -75,13 +74,9 @@ public class TextSelectionHandleView extends View {
         mHandle.setBackgroundDrawable(null);
         mHandle.setAnimationStyle(0);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            mHandle.setWindowLayoutType(WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL);
-            mHandle.setEnterTransition(null);
-            mHandle.setExitTransition(null);
-        } else {
-            PopupWindowCompatGingerbread.setWindowLayoutType(mHandle, WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL);
-        }
+        mHandle.setWindowLayoutType(WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL);
+        mHandle.setEnterTransition(null);
+        mHandle.setExitTransition(null);
         mHandle.setContentView(this);
     }
 

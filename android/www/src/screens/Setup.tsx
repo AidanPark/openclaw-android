@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, useEffect } from 'react'
+import { useState, useEffect, useCallback, memo, useRef } from 'react'
 import { bridge } from '../lib/bridge'
 import { useNativeEvent } from '../lib/useNativeEvent'
 import { t } from '../i18n'
@@ -103,6 +103,7 @@ export function Setup({ onComplete }: Props) {
   // ── Tips ──────────────────────────────────────────────────────────────
   const [tipIndex, setTipIndex] = useState(0)
   const [autoNavigate, setAutoNavigate] = useState(false)
+  const autoNavigateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const isInstalling = bsPhase === 'installing' || ocPhase === 'installing' || prootPhase === 'installing'
   useEffect(() => {
     if (!isInstalling) return
@@ -110,13 +111,27 @@ export function Setup({ onComplete }: Props) {
     return () => clearInterval(id)
   }, [isInstalling])
 
+  // Cancel auto-navigate timeout when user manually proceeds
+  const cancelAutoNavigate = useCallback(() => {
+    if (autoNavigateTimeoutRef.current) {
+      clearTimeout(autoNavigateTimeoutRef.current)
+      autoNavigateTimeoutRef.current = null
+    }
+    setAutoNavigate(false)
+  }, [])
+
   // Auto-navigate to dashboard after bootstrap completes (3s delay)
   // Cancelled if user proceeds to Step 2 (ocPhase changes from 'mode-select')
+  // or when Skip is clicked
   useEffect(() => {
     if (!autoNavigate) return
-    if (ocPhase !== 'mode-select') return // user already started Step 2, don't redirect
+    if (ocPhase !== 'mode-select') {
+      // User already started Step 2, cancel auto-navigate
+      cancelAutoNavigate()
+      return
+    }
     onComplete()
-  }, [autoNavigate, ocPhase, onComplete])
+  }, [autoNavigate, ocPhase, onComplete, cancelAutoNavigate])
 
   // ── Check existing installs on mount ──────────────────────────────────
   useEffect(() => {
@@ -167,7 +182,7 @@ export function Setup({ onComplete }: Props) {
       else if (pct >= 1) {
         setBsPhase('done')
         setOcPhase('mode-select')
-        setTimeout(() => setAutoNavigate(true), 3000)
+        autoNavigateTimeoutRef.current = setTimeout(() => setAutoNavigate(true), 3000)
       }
     } else if (ocPhase === 'installing') {
       // Termux flow — openclaw step

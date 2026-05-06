@@ -19,20 +19,21 @@ APK autónoma que instala y ejecuta OpenClaw en Android sin necesidad de root. I
 
 ## Requisitos del sistema
 
-| Componente | Versión mínima |
-|---|---|
-| Android | 7.0 (API 24) |
-| Arquitectura | arm64-v8a |
-| JDK (build) | 21 |
-| Android SDK (build) | API 35 |
-| NDK (build) | 27+ |
-| Node.js (build UI) | 18+ |
+| Componente          | Versión mínima |
+| ------------------- | -------------- |
+| Android             | 7.0 (API 24)   |
+| Arquitectura        | arm64-v8a      |
+| JDK (build)         | 21             |
+| Android SDK (build) | API 35         |
+| NDK (build)         | 27+            |
+| Node.js (build UI)  | 18+            |
 
 ---
 
 ## Modos de instalación
 
 ### Modo 1 — Payload offline (`payload.tar.gz`, bundleado en APK)
+
 Asset principal incluido en el APK. Contiene glibc, Node.js y OpenClaw listos para usar.
 
 ```
@@ -45,12 +46,15 @@ payload/
 ```
 
 ### Modo 2 — proot + Ubuntu rootfs (online)
+
 Descarga proot y un rootfs Ubuntu mínimo. Instala Node.js y OpenClaw dentro del entorno Ubuntu.
 
 ### Modo 3 — Online install (curl)
+
 ```bash
 curl -sL myopenclawhub.com/install | bash
 ```
+
 Detectado por: `prefix/bin/bash` + `ocaDir/installed.json` + `ocaDir/node/bin/node.real` + `prefix/glibc/lib/ld-linux-aarch64.so.1` + `prefix/lib/node_modules/openclaw/openclaw.mjs`
 
 ---
@@ -103,10 +107,10 @@ MainActivity (fachada delgada)
 
 ### Tres modos de terminal (TerminalSessionManager)
 
-| Modo | Shell | Condición |
-|---|---|---|
-| proot | `openclaw-shell.sh` | proot instalado |
-| online install | `prefix/bin/bash` | online install detectado |
+| Modo           | Shell                     | Condición                 |
+| -------------- | ------------------------- | ------------------------- |
+| proot          | `openclaw-shell.sh`       | proot instalado           |
+| online install | `prefix/bin/bash`         | online install detectado  |
 | payload/legacy | fallback `/system/bin/sh` | ninguno de los anteriores |
 
 > ⚠️ **Regla crítica:** `LD_LIBRARY_PATH` con `glibc/lib` NUNCA debe estar en el entorno de shells Bionic (`/system/bin/sh`). Causa: `CANNOT LINK EXECUTABLE sh: cannot find libc.so from verneed[0]`. `InstallOverlayController` y `TerminalManager` eliminan esta variable antes de pasar el entorno a `/system/bin/sh`.
@@ -139,7 +143,7 @@ android/
 │   │   ├── PayloadExtractor.kt           # Extracción streaming tar.gz (sin saturar RAM)
 │   │   ├── InstallValidator.kt           # Verifica node.real, openclaw/, certs/cert.pem
 │   │   ├── EventBridge.kt                # Eventos Kotlin → WebView
-│   │   ├── CommandRunner.kt              # Ejecución de comandos con sanitización (whitelist)
+│   │   │   # CommandRunner.kt - ELIMINADO (métodos peligrosos removidos por seguridad)
 │   │   ├── UrlResolver.kt                # URLs BuildConfig + config.json remoto
 │   │   ├── TerminalManager.kt            # Gestión PTY
 │   │   ├── TerminalSessionManager.kt     # 3 modos: proot / online install / payload-legacy
@@ -276,25 +280,25 @@ npm run test         # Tests con Vitest
 
 ## JsBridge API
 
-| Dominio | Métodos clave | Descripción |
-|---|---|---|
-| Terminal | 8 | show/hide, crear/cambiar/cerrar sesiones, escribir |
-| Setup | 12 | estado bootstrap/payload/rootfs, iniciar setup, rutas |
-| Platform | 6 | instalar/desinstalar/cambiar plataformas |
-| Tools | 4 | instalar/desinstalar herramientas CLI, estado |
-| System | 15+ | info app, batería, permisos, almacenamiento, OTA, comandos |
-| **Batch** | 1 | `batchQuery(callbackId, methods[])` — múltiples consultas en una llamada |
+| Dominio   | Métodos clave | Descripción                                                              |
+| --------- | ------------- | ------------------------------------------------------------------------ |
+| Terminal  | 8             | show/hide, crear/cambiar/cerrar sesiones, escribir                       |
+| Setup     | 12            | estado bootstrap/payload/rootfs, iniciar setup, rutas                    |
+| Platform  | 6             | instalar/desinstalar/cambiar plataformas                                 |
+| Tools     | 4             | instalar/desinstalar herramientas CLI, estado                            |
+| System    | 15+           | info app, batería, permisos, almacenamiento, OTA, comandos               |
+| **Batch** | 1             | `batchQuery(callbackId, methods[])` — múltiples consultas en una llamada |
 
 ### batchQuery
 
 ```typescript
 // Frontend — una sola llamada para múltiples estados
 const results = await bridge.batchCall([
-  'getSetupStatus',
-  'getEnvironmentInfo',
-  'getStorageInfo',
-  'getInstalledTools',
-])
+  "getSetupStatus",
+  "getEnvironmentInfo",
+  "getStorageInfo",
+  "getInstalledTools",
+]);
 ```
 
 ```kotlin
@@ -305,45 +309,64 @@ fun batchQuery(callbackId: String, requests: String)
 
 ---
 
-## Seguridad — CommandRunner
+## Seguridad — Ejecución de Comandos
 
-`CommandRunner.sanitizeCommand()` aplica tres capas de validación antes de ejecutar cualquier comando recibido desde WebView:
+**⚠️ Cambio de seguridad importante:**
 
-1. **Longitud máxima** — rechaza comandos > 10.000 caracteres
-2. **Patrones de inyección** — bloquea `| sh`, `| bash`, `&& rm -rf`, `` `...` ``, `$(...)`, etc.
-3. **Whitelist de comandos** — solo ejecuta comandos de la lista permitida:
-   `openclaw`, `node`, `npm`, `npx`, `git`, `apt`, `pkg`, `curl`, `wget`, `ls`, `cat`, `tar`, etc.
+Los métodos `runCommand()` y `runCommandAsync` fueron **eliminados** de `SystemBridge` y `JsBridgeFacade`.
 
-Los comandos internos del sistema usan `runSyncUnsafe` / `runStreamingUnsafe` para saltarse la sanitización.
+### Razón
+
+Por seguridad, la ejecución de comandos arbitrarios desde WebView ya no está disponible:
+
+```kotlin
+// ❌ ELIMINADO — No expuesto a JavaScript
+// @JavascriptInterface
+// fun runCommand(cmd: String): String
+// fun runCommandAsync(cmd: String): String
+```
+
+### Alternativa
+
+Los comandos internos del sistema usan `runSyncUnsafe` (no expuesto al frontend):
+
+```kotlin
+// ✅ Solo para uso interno en Kotlin
+CommandRunner.runSyncUnsafe("internal-command")
+```
+
+**Principio:** Ningún comando shell puede ser ejecutado desde el frontend React. Todo procesamiento crítico ocurre en Kotlin nativo.
 
 ---
 
 ## Permisos Android
 
-| Permiso | Uso |
-|---|---|
-| `INTERNET` | Descarga bootstrap y actualizaciones |
-| `FOREGROUND_SERVICE` | Mantener terminal activa en background |
-| `WAKE_LOCK` | Evitar suspensión durante instalación |
-| `RECEIVE_BOOT_COMPLETED` | Auto-inicio del gateway al arrancar |
-| `READ/WRITE_EXTERNAL_STORAGE` | Android 6–10 |
-| `MANAGE_EXTERNAL_STORAGE` | Android 11+ |
-| `POST_NOTIFICATIONS` | Android 13+ — notificaciones del servicio |
+| Permiso                  | Uso                                                     |
+| ------------------------ | ------------------------------------------------------- |
+| `INTERNET`               | Descarga bootstrap y actualizaciones (solo modo online) |
+| `FOREGROUND_SERVICE`     | Mantener terminal activa en background                  |
+| `WAKE_LOCK`              | Evitar suspensión durante instalación                   |
+| `RECEIVE_BOOT_COMPLETED` | Auto-inicio del gateway al arrancar                     |
+| `POST_NOTIFICATIONS`     | Android 13+ — notificaciones del servicio               |
+
+**Eliminados (no requeridos):**
+
+- ❌ `MANAGE_EXTERNAL_STORAGE` — Todo funciona en sandbox privado
+- ❌ `READ/WRITE_EXTERNAL_STORAGE` — No se accede a almacenamiento externo
 
 ### ModernPermissionManager
 
-Maneja todos los permisos con API `suspend` y `ActivityResultLaunchers` (sin `onRequestPermissionsResult` deprecado):
+Maneja permisos con API `suspend` y `ActivityResultLaunchers`:
 
 ```kotlin
-// Solicitar almacenamiento — muestra diálogo de rationale si es necesario
-val granted = permissionManager.requestStorage()
-
 // Solicitar notificaciones (Android 13+)
 val granted = permissionManager.requestNotifications()
 
 // Verificar sin solicitar
-val hasStorage = permissionManager.hasStoragePermission()
+val hasNotifications = permissionManager.hasNotificationPermission()
 ```
+
+**Nota:** Los permisos de almacenamiento fueron eliminados. Todo funciona dentro del sandbox privado de la app (`context.getFilesDir()`).
 
 ---
 
@@ -352,7 +375,8 @@ val hasStorage = permissionManager.hasStoragePermission()
 `AppContext` es la única fuente de verdad del frontend. Todos los componentes consumen estado desde aquí en lugar de llamar directamente al bridge:
 
 ```typescript
-const { setupStatus, envInfo, storageInfo, installedTools, refresh } = useAppContext()
+const { setupStatus, envInfo, storageInfo, installedTools, refresh } =
+  useAppContext();
 ```
 
 Se refresca automáticamente al recibir eventos nativos: `session_changed`, `setup_progress`, `install_progress`.
@@ -361,39 +385,39 @@ Se refresca automáticamente al recibir eventos nativos: `session_changed`, `set
 
 ## Decisiones de diseño
 
-| Decisión | Motivo |
-|---|---|
-| `targetSdk 28` | Bypass W^X — permite exec en `/data/data/` |
-| `minSdk 24` | Requisito bootstrap apt-android-7 |
-| `EnvironmentResolver` como única fuente de rutas | Elimina rutas hardcodeadas y duplicación |
-| `InstallationOrchestrator` unificado | Reemplaza SetupManager + RootfsManager eliminados |
-| `ModernPermissionManager` con suspend | API limpia, sin callbacks anidados |
-| `batchQuery` en JsBridge | Reduce llamadas WebView↔Kotlin de N a 1 |
-| `AppContext` centralizado | Evita prop drilling y llamadas duplicadas al bridge |
-| `lazy + Suspense` en settings | Code splitting — chunks de 2–8 KB cargados bajo demanda |
-| Componentes `memo` en Dashboard | Evita re-renders innecesarios en actualizaciones de estado |
-| `sanitizeCommand` con whitelist | Seguridad: bloquea inyección de comandos desde WebView |
-| Hash routing | `file://` no soporta History API |
-| Sin CSS framework | Bundle mínimo para entrega OTA |
-| Scope IO compartido | Un solo `CoroutineScope(Dispatchers.IO + SupervisorJob)` en JsBridge |
+| Decisión                                         | Motivo                                                               |
+| ------------------------------------------------ | -------------------------------------------------------------------- |
+| `targetSdk 28`                                   | Bypass W^X — permite exec en `/data/data/`                           |
+| `minSdk 24`                                      | Requisito bootstrap apt-android-7                                    |
+| `EnvironmentResolver` como única fuente de rutas | Elimina rutas hardcodeadas y duplicación                             |
+| `InstallationOrchestrator` unificado             | Reemplaza SetupManager + RootfsManager eliminados                    |
+| `ModernPermissionManager` con suspend            | API limpia, sin callbacks anidados                                   |
+| `batchQuery` en JsBridge                         | Reduce llamadas WebView↔Kotlin de N a 1                              |
+| `AppContext` centralizado                        | Evita prop drilling y llamadas duplicadas al bridge                  |
+| `lazy + Suspense` en settings                    | Code splitting — chunks de 2–8 KB cargados bajo demanda              |
+| Componentes `memo` en Dashboard                  | Evita re-renders innecesarios en actualizaciones de estado           |
+| Eliminación de `runCommand/runCommandAsync`      | Seguridad: comandos shell ya no expuestos a WebView                  |
+| Hash routing                                     | `file://` no soporta History API                                     |
+| Sin CSS framework                                | Bundle mínimo para entrega OTA                                       |
+| Scope IO compartido                              | Un solo `CoroutineScope(Dispatchers.IO + SupervisorJob)` en JsBridge |
 
 ---
 
 ## Dependencias clave
 
-| Librería | Versión | Uso |
-|---|---|---|
-| AGP | 9.1.0 | Build system Android |
-| Kotlin | 2.2.21 | Lenguaje principal |
-| kotlinx-coroutines | 1.10.2 | Operaciones async |
-| gson | 2.13.2 | Serialización JSON en batchQuery |
-| React | 19 | UI WebView |
-| Vite | 7 | Build + code splitting |
-| Vitest | latest | Tests frontend |
-| JUnit5 | 6.0.3 | Tests unitarios Kotlin |
-| MockK | 1.14.9 | Mocking en tests |
-| detekt | 1.23.8 | Análisis estático |
-| ktlint | 14.2.0 | Formato de código |
+| Librería           | Versión | Uso                              |
+| ------------------ | ------- | -------------------------------- |
+| AGP                | 9.1.0   | Build system Android             |
+| Kotlin             | 2.2.21  | Lenguaje principal               |
+| kotlinx-coroutines | 1.10.2  | Operaciones async                |
+| gson               | 2.13.2  | Serialización JSON en batchQuery |
+| React              | 19      | UI WebView                       |
+| Vite               | 7       | Build + code splitting           |
+| Vitest             | latest  | Tests frontend                   |
+| JUnit5             | 6.0.3   | Tests unitarios Kotlin           |
+| MockK              | 1.14.9  | Mocking en tests                 |
+| detekt             | 1.23.8  | Análisis estático                |
+| ktlint             | 14.2.0  | Formato de código                |
 
 ---
 

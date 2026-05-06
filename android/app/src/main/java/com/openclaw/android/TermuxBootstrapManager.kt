@@ -1,71 +1,22 @@
 package com.openclaw.android
 
 import android.content.Context
-import com.openclaw.android.core.bootstrap.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.openclaw.android.core.bootstrap.TermuxBootstrapOrchestrator
 import java.io.File
 
 /**
- * TermuxBootstrapManager — fachada para la instalación del bootstrap oficial de Termux.
+ * TermuxBootstrapManager — Fachada para instalación de Termux Bootstrap (ONLINE).
  *
- * Esta clase actúa como fachada (Facade pattern): mantiene la API pública intacta
- * y delega cada responsabilidad a un componente especializado:
+ * Este sistema permite la instalación ONLINE de OpenClaw via curl | bash.
+ * Provee: curl, bash, sh, apt - necesarios para scripts de instalación online.
  *
- *   ┌─────────────────────────────────────────────────────────────┐
- *   │            TermuxBootstrapManager (fachada)                 │
- *   │                                                             │
- *   │  TermuxBootstrapOrchestrator → install(), getStatus(), uninstall()
- *   │  TermuxArchitectureDetector  → detectArchitecture()         │
- *   │  TermuxBootstrapDownloader   → downloadBootstrap()          │
- *   │  TermuxBootstrapExtractor    → extractBootstrap()           │
- *   │  TermuxEnvironmentConfigurator → setupEnvironment()         │
- *   │  TermuxDpkgManager           → runDpkgConfigure()           │
- *   │  TermuxPkgManager            → runPkgUpdateWithRetry()      │
- *   │  TermuxPackageInstaller      → installAdditionalPackages()  │
- *   │  TermuxBootstrapMarker       → isInstalled(), writeMarker() │
- *   └─────────────────────────────────────────────────────────────┘
+ * ⚠️ MUTUAMENTE EXCLUYENTE con:
+ *   - Proot (sistema mini Linux independiente)
+ *   - Payload (OpenClaw embebido offline)
  *
- * Flujo de instalación online (cuando el payload offline no está disponible):
- *   1. Detectar arquitectura del dispositivo
- *   2. Descargar bootstrap ZIP desde packages.termux.dev
- *   3. Extraer al PREFIX preservando permisos y symlinks
- *   4. Configurar entorno (DNS, DEBIAN_FRONTEND, etc.)
- *   5. Ejecutar dpkg --configure -a (no-interactivo) para reparar estado
- *   6. Ejecutar pkg update con reintentos automáticos
- *   7. Instalar paquetes adicionales (git, curl, wget)
+ * NO instalar si ya existe Proot o Payload instalado.
  */
 class TermuxBootstrapManager(private val context: Context) {
-
-    // ── Componentes internos ───────────────────────────────────────────────
-
-    private val filesDir: File = context.filesDir
-    private val cacheDir: File = context.cacheDir
-    private val homeDir = File(filesDir, "home")
-
-    // PREFIX donde se instala el bootstrap — SIEMPRE filesDir/usr.
-    // El bootstrap de Termux es un entorno nativo que debe vivir en usr/,
-    // separado del payload de OpenClaw (que va en homeDir/payload/).
-    // No usar candidatos dinámicos: si homeDir/payload/ existe, el getter
-    // anterior lo elegía como prefix y el bootstrap se instalaba encima del payload.
-    private val prefix: File = File(filesDir, "usr")
-
-    // Instanciar componentes
-    private val architectureDetector = TermuxArchitectureDetector
-    private val downloader = TermuxBootstrapDownloader(cacheDir)
-    private val extractor = TermuxBootstrapExtractor()
-    private val envConfigurator = TermuxEnvironmentConfigurator(context, prefix, homeDir)
-    private val marker = TermuxBootstrapMarker(filesDir, prefix)
-    private val dpkgManager = TermuxDpkgManager(prefix, homeDir, envConfigurator)
-    private val pkgManager = TermuxPkgManager(prefix, homeDir, envConfigurator, dpkgManager)
-    private val packageInstaller = TermuxPackageInstaller(prefix, homeDir, envConfigurator)
-    private val orchestrator = TermuxBootstrapOrchestrator(
-        context, filesDir, cacheDir, homeDir, prefix,
-        architectureDetector, downloader, extractor, envConfigurator,
-        dpkgManager, pkgManager, packageInstaller, marker
-    )
-
-    // ── Interfaz de progreso ──────────────────────────────────────────────────
 
     interface ProgressListener {
         fun onProgress(percent: Int, message: String)
@@ -73,21 +24,125 @@ class TermuxBootstrapManager(private val context: Context) {
         fun onError(message: String, cause: Throwable? = null)
     }
 
-    // ── API pública ───────────────────────────────────────────────────────────
+    companion object {
+        private const val TAG = "TermuxBootstrapManager"
+        private const val MARKER_FILE = ".termux-bootstrap-installed"
 
-    fun isInstalled(): Boolean = marker.isInstalled()
+        /**
+         * Verifica si Termux Bootstrap está instalado.
+         */
+        fun isInstalled(context: Context): Boolean {
+            val marker = File(context.filesDir, MARKER_FILE)
+            val prefixDir = File(context.filesDir, "usr")
+            return marker.exists() && prefixDir.exists() && prefixDir.isDirectory
+        }
 
-    fun detectArchitecture(): String = architectureDetector.detectArchitecture()
+        /**
+         * Verifica si existe un sistema CONFLICTIVO instalado (Proot o Payload).
+         * Termux NO debe instalarse si existe otro sistema.
+         */
+        fun hasConflictingSystem(context: Context): Boolean {
+            // Proot instalado
+            val prootMarker = File(context.filesDir, ".proot-installed")
+            val rootfsDir = File(context.filesDir, "ubuntu-rootfs")
+            if (prootMarker.exists() || rootfsDir.exists()) {
+                AppLogger.w(TAG, "Conflicting system detected: Proot")
+                return true
+            }
 
-    /**
-     * Instala el bootstrap de Termux.
-     * Debe ejecutarse en Dispatchers.IO.
-     */
-    suspend fun install(listener: ProgressListener) = withContext(Dispatchers.IO) {
-        orchestrator.install(listener)
+            // Payload instalado
+            val payloadMarker = File(context.filesDir, ".payload-installed")
+            val payloadDir = File(context.filesDir, "home/payload")
+            if (payloadMarker.exists() && payloadDir.exists()) {
+                AppLogger.w(TAG, "Conflicting system detected: Payload")
+                return true
+            }
+
+            return false
+        }
+
+        /**
+         * Obtiene mensaje de error apropiado para el conflicto detectado.
+         */
+        fun getConflictMessage(context: Context): String {
+            return when {
+                File(context.filesDir, ".proot-installed").exists() ->
+                    "Cannot install Termux: Proot system is already installed. Uninstall Proot first."
+                File(context.filesDir, ".payload-installed").exists() ->
+                    "Cannot install Termux: Payload (offline) system is already installed. Uninstall it first."
+                else -> "Cannot install Termux: Another system is already installed."
+            }
+        }
     }
 
-    fun getStatus(): Map<String, Any> = orchestrator.getStatus()
+    /**
+     * Verifica si Termux Bootstrap está instalado (instancia).
+     */
+    fun isInstalled(): Boolean = isInstalled(context)
 
-    fun uninstall() = orchestrator.uninstall()
+    /**
+     * Verifica si existe sistema conflictivo.
+     */
+    fun hasConflictingSystem(): Boolean = hasConflictingSystem(context)
+
+    /**
+     * Instala Termux Bootstrap desde la URL configurada.
+     * Requiere conexión a internet.
+     *
+     * @throws IllegalStateException si existe un sistema conflictivo
+     */
+    fun install(listener: ProgressListener) {
+        // Validación: No instalar si existe otro sistema
+        if (hasConflictingSystem()) {
+            val msg = getConflictMessage(context)
+            AppLogger.e(TAG, msg)
+            listener.onError(msg, IllegalStateException(msg))
+            return
+        }
+
+        // Validación: Ya instalado
+        if (isInstalled()) {
+            AppLogger.i(TAG, "Termux Bootstrap already installed")
+            listener.onSuccess()
+            return
+        }
+
+        val orchestrator = TermuxBootstrapOrchestrator(context)
+        orchestrator.install(object : TermuxBootstrapOrchestrator.ProgressListener {
+            override fun onProgress(percent: Int, message: String) {
+                listener.onProgress(percent, message)
+            }
+
+            override fun onSuccess() {
+                // Escribir marcador propio
+                try {
+                    File(context.filesDir, MARKER_FILE).writeText("${System.currentTimeMillis()}")
+                    AppLogger.i(TAG, "Termux Bootstrap marker written")
+                } catch (e: Exception) {
+                    AppLogger.w(TAG, "Could not write marker: ${e.message}")
+                }
+                listener.onSuccess()
+            }
+
+            override fun onError(message: String, cause: Throwable?) {
+                listener.onError(message, cause)
+            }
+        })
+    }
+
+    /**
+     * Desinstala Termux Bootstrap.
+     */
+    fun uninstall(): Boolean {
+        return try {
+            File(context.filesDir, MARKER_FILE).delete()
+            File(context.filesDir, "usr").deleteRecursively()
+            File(context.filesDir, "home").deleteRecursively()
+            AppLogger.i(TAG, "Termux Bootstrap uninstalled")
+            true
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Uninstall failed: ${e.message}", e)
+            false
+        }
+    }
 }

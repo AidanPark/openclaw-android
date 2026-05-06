@@ -1,8 +1,9 @@
 # OpenClaw en Android 🦞
 
 [![Android 7.0+](https://img.shields.io/badge/Android-7.0+-brightgreen)](https://developer.android.com)
-[![APK Independiente](https://img.shields.io/badge/Termux-Opcional-blue)](https://f-droid.org/packages/com.termux/)
-[![Sin proot](https://img.shields.io/badge/proot--distro-No%20Requerido-blue)](https://github.com/termux/proot-distro)
+[![APK Independiente](https://img.shields.io/badge/Termux%20App-No%20Requerida-success)](https://f-droid.org/packages/com.termux/)
+[![Sandbox](https://img.shields.io/badge/Sandbox-Self%20Contained-blue)]()
+[![Sin proot](https://img.shields.io/badge/proot--distro-Opcional-blue)](https://github.com/termux/proot-distro)
 [![Licencia GPL v3](https://img.shields.io/github/license/AidanPark/openclaw-android)](https://github.com/AidanPark/openclaw-android/blob/main/LICENSE)
 [![Estrellas](https://img.shields.io/github/stars/AidanPark/openclaw-android)](https://github.com/AidanPark/openclaw-android)
 [![Descargas](https://img.shields.io/github/downloads/AidanPark/openclaw-android/total)](https://github.com/AidanPark/openclaw-android/releases)
@@ -42,12 +43,12 @@ Porque Android merece un shell.
 
 ## 🌟 Características
 
-| | |
-|---|---|
-| 🚀 **Configuración Relámpago** | Un comando instala glibc + Node.js + OpenClaw. **3-10 min** en WiFi. |
-| 📱 **App Independiente** | APK con dashboard WebView + terminal PTY. No Termux necesario. |
-| ⚡ **Velocidad Nativa** | Solo glibc ld.so — **sin sobrecarga proot**. Mismo rendimiento que PC. |
-| 🛠️ **Cadena de Herramientas Completa** | code-server, Playwright, CLIs IA. Actualizar con `oa --update`. |
+|                                        |                                                                        |
+| -------------------------------------- | ---------------------------------------------------------------------- |
+| 🚀 **Configuración Relámpago**         | Un comando instala glibc + Node.js + OpenClaw. **3-10 min** en WiFi.   |
+| 📱 **App Independiente**               | APK con dashboard WebView + terminal PTY. No Termux necesario.         |
+| ⚡ **Velocidad Nativa**                | Solo glibc ld.so — **sin sobrecarga proot**. Mismo rendimiento que PC. |
+| 🛠️ **Cadena de Herramientas Completa** | code-server, Playwright, CLIs IA. Actualizar con `oa --update`.        |
 
 ---
 
@@ -78,21 +79,22 @@ El enfoque estándar requiere instalar proot-distro con Linux, añadiendo 700MB-
 └───────────────────────────────────────────────────┘
 ```
 
-| | Estándar (proot-distro) | OpenClaw Android |
-|---|---|---|
-| 💾 Almacenamiento | 1-2GB | **~200MB** |
-| ⏱️ Configuración | 20-30 min | **3-10 min** |
-| ⚡ Rendimiento | Más lento (capa proot) | **Velocidad nativa** |
-| 🔧 Pasos | Multi-paso | **Un comando** |
+|                   | Estándar (proot-distro) | OpenClaw Android     |
+| ----------------- | ----------------------- | -------------------- |
+| 💾 Almacenamiento | 1-2GB                   | **~200MB**           |
+| ⏱️ Configuración  | 20-30 min               | **3-10 min**         |
+| ⚡ Rendimiento    | Más lento (capa proot)  | **Velocidad nativa** |
+| 🔧 Pasos          | Multi-paso              | **Un comando**       |
 
 ---
 
+- **🔒 App Sandbox**: Todo funciona dentro de la app, sin necesidad de apps externas ni acceso root
 - **Dashboard Nativo**: Interfaz React que actúa como centro de control (Bootstrap UI).
-- **Instalación Híbrida Inteligente**: 
-  - *Offline (Payload)*: Extrae `openclaw-payload.tar.gz` desde assets o almacenamiento externo. Sin red, instantáneo.
-  - *Online (OTA)*: Descarga el último entorno desde el repositorio si el payload no está presente.
-- **CLI Integrado**: Comando `oa` compatible con el terminal de la App y Termux (detección automática de entorno).
-- **Zero Overhead**: Ejecución directa vía glibc ld.so, sin capas de emulación proot.
+- **Instalación Híbrida Inteligente**:
+  - _Payload (Offline)_: OpenClaw embebido en APK. Sin internet, instantáneo.
+  - _Termux Bootstrap (Online)_: Descarga curl/bash/apt para scripts online.
+  - _Proot (Opcional)_: Ubuntu mini aislado, resistente a Phantom Process Killer.
+- **Zero Overhead**: Ejecución directa vía glibc ld.so, sin capas de emulación.
 
 Descarga el APK desde [Releases](https://github.com/AidanPark/openclaw-android/releases).
 
@@ -100,14 +102,31 @@ Descarga el APK desde [Releases](https://github.com/AidanPark/openclaw-android/r
 
 ## 🚀 Inicio Rápido
 
-> **Instalar desde F-Droid** — Termux de Play Store está descontinuado.
+### Opción 1: Instalación vía APK (Recomendado)
 
-1. Instalar [Termux desde F-Droid](https://f-droid.org/packages/com.termux/)
-2. `pkg update -y && pkg install -y curl`
-3. `curl -sL myopenclawhub.com/install | bash`
-4. `openclaw onboard`
-5. Nueva pestaña: `openclaw gateway`
-6. Abrir dashboard: [myopenclawhub.com](https://myopenclawhub.com)
+La forma más sencilla — descarga el APK e instálalo directamente. Todo está contenido en la app.
+
+1. Descargar APK desde [Releases](https://github.com/AidanPark/openclaw-android/releases)
+2. Instalar el APK (permitir "Instalar apps desconocidas" si es necesario)
+3. Abrir la app → Seleccionar modo de instalación:
+   - **Payload**: OpenClaw offline embebido (~30 seg, sin internet)
+   - **Termux Bootstrap**: Para scripts online con curl/bash (~3 min, requiere internet)
+   - **Proot**: Ubuntu mini aislado (~5 min, resistente a Phantom Killer)
+4. ¡Listo! El dashboard se abre automáticamente.
+
+### Opción 2: Instalación vía Termux (Usuarios Avanzados)
+
+Si prefieres usar la app de Termux externa:
+
+> **Nota**: La versión de Play Store está descontinuada. Instalar desde [F-Droid](https://f-droid.org/packages/com.termux/).
+
+```bash
+pkg update -y && pkg install -y curl
+curl -sL myopenclawhub.com/install | bash
+openclaw onboard
+```
+
+Abrir dashboard: [myopenclawhub.com](https://myopenclawhub.com)
 
 ---
 
@@ -116,17 +135,39 @@ Descarga el APK desde [Releases](https://github.com/AidanPark/openclaw-android/r
 ### Requisitos
 
 - Android 7.0 o superior (Android 10+ recomendado)
-- ~1GB de almacenamiento libre
-- Conexión Wi-Fi o datos móviles
+- ~200MB-500MB de almacenamiento libre (dependiendo del modo)
+- Conexión Wi-Fi o datos móviles (solo para modos online)
 
-### Qué hace el instalador
+### Arquitectura de 2 Sistemas
 
-1. **Entorno glibc** — Instala el enlazador dinámico glibc (vía glibc-runner de pacman)
-2. **Node.js (glibc)** — Descarga Node.js linux-arm64 oficial con wrapper ld.so
-3. **Conversión de rutas** — Convierte rutas Linux estándar a rutas Termux
-4. **Carpeta temporal** — Configura una carpeta temp accesible para Android
-5. **Bypass systemd** — Configura operación normal sin gestor de servicios
-6. **Integración OpenCode** — Si se selecciona, instala OpenCode con proot + ld.so
+La app implementa **2 sistemas principales mutuamente excluyentes**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    SISTEMA TERMUX                           │
+│              (Por defecto - Recomendado)                    │
+│                                                             │
+│  ┌──────────────────┐    ┌──────────────────┐                │
+│  │   Payload        │    │   Bootstrap      │                │
+│  │   (Offline)      │    │   (Online)       │                │
+│  │                  │    │                  │                │
+│  │  OpenClaw        │    │  curl, bash, apt │                │
+│  │  embebido        │    │  descargados     │                │
+│  │  ~30 seg         │    │  ~3 min          │                │
+│  └──────────────────┘    └──────────────────┘                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    SISTEMA PROOT                            │
+│              (Alternativa - Avanzado)                       │
+│                                                             │
+│  • Ubuntu mini completo                                     │
+│  • Resistente a Phantom Process Killer                      │
+│  • ~5 min instalación, ~80MB                                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ### Paso 1: Preparar tu Teléfono
 
@@ -134,35 +175,38 @@ Activar **Opciones de desarrollador** → **Mantener despierto** + deshabilitar 
 
 Ver la [guía Mantener Procesos Vivos](docs/disable-phantom-process-killer.md) para instrucciones detalladas.
 
-### Paso 2: Instalar Termux
+### Paso 2: Instalar APK
 
-> La versión de Play Store está descontinuada. Instalar desde [F-Droid](https://f-droid.org/packages/com.termux/).
+1. Descargar APK desde [Releases](https://github.com/AidanPark/openclaw-android/releases)
+2. Instalar (permitir "Apps desconocidas" si es necesario)
+3. Abrir la app
 
-### Paso 3: Configuración Inicial de Termux
+### Paso 3: Seleccionar Modo de Instalación
 
-```bash
-pkg update -y && pkg install -y curl
-```
+La app detectará automáticamente si hay un sistema instalado y mostrará las opciones disponibles.
 
-### Paso 4: Configuración (App o Termux)
+| Modo                 | Cuándo usar                  | Tiempo  | Requiere internet |
+| -------------------- | ---------------------------- | ------- | ----------------- |
+| **Payload**          | Uso offline, velocidad       | ~30 seg | ❌ No             |
+| **Termux Bootstrap** | Scripts online, flexibilidad | ~3 min  | ✅ Sí             |
+| **Proot**            | Resistencia Phantom Killer   | ~5 min  | ✅ Sí             |
 
-> **Vía App Android (Recomendado)**: Simplemente abre la app, selecciona tus herramientas y comenzará la instalación híbrida de manera automática y offline si el payload está disponible.
+> ⚠️ **Sistemas mutuamente excluyentes**: Solo puedes tener uno activo. Para cambiar, desinstala primero.
 
-> **Vía Termux**:
-```bash
-curl -sL myopenclawhub.com/install | bash && source ~/.bashrc
-openclaw onboard
-```
+### Paso 4: Completar Instalación
 
-> Ejecuta `openclaw gateway` directamente en Termux, **no vía SSH**.
+La app manejará automáticamente:
 
-Abre una nueva pestaña (icono ☰ → **NEW SESSION**) y ejecuta:
+- Extracción de archivos (Payload) o descarga (Bootstrap/Proot)
+- Configuración de entorno
+- Inicio del gateway OpenClaw
+- Apertura del dashboard
 
-```bash
-openclaw gateway
-```
+### Después de Instalar
 
-Para detener: `Ctrl+C`. No uses `Ctrl+Z` — solo suspende el proceso.
+- El dashboard se abre automáticamente
+- Usa `oa --help` en el terminal para ver comandos disponibles
+- Para detener el gateway: `Ctrl+C` en la pestaña del gateway
 
 ---
 
@@ -172,7 +216,9 @@ Android puede matar procesos en segundo plano. Ver la [guía Mantener Procesos V
 
 ## Acceder al Dashboard desde tu PC
 
-Ver la [Guía de Configuración SSH Termux](docs/termux-ssh-guide.md).
+> **Nota**: SSH solo está disponible cuando usas el sistema **Termux Bootstrap** (que incluye `ssh`). No aplica a Payload (offline) ni a Proot directamente desde la app.
+
+Ver la [Guía de Configuración SSH Termux](docs/termux-ssh-guide.md) para acceso remoto cuando uses Termux Bootstrap.
 
 ## Gestionar Múltiples Dispositivos
 
@@ -186,14 +232,14 @@ Usa [Dashboard Connect](https://myopenclawhub.com) para gestionar múltiples dis
 oa --help
 ```
 
-| Comando | Descripción |
-|---------|-------------|
-| `oa --status` | 📊 Estado del entorno (detecta App vs Termux) |
-| `oa --update` | 🔄 Actualizar plataforma y herramientas |
-| `oa --install` | 🛠️ Añadir herramientas (tmux, code-server, etc.) |
-| `oa --backup` | 💾 Respaldo compatible con la App |
-| `oa --restore` | ⬆️ Restaurar datos |
-| `oa --uninstall` | 🗑️ Remover de forma limpia |
+| Comando          | Descripción                                      |
+| ---------------- | ------------------------------------------------ |
+| `oa --status`    | 📊 Estado del entorno (detecta App vs Termux)    |
+| `oa --update`    | 🔄 Actualizar plataforma y herramientas          |
+| `oa --install`   | 🛠️ Añadir herramientas (tmux, code-server, etc.) |
+| `oa --backup`    | 💾 Respaldo compatible con la App                |
+| `oa --restore`   | ⬆️ Restaurar datos                               |
+| `oa --uninstall` | 🗑️ Remover de forma limpia                       |
 
 ---
 
@@ -243,12 +289,12 @@ Los comandos CLI pueden sentirse más lentos que en PC por la velocidad de almac
 
 OpenClaw soporta inferencia LLM local vía [node-llama-cpp](https://github.com/withcatai/node-llama-cpp). El binario precompilado (`@node-llama-cpp/linux-arm64`) carga exitosamente bajo glibc — técnicamente funcional en el teléfono.
 
-| Restricción | Detalles |
-|-------------|----------|
-| RAM | Modelos GGUF necesitan 2-4GB libres (7B, Q4). RAM compartida con Android |
-| Almacenamiento | Modelos de 4GB a 70GB+. Espacio limitado |
-| Velocidad | CPU-only en ARM es muy lento. Sin GPU offloading |
-| Caso de uso | Para producción, usar APIs LLM cloud (misma velocidad que PC) |
+| Restricción    | Detalles                                                                 |
+| -------------- | ------------------------------------------------------------------------ |
+| RAM            | Modelos GGUF necesitan 2-4GB libres (7B, Q4). RAM compartida con Android |
+| Almacenamiento | Modelos de 4GB a 70GB+. Espacio limitado                                 |
+| Velocidad      | CPU-only en ARM es muy lento. Sin GPU offloading                         |
+| Caso de uso    | Para producción, usar APIs LLM cloud (misma velocidad que PC)            |
 
 Para experimentar: TinyLlama 1.1B (Q4, ~670MB) funciona en el teléfono.
 
@@ -258,46 +304,82 @@ Para experimentar: TinyLlama 1.1B (Q4, ~670MB) funciona en el teléfono.
 
 ## 🛠️ Detalles Técnicos
 
-### Componentes Instalados
+### Arquitectura de 2 Sistemas
 
-**Infraestructura Principal**
+La app implementa **2 sistemas principales** dentro del sandbox:
 
-| Componente | Rol | Instalación |
-|------------|-----|-------------|
-| git | Control de versiones | `pkg install` |
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    SISTEMA TERMUX                           │
+│                                                             │
+│  ┌──────────────────┐    ┌──────────────────┐                │
+│  │   Payload        │    │   Bootstrap      │                │
+│  │   (Offline)      │    │   (Online)       │                │
+│  │                  │    │                  │                │
+│  │  • OpenClaw      │    │  • curl          │                │
+│  │  • Node.js       │    │  • bash          │                │
+│  │  • glibc         │    │  • apt/pkg       │                │
+│  │  Embebido en APK │    │  Descargados     │                │
+│  └──────────────────┘    └──────────────────┘                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 
-**Dependencias Runtime (L2)**
+┌─────────────────────────────────────────────────────────────┐
+│                    SISTEMA PROOT                            │
+│                                                             │
+│  • proot binario estático                                 │
+│  • Ubuntu mini rootfs (~80MB)                              │
+│  • Resistente a Phantom Process Killer                      │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
-| Componente | Rol | Instalación |
-|------------|-----|-------------|
-| [pacman](https://wiki.archlinux.org/title/Pacman) | Gestor paquetes glibc | `pkg install` |
-| [glibc-runner](https://github.com/termux-pacman/glibc-packages) | Enlazador dinámico glibc | `pacman -Sy` |
-| [Node.js](https://nodejs.org/) v22 LTS (linux-arm64) | Runtime JavaScript | nodejs.org |
-| python, make, cmake, clang, binutils | Herramientas build nativos | `pkg install` |
+### Componentes por Sistema
 
-**Plataforma OpenClaw**
+**Sistema Termux — Payload (Offline)**
 
-| Componente | Rol | Instalación |
-|------------|-----|-------------|
-| [OpenClaw](https://github.com/openclaw/openclaw) | Plataforma agentes IA | `npm install -g` |
-| [clawdhub](https://github.com/AidanPark/clawdhub) | Gestor de skills | `npm install -g` |
-| [PyYAML](https://pyyaml.org/) | Parser YAML para `.skill` | `pip install` |
+| Componente  | Rol                | Origen          |
+| ----------- | ------------------ | --------------- |
+| Node.js v22 | Runtime JavaScript | Embebido en APK |
+| glibc ld.so | Enlazador dinámico | Embebido en APK |
+| OpenClaw    | Plataforma IA      | Embebido en APK |
+| certs       | Certificados CA    | Embebido en APK |
 
-**Herramientas Opcionales**
+**Sistema Termux — Bootstrap (Online)**
 
-| Componente | Rol | Instalación |
-|------------|-----|-------------|
-| [tmux](https://github.com/tmux/tmux) | Multiplexor terminal | `pkg install` |
-| [ttyd](https://github.com/tsl0922/ttyd) | Terminal web | `pkg install` |
-| [dufs](https://github.com/sigoden/dufs) | Servidor HTTP/WebDAV | `pkg install` |
-| [android-tools](https://developer.android.com/tools/adb) | ADB | `pkg install` |
-| [code-server](https://github.com/coder/code-server) | VS Code en navegador | GitHub |
-| [OpenCode](https://opencode.ai/) | Asistente IA (TUI) | `bun install -g` |
-| [Chromium](https://www.chromium.org/) | Automatización navegador (~400MB) | Script personalizado |
-| [Playwright](https://playwright.dev/) | Librería automatización | Script personalizado |
-| [Claude Code](https://github.com/anthropics/claude-code) | CLI IA Anthropic | `npm install -g` |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | CLI IA Google | `npm install -g` |
-| [Codex CLI](https://github.com/DioNanos/codex-termux) | CLI IA (fork Termux) | `npm install -g` |
+| Componente | Rol                  | Origen     |
+| ---------- | -------------------- | ---------- |
+| curl       | Descarga scripts     | Descargado |
+| bash       | Shell completo       | Descargado |
+| apt/pkg    | Gestor paquetes      | Descargado |
+| git        | Control de versiones | Descargado |
+
+**Sistema Proot**
+
+| Componente    | Rol              | Origen           |
+| ------------- | ---------------- | ---------------- |
+| proot         | Emulador chroot  | Descargado       |
+| Ubuntu rootfs | Sistema completo | Descargado       |
+| apt           | Gestor paquetes  | Dentro de rootfs |
+
+### Componentes Principales del APK
+
+| Clase                      | Responsabilidad                     |
+| -------------------------- | ----------------------------------- |
+| `InstallationOrchestrator` | Orquestador unificado de 2 sistemas |
+| `TermuxBootstrapManager`   | Instalación Termux Bootstrap        |
+| `ProotManager`             | Gestión sistema Proot               |
+| `PayloadInstaller`         | Extracción payload embebido         |
+| `GlibcRunner`              | Ejecutor ELF via ld.so              |
+| `JsBridgeFacade`           | API segura WebView↔Kotlin           |
+| `TerminalSessionManager`   | 3 modos: proot/online/payload       |
+
+### Seguridad
+
+- **Sandbox completo**: Todo en `context.getFilesDir()`
+- **Sin permisos externos**: `MANAGE_EXTERNAL_STORAGE` eliminado
+- **Comandos no expuestos**: `runCommand()` eliminado de bridges
+- **Validación de sistemas**: Bloqueo de instalación mutua
 
 ### Estructura del Proyecto
 
@@ -366,34 +448,34 @@ Plugins Plataforma (platforms/<name>/)
   └── install.sh / update.sh / uninstall.sh / ...
 ```
 
-| Capa | Alcance | Ejemplos | Controlado por |
-|------|---------|----------|----------------|
-| L1 | Infraestructura (siempre) | git, `pkg update` | Orquestador |
-| L2 | Runtime plataforma (condicional) | glibc, Node.js, build tools | Banderas `config.env` |
-| L3 | Herramientas opcionales | tmux, code-server, CLIs IA | Prompts usuario |
+| Capa | Alcance                          | Ejemplos                    | Controlado por        |
+| ---- | -------------------------------- | --------------------------- | --------------------- |
+| L1   | Infraestructura (siempre)        | git, `pkg update`           | Orquestador           |
+| L2   | Runtime plataforma (condicional) | glibc, Node.js, build tools | Banderas `config.env` |
+| L3   | Herramientas opcionales          | tmux, code-server, CLIs IA  | Prompts usuario       |
 
 ### Flujo de Instalación — 8 Pasos
 
-| Paso | Descripción |
-|------|-------------|
-| [1/8] Chequeo de Entorno | Termux, arquitectura CPU, espacio disco (mín. 1000MB), Phantom Process Killer |
-| [2/8] Selección de Plataforma | Carga `config.env`. Actualmente fijo a `openclaw` |
+| Paso                          | Descripción                                                                                                                      |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| [1/8] Chequeo de Entorno      | Termux, arquitectura CPU, espacio disco (mín. 1000MB), Phantom Process Killer                                                    |
+| [2/8] Selección de Plataforma | Carga `config.env`. Actualmente fijo a `openclaw`                                                                                |
 | [3/8] Herramientas Opcionales | 11 prompts Y/n: tmux, ttyd, dufs, android-tools, Chromium, Playwright, code-server, OpenCode, Claude Code, Gemini CLI, Codex CLI |
-| [4/8] Infraestructura L1 | `pkg update && pkg upgrade`, instala `git`, crea directorios base |
-| [5/8] Dependencias Runtime L2 | glibc-runner, Node.js v22 LTS, herramientas build (condicional) |
-| [6/8] Instalación Plataforma | `npm install -g openclaw@latest --ignore-scripts`, parches, clawdhub |
-| [7/8] Herramientas Opcionales | Instala las herramientas seleccionadas en el paso 3 |
-| [8/8] Verificación | Chequeos FAIL/WARN: Node.js >= 22, npm, OA_GLIBC, glibc ld.so, node wrapper |
+| [4/8] Infraestructura L1      | `pkg update && pkg upgrade`, instala `git`, crea directorios base                                                                |
+| [5/8] Dependencias Runtime L2 | glibc-runner, Node.js v22 LTS, herramientas build (condicional)                                                                  |
+| [6/8] Instalación Plataforma  | `npm install -g openclaw@latest --ignore-scripts`, parches, clawdhub                                                             |
+| [7/8] Herramientas Opcionales | Instala las herramientas seleccionadas en el paso 3                                                                              |
+| [8/8] Verificación            | Chequeos FAIL/WARN: Node.js >= 22, npm, OA_GLIBC, glibc ld.so, node wrapper                                                      |
 
 ### Flujo de Actualización — `oa --update`
 
-| Paso | Descripción |
-|------|-------------|
-| [1/5] Pre-flight check | Valida Termux, curl, plataforma, arquitectura |
-| [2/5] Descarga | Tarball GitHub → directorio temporal |
-| [3/5] Infraestructura | Actualiza lib.sh, setup-env.sh, parches, CLI `oa` |
-| [4/5] Plataforma | `openclaw@latest`, parches, clawdhub, sharp |
-| [5/5] Herramientas | Actualiza solo las herramientas ya instaladas |
+| Paso                   | Descripción                                       |
+| ---------------------- | ------------------------------------------------- |
+| [1/5] Pre-flight check | Valida Termux, curl, plataforma, arquitectura     |
+| [2/5] Descarga         | Tarball GitHub → directorio temporal              |
+| [3/5] Infraestructura  | Actualiza lib.sh, setup-env.sh, parches, CLI `oa` |
+| [4/5] Plataforma       | `openclaw@latest`, parches, clawdhub, sharp       |
+| [5/5] Herramientas     | Actualiza solo las herramientas ya instaladas     |
 
 ---
 

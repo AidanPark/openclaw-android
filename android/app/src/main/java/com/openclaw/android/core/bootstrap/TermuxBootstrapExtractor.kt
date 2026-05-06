@@ -1,134 +1,69 @@
 package com.openclaw.android.core.bootstrap
 
 import com.openclaw.android.AppLogger
-import org.apache.commons.compress.archivers.zip.ZipFile
+import java.io.BufferedInputStream
 import java.io.File
-import java.io.FileOutputStream
+import java.io.FileInputStream
+import java.util.zip.ZipInputStream
 
 /**
- * Extrae el ZIP del bootstrap de Termux preservando permisos Unix y symlinks.
- *
- * Responsabilidad única: extraer el archivo ZIP con:
- *   - Preservación de permisos Unix (modo)
- *   - Creación de symlinks (isUnixSymlink y SYMLINKS.txt)
- *   - Ejecutables en bin/ marcados como ejecutables
+ * Extrae el ZIP del bootstrap de Termux.
  */
-internal class TermuxBootstrapExtractor {
+class TermuxBootstrapExtractor {
 
-    private val tag = "TermuxBootstrapExtractor"
-
-    /**
-     * Extrae el ZIP del bootstrap al directorio de destino.
-     *
-     * @param zipFile Archivo ZIP del bootstrap
-     * @param targetDir Directorio donde extraer (PREFIX)
-     * @param onProgress Callback con número de archivos extraídos
-     * @return Número total de entradas extraídas
-     */
-    fun extractBootstrap(
-        zipFile: File,
-        targetDir: File,
-        onProgress: (Int) -> Unit,
-    ): Int {
-        targetDir.mkdirs()
-        var count = 0
-
-        ZipFile.builder().setFile(zipFile).get().use { zip ->
-            val entries = zip.entries
-            while (entries.hasMoreElements()) {
-                val entry = entries.nextElement()
-                val dest = File(targetDir, entry.name)
-
-                try {
-                    when {
-                        entry.isDirectory -> dest.mkdirs()
-
-                        entry.isUnixSymlink -> {
-                            // El contenido del entry ES el target del symlink
-                            dest.parentFile?.mkdirs()
-                            val target = zip.getInputStream(entry).bufferedReader().readText().trim()
-                            dest.delete()
-                            try {
-                                android.system.Os.symlink(target, dest.absolutePath)
-                            } catch (e: Exception) {
-                                AppLogger.w(tag, "Symlink failed: ${entry.name} -> $target: ${e.message}")
-                            }
-                        }
-
-                        // Archivo especial: SYMLINKS.txt — procesar symlinks adicionales
-                        entry.name == "SYMLINKS.txt" -> {
-                            dest.parentFile?.mkdirs()
-                            zip.getInputStream(entry).use { input ->
-                                FileOutputStream(dest).use { out -> input.copyTo(out) }
-                            }
-                            // Procesar el archivo de symlinks
-                            processSymlinksFile(dest, targetDir)
-                        }
-
-                        else -> {
-                            dest.parentFile?.mkdirs()
-                            zip.getInputStream(entry).use { input ->
-                                FileOutputStream(dest).use { out -> input.copyTo(out) }
-                            }
-                            // Aplicar permisos Unix del ZIP
-                            val mode = entry.unixMode
-                            if (mode != 0 && (mode and 0b001_001_001) != 0) {
-                                dest.setExecutable(true, false)
-                            }
-                            // bin/ siempre ejecutable
-                            if (entry.name.contains("/bin/") || entry.name.startsWith("bin/")) {
-                                dest.setExecutable(true, false)
-                            }
-                        }
-                    }
-                    count++
-                    onProgress(count)
-                } catch (e: Exception) {
-                    AppLogger.e(tag, "Extract failed: ${entry.name}: ${e.message}")
-                }
-            }
-        }
-
-        AppLogger.i(tag, "Extracted $count entries to ${targetDir.absolutePath}")
-        return count
+    companion object {
+        private const val TAG = "TermuxBootstrapExtractor"
+        private const val BUFFER_SIZE = 8192
     }
 
-    /**
-     * Procesa SYMLINKS.txt del bootstrap de Termux.
-     * Formato: "target←linkpath" (separador: ← U+2190, una sola flecha)
-     * Ejemplo: "libreadline.so.8.3←./lib/libreadline.so.8"
-     *
-     * El linkpath puede tener prefijo "./" que se elimina al construir la ruta.
-     */
-    private fun processSymlinksFile(symlinksFile: File, targetDir: File) {
-        if (!symlinksFile.exists()) return
-        var created = 0
-        var failed = 0
-        try {
-            symlinksFile.readLines().forEach { line ->
-                if (line.isBlank()) return@forEach
-                // Separator is a single LEFT ARROW ← (U+2190)
-                val sepIdx = line.indexOf('\u2190')
-                if (sepIdx < 0) return@forEach
+    fun extract(
+        zipFile: File,
+        outputDir: File,
+        onProgress: (Int) -> Unit
+    ): Boolean {
+        return try {
+            AppLogger.i(TAG, "Extracting: ${zipFile.absolutePath}")
 
-                val target   = line.substring(0, sepIdx).trim()
-                val linkPath = line.substring(sepIdx + 1).trim()
-                    .removePrefix("./")   // strip leading "./" if present
+            BufferedInputStream(FileInputStream(zipFile)).use { bis ->
+                ZipInputStream(bis).use { zis ->
+                    var entry = zis.nextEntry
+                    var entryCount = 0
 
-                val linkFile = File(targetDir, linkPath)
-                linkFile.parentFile?.mkdirs()
-                linkFile.delete()
-                try {
-                    android.system.Os.symlink(target, linkFile.absolutePath)
-                    created++
-                } catch (e: Exception) {
-                    AppLogger.w(tag, "Symlink failed: $linkPath -> $target: ${e.message}")
-                    failed++
+                    while (entry != null) {
+                        val outFile = File(outputDir, entry.name)
+
+                        if (entry.isDirectory) {
+                            outFile.mkdirs()
+                        } else {
+                            outFile.parentFile?.mkdirs()
+                            outFile.outputStream().use { output ->
+                                zis.copyTo(output, BUFFER_SIZE)
+                            }
+
+                            // Preservar permisos de ejecución
+                            if (entry.name.startsWith("usr/bin/") ||
+                                entry.name.startsWith("usr/libexec/")) {
+                                outFile.setExecutable(true, false)
+                            }
+                        }
+
+                        entryCount++
+                        if (entryCount % 50 == 0) {
+                            onProgress((entryCount * 100 / 2000).coerceIn(0, 100))
+                        }
+
+                        zis.closeEntry()
+                        entry = zis.nextEntry
+                    }
                 }
             }
-            AppLogger.i(tag, "SYMLINKS.txt: $created created, $failed failed")
+
+            AppLogger.i(TAG, "Extraction complete: $entryCount entries")
+            true
+
         } catch (e: Exception) {
-            AppLogger.w(tag, "Failed to process SYMLINKS.txt: ${e.message}")
+            AppLogger.e(TAG, "Extraction failed: ${e.message}", e)
+            false
         }
     }
 }

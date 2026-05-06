@@ -1,141 +1,108 @@
 package com.openclaw.android.core.bootstrap
 
+import android.content.Context
+import android.os.Build
 import com.openclaw.android.AppLogger
-import com.openclaw.android.TermuxBootstrapManager
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.URL
 
 /**
- * Orquesta el flujo completo de instalación del bootstrap de Termux.
+ * TermuxBootstrapOrchestrator — Orquesta la descarga e instalación de Termux Bootstrap.
  *
- * Responsabilidad única: coordinar todos los pasos en el orden correcto:
- *   1. Detectar arquitectura
- *   2. Descargar bootstrap
- *   3. Extraer ZIP
- *   4. Configurar entorno
- *   5. Ejecutar dpkg --configure -a
- *   6. Ejecutar pkg update con reintentos
- *   7. Instalar paquetes adicionales
- *   8. Escribir marcador
+ * Descarga el bootstrap oficial de Termux desde GitHub y lo extrae.
+ * Este es un sistema ONLINE - requiere conexión a internet.
  */
-internal class TermuxBootstrapOrchestrator(
-    private val context: android.content.Context,
-    private val filesDir: File,
-    private val cacheDir: File,
-    private val homeDir: File,
-    private val prefix: File,
-    private val architectureDetector: TermuxArchitectureDetector,
-    private val downloader: TermuxBootstrapDownloader,
-    private val extractor: TermuxBootstrapExtractor,
-    private val envConfigurator: TermuxEnvironmentConfigurator,
-    private val dpkgManager: TermuxDpkgManager,
-    private val pkgManager: TermuxPkgManager,
-    private val packageInstaller: TermuxPackageInstaller,
-    private val marker: TermuxBootstrapMarker,
-) {
+class TermuxBootstrapOrchestrator(private val context: Context) {
 
-    private val TAG = "TermuxBootstrapOrchestrator"
-
-    /**
-     * Ejecuta el flujo completo de instalación.
-     * Debe ejecutarse en Dispatchers.IO.
-     */
-    suspend fun install(listener: TermuxBootstrapManager.ProgressListener) = withContext(Dispatchers.IO) {
-        try {
-            if (marker.isInstalled()) {
-                AppLogger.i(TAG, "Already installed")
-                listener.onSuccess()
-                return@withContext
-            }
-
-            // Paso 1: Arquitectura
-            listener.onProgress(1, "Detectando arquitectura...")
-            val arch = architectureDetector.detectArchitecture()
-            val bootstrapUrl = architectureDetector.getBootstrapUrl(arch)
-            listener.onProgress(2, "Arquitectura: $arch")
-
-            // Paso 2: Descargar
-            val bootstrapZip = downloader.getBootstrapCacheFile(arch)
-            downloader.downloadBootstrap(bootstrapUrl, bootstrapZip) { downloaded, total ->
-                val pct = if (total > 0) 2 + (downloaded * 48 / total).toInt().coerceIn(0, 48) else 25
-                listener.onProgress(
-                    pct,
-                    "Descargando... ${downloaded / 1024 / 1024}MB${if (total > 0) " / ${total / 1024 / 1024}MB" else ""}"
-                )
-            }
-
-            // Paso 3: Extraer
-            listener.onProgress(50, "Extrayendo bootstrap...")
-            val count = extractor.extractBootstrap(bootstrapZip, prefix) { n ->
-                if (n % 200 == 0) listener.onProgress(
-                    50 + (n / 100).coerceAtMost(20),
-                    "Extrayendo... $n archivos"
-                )
-            }
-            listener.onProgress(70, "Extraídos $count archivos")
-
-            // Paso 4: Configurar entorno base
-            listener.onProgress(71, "Configurando entorno...")
-            envConfigurator.setupEnvironment(context)
-
-            // Paso 5: dpkg --configure -a (no-interactivo)
-            listener.onProgress(75, "Configurando dpkg (no-interactivo)...")
-            dpkgManager.runDpkgConfigure(listener)
-
-            // Paso 6: pkg update con reintentos
-            listener.onProgress(80, "Actualizando repositorios...")
-            val updateOk = pkgManager.runPkgUpdateWithRetry(listener, maxAttempts = 3)
-            if (!updateOk) {
-                AppLogger.w(TAG, "pkg update failed after retries — continuing anyway")
-                listener.onProgress(88, "Advertencia: pkg update falló, continuando...")
-            }
-
-            // Paso 7: Paquetes adicionales
-            listener.onProgress(90, "Instalando paquetes base...")
-            packageInstaller.installAdditionalPackages(listener)
-
-            // Paso 8: Marcador y verificación
-            marker.writeMarker(arch)
-            listener.onProgress(98, "Verificando instalación...")
-            if (!marker.isInstalled()) throw IllegalStateException("Verificación post-instalación falló")
-
-            // Limpiar ZIP descargado
-            bootstrapZip.delete()
-
-            listener.onProgress(100, "¡Instalación completada!")
-            listener.onSuccess()
-
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "Bootstrap installation failed: ${e.message}", e)
-            listener.onError("Error instalando bootstrap: ${e.message}", e)
-        }
+    interface ProgressListener {
+        fun onProgress(percent: Int, message: String)
+        fun onSuccess()
+        fun onError(message: String, cause: Throwable? = null)
     }
 
-    /**
-     * Obtiene el estado actual del bootstrap.
-     */
-    fun getStatus(): Map<String, Any> = mapOf(
-        "installed"    to marker.isInstalled(),
-        "architecture" to architectureDetector.detectArchitecture(),
-        "prefixPath"   to prefix.absolutePath,
-        "prefixExists" to prefix.exists(),
-        "prefixSizeMB" to if (prefix.exists()) prefix.walkTopDown().sumOf { it.length() } / 1024 / 1024 else 0L,
-        "dpkgExists"   to File(prefix, "bin/dpkg").exists(),
-        "aptExists"    to File(prefix, "bin/apt").exists(),
-        "bashExists"   to File(prefix, "bin/bash").exists(),
-    )
+    companion object {
+        private const val TAG = "TermuxBootstrapOrchestrator"
 
-    /**
-     * Desinstala el bootstrap.
-     */
-    fun uninstall() {
-        try {
-            if (prefix.exists()) prefix.deleteRecursively()
-            marker.deleteMarker()
-            AppLogger.i(TAG, "Bootstrap uninstalled")
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "Uninstall failed: ${e.message}", e)
+        // URL del bootstrap oficial de Termux (aarch64)
+        private const val BOOTSTRAP_URL =
+            "https://github.com/termux/termux-packages/releases/download/bootstrap-2026.02.12-r1%2Bapt.android-7/bootstrap-aarch64.zip"
+    }
+
+    private val architectureDetector = TermuxArchitectureDetector()
+    private val downloader = TermuxBootstrapDownloader()
+    private val extractor = TermuxBootstrapExtractor()
+    private val marker = TermuxBootstrapMarker(context)
+    private val pkgManager = TermuxPkgManager(context)
+
+    fun install(listener: ProgressListener) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                withContext(Dispatchers.Main) {
+                    listener.onProgress(5, "Detecting architecture...")
+                }
+
+                val arch = architectureDetector.getArchitecture()
+                AppLogger.i(TAG, "Architecture detected: $arch")
+
+                withContext(Dispatchers.Main) {
+                    listener.onProgress(10, "Downloading Termux bootstrap...")
+                }
+
+                val bootstrapFile = File(context.cacheDir, "bootstrap-$arch.zip")
+
+                // Descargar
+                val downloaded = downloader.download(
+                    url = URL(BOOTSTRAP_URL),
+                    outputFile = bootstrapFile,
+                    onProgress = { pct ->
+                        val overall = 10 + (pct * 40 / 100)
+                        listener.onProgress(overall, "Downloading: $pct%")
+                    }
+                )
+
+                if (!downloaded) {
+                    throw Exception("Bootstrap download failed")
+                }
+
+                withContext(Dispatchers.Main) {
+                    listener.onProgress(55, "Extracting bootstrap...")
+                }
+
+                // Extraer
+                extractor.extract(
+                    zipFile = bootstrapFile,
+                    outputDir = context.filesDir,
+                    onProgress = { pct ->
+                        val overall = 55 + (pct * 35 / 100)
+                        listener.onProgress(overall, "Extracting: $pct%")
+                    }
+                )
+
+                withContext(Dispatchers.Main) {
+                    listener.onProgress(95, "Configuring environment...")
+                }
+
+                // Configurar
+                pkgManager.setupPackageManager()
+
+                // Limpiar
+                bootstrapFile.delete()
+
+                withContext(Dispatchers.Main) {
+                    listener.onProgress(100, "Termux Bootstrap installed")
+                    listener.onSuccess()
+                }
+
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "Installation failed: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    listener.onError("Installation failed: ${e.message}", e)
+                }
+            }
         }
     }
 }
