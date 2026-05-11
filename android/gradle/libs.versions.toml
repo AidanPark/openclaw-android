@@ -9,7 +9,7 @@ lifecycleRuntimeKtx = "2.10.0"
 kotlinxCoroutines = "1.10.2"
 junit5 = "6.0.3"
 mockk = "1.14.9"
-kotlinxCoroutinesTest = "1.10.2"
+kotlinxCoroutinesTest = "1.11.0"
 detekt = "1.23.8"
 ktlintGradle = "14.1.0"
 
