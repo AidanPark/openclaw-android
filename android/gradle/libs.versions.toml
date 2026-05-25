@@ -22,7 +22,7 @@ androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecyc
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 gson = { module = "com.google.code.gson:gson", version = "2.12.1" }
 junit5 = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit5" }
-junit5-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version = "6.0.3" }
+junit5-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version = "6.1.0" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 mockk-android = { module = "io.mockk:mockk-android", version.ref = "mockk" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
