@@ -161,6 +161,18 @@ openclaw gateway
 
 > 게이트웨이를 중지하려면 `Ctrl+C`를 누르세요. `Ctrl+Z`는 프로세스를 종료하지 않고 일시 중지만 시키므로, 반드시 `Ctrl+C`를 사용하세요.
 
+## OpenClaw 플러그인 설치
+
+`openclaw gateway`가 실행 중이면 두 번째 Termux 탭을 열어 선택적 OpenClaw 플러그인을 설치할 수 있습니다. 예를 들어 [TweetClaw](https://github.com/Xquik-dev/tweetclaw)는 search tweets, search tweet replies, follower export, user lookup, media upload and download, direct messages, monitors, webhooks, giveaway draws, 검토된 post 또는 reply 워크플로를 위한 X/Twitter 자동화를 추가합니다.
+
+Xquik is an independent third-party service. Not affiliated with X Corp. "Twitter" and "X" are trademarks of X Corp.
+
+```bash
+openclaw plugins install clawhub:@xquik/tweetclaw
+```
+
+TweetClaw는 자격 증명 정보 없이도 설치할 수 있습니다. 설치 후 OpenClaw 플러그인 설정을 통해 Xquik 액세스를 추가하세요. 게이트웨이 탭을 계속 실행한 상태에서 별도 탭으로 플러그인을 설정하세요.
+
 ## 프로세스 라이브 상태 유지
 
 Android는 백그라운드 프로세스를 종료하거나 화면이 꺼지면 스로틀링할 수 있습니다. [프로세스 라이브 상태 유지 가이드](docs/disable-phantom-process-killer.ko.md)에서 모든 권장 설정(개발자 옵션, 화면 켜짐 유지, 충전 제한, 배터리 최적화, Phantom Process Killer)을 확인하세요.
@@ -287,7 +299,7 @@ OpenClaw은 [node-llama-cpp](https://github.com/withcatai/node-llama-cpp)를 통
 | 컴포넌트 | 역할 | 설치 방식 |
 |----------|------|-----------|
 | [OpenClaw](https://github.com/openclaw/openclaw) | AI 에이전트 플랫폼 (핵심) | `npm install -g` |
-| [clawdhub](https://github.com/AidanPark/clawdhub) | OpenClaw 스킬 매니저 | `npm install -g` |
+| [ClawHub](https://github.com/openclaw/clawhub) | OpenClaw 스킬 및 플러그인 레지스트리 | `npm install -g` |
 | [PyYAML](https://pyyaml.org/) | `.skill` 패키징용 YAML 파서 | `pip install` |
 | libvips | sharp 빌드용 이미지 처리 헤더 | `pkg install` (업데이트 시) |
 

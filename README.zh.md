@@ -166,6 +166,18 @@ openclaw gateway
 
 > 要停止网关，按 `Ctrl+C`。不要使用 `Ctrl+Z` — 它只会挂起进程而不会终止它。
 
+## 安装 OpenClaw 插件
+
+`openclaw gateway` 运行后，可以打开第二个 Termux 标签页安装可选的 OpenClaw 插件。例如，[TweetClaw](https://github.com/Xquik-dev/tweetclaw) 为 X/Twitter 自动化提供 search tweets、search tweet replies、follower export、user lookup、media upload and download、direct messages、monitors、webhooks、giveaway draws，以及经过审核的 post 或 reply 工作流。
+
+Xquik is an independent third-party service. Not affiliated with X Corp. "Twitter" and "X" are trademarks of X Corp.
+
+```bash
+openclaw plugins install clawhub:@xquik/tweetclaw
+```
+
+TweetClaw 可以在未配置凭据时安装。安装后，通过 OpenClaw 插件配置添加 Xquik 访问权限。保持网关标签页运行，并在单独的标签页完成插件设置。
+
 ## 保持进程存活
 
 Android 可能会在屏幕关闭时杀死后台进程或对其进行限制。详细的推荐设置请参阅 [保持进程存活指南](docs/disable-phantom-process-killer.md)（开发者选项、保持唤醒、充电限制、电池优化和 Phantom Process Killer）。
@@ -294,7 +306,7 @@ OpenClaw 通过 [node-llama-cpp](https://github.com/withcatai/node-llama-cpp) �
 | 组件 | 作用 | 安装方式 |
 |-----------|------|----------------|
 | [OpenClaw](https://github.com/openclaw/openclaw) | AI Agent 平台（核心） | `npm install -g` |
-| [clawdhub](https://github.com/AidanPark/clawdhub) | OpenClaw 的技能管理器 | `npm install -g` |
+| [ClawHub](https://github.com/openclaw/clawhub) | OpenClaw 的技能和插件注册中心 | `npm install -g` |
 | [PyYAML](https://pyyaml.org/) | `.skill` 打包的 YAML 解析器 | `pip install` |
 | libvips | sharp 构建所需的图像处理头文件 | `pkg install`（更新时） |
 

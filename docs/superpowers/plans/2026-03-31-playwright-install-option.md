@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Create `scripts/install-playwright.sh`
+## Task 1: Create `scripts/install-playwright.sh`
 
 **Files:**
 - Create: `scripts/install-playwright.sh`
@@ -165,7 +165,7 @@ Run: `chmod +x scripts/install-playwright.sh`
 
 ---
 
-### Task 2: Add Playwright to `install-tools.sh`
+## Task 2: Add Playwright to `install-tools.sh`
 
 **Files:**
 - Modify: `install-tools.sh:79` (tool detection)
@@ -240,7 +240,7 @@ fi
 
 ---
 
-### Task 3: Verify
+## Task 3: Verify
 
 - [ ] **Step 1: Syntax check install-playwright.sh**
 
