@@ -161,6 +161,18 @@ openclaw gateway
 
 > To stop the gateway, press `Ctrl+C`. Do not use `Ctrl+Z` — it only suspends the process without terminating it.
 
+## Install OpenClaw Plugins
+
+After `openclaw gateway` is running, open a second Termux tab to install optional OpenClaw plugins. For example, [TweetClaw](https://github.com/Xquik-dev/tweetclaw) adds X/Twitter automation for search tweets, search tweet replies, follower export, user lookup, media upload and download, direct messages, monitors, webhooks, giveaway draws, and reviewed post or reply workflows.
+
+Xquik is an independent third-party service. Not affiliated with X Corp. "Twitter" and "X" are trademarks of X Corp.
+
+```bash
+openclaw plugins install clawhub:@xquik/tweetclaw
+```
+
+TweetClaw installs before credentials are configured. Add Xquik access through OpenClaw plugin config after installation. Leave the gateway tab running while using a separate tab for plugin setup.
+
 ## Keeping Processes Alive
 
 Android may kill background processes or throttle them when the screen is off. See the [Keeping Processes Alive guide](docs/disable-phantom-process-killer.md) for all recommended settings (Developer Options, Stay Awake, charge limit, battery optimization, and Phantom Process Killer).
@@ -289,7 +301,7 @@ These are controlled by the platform's `config.env` flags. For OpenClaw, all are
 | Component | Role | Install Method |
 |-----------|------|----------------|
 | [OpenClaw](https://github.com/openclaw/openclaw) | AI agent platform (core) | `npm install -g` |
-| [clawdhub](https://github.com/AidanPark/clawdhub) | Skill manager for OpenClaw | `npm install -g` |
+| [ClawHub](https://github.com/openclaw/clawhub) | Skill and plugin registry for OpenClaw | `npm install -g` |
 | [PyYAML](https://pyyaml.org/) | YAML parser for `.skill` packaging | `pip install` |
 | libvips | Image processing headers for sharp build | `pkg install` (on update) |
 
