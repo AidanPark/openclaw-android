@@ -45,8 +45,11 @@ rm -f "$CACHE"/glibc-*.pkg.tar.xz "$CACHE"/glibc-runner-*.pkg.tar.xz
 
 # --- Install glibc + glibc-runner aarch64 ---
 # --assume-installed: sama seperti install-glibc.sh upstream (paket disediakan apt Termux, pacman tak kenal)
+# --overwrite='*': wajib — tanpa ini pacman GAGAL parsial saat file bentrok dengan paket apt
+#   (mis. bash.info), glibc terpasang tidak lengkap, node lalu segfault. Reproduce
+#   di emulator Android x86_64 membuktikan ini fail mode nyata.
 info "Install glibc, glibc-runner, dan gcc-libs-glibc (libstdc++ untuk Node.js)..."
-pacman -Sy glibc glibc-runner gcc-libs-glibc --noconfirm --assume-installed bash,patchelf,resolv-conf
+pacman -Sy glibc glibc-runner gcc-libs-glibc --noconfirm --overwrite='*' --assume-installed bash,patchelf,resolv-conf
 
 # --- Purge library arch-salah (sisa era pacman.conf x86_64) ---
 # glibc aarch64 hanya menimpa file milik paketnya sendiri. lib x86_64 lain
