@@ -45,8 +45,23 @@ rm -f "$CACHE"/glibc-*.pkg.tar.xz "$CACHE"/glibc-runner-*.pkg.tar.xz
 
 # --- Install glibc + glibc-runner aarch64 ---
 # --assume-installed: sama seperti install-glibc.sh upstream (paket disediakan apt Termux, pacman tak kenal)
-info "Install glibc dan glibc-runner..."
-pacman -Sy glibc glibc-runner --noconfirm --assume-installed bash,patchelf,resolv-conf
+info "Install glibc, glibc-runner, dan gcc-libs-glibc (libstdc++ untuk Node.js)..."
+pacman -Sy glibc glibc-runner gcc-libs-glibc --noconfirm --assume-installed bash,patchelf,resolv-conf
+
+# --- Purge library arch-salah (sisa era pacman.conf x86_64) ---
+# glibc aarch64 hanya menimpa file milik paketnya sendiri. lib x86_64 lain
+# (mis. libstdc++.so.6 dari gcc-libs-glibc versi lama) tetap nempel dan
+# membuat node.real segfault saat di-load. Hapus semua .so yang bukan aarch64.
+info "Bersihkan library non-aarch64 di $PREFIX/glibc/lib..."
+if [ -d "$PREFIX/glibc/lib" ]; then
+  for _lib in "$PREFIX"/glibc/lib/*.so*; do
+    [ -e "$_lib" ] || continue
+    if file "$_lib" 2>/dev/null | grep -q 'ELF' && ! file "$_lib" 2>/dev/null | grep -q 'aarch64'; then
+      rm -f "$_lib"
+      info "  hapus: $(basename "$_lib")"
+    fi
+  done
+fi
 
 # --- Verifikasi dynamic linker aarch64 benar-benar ada ---
 [ -f "$LINKER" ] || die "linker aarch64 tidak ditemukan: $LINKER. Versi x86_64 masih menempel?"
